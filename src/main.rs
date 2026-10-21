@@ -137,7 +137,16 @@ fn selfplay(args: &[String]) -> Result<(), String> {
     let file = std::fs::File::create(&out).map_err(|e| format!("cannot create {out}: {e}"))?;
     let mut writer = std::io::BufWriter::new(file);
     let start = Instant::now();
-    let records = rainbow::selfplay::generate(&params, &config, &mut writer)
+    let total = config.games;
+    let report = move |games: u64, records: u64| {
+        if games % 50 == 0 || games == total {
+            eprintln!(
+                "{games}/{total} games, {records} records, {:.0}s",
+                start.elapsed().as_secs_f64()
+            );
+        }
+    };
+    let records = rainbow::selfplay::generate(&params, &config, &mut writer, &report)
         .map_err(|e| format!("writing {out}: {e}"))?;
     println!(
         "{records} records from {} games in {:.1}s -> {out}",

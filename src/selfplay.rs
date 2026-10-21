@@ -12,6 +12,7 @@
 //! | the deciding player's final reward | 1 |
 
 use std::io::{self, Write};
+use std::sync::Mutex;
 use std::thread;
 
 use rand::rngs::SmallRng;
@@ -95,40 +96,52 @@ fn play_game(params: &Params, config: &Config, game: u64, out: &mut Vec<f32>) {
     }
 }
 
-/// Plays `config.games` self-play games with ISMCTS and writes their records to `out`.
-/// Returns the number of records written.
+/// Plays `config.games` self-play games with ISMCTS, writing each game's records to `out` as
+/// soon as it finishes. `progress` is called after every game with the games and records written
+/// so far. Returns the number of records written.
 ///
 /// # Errors
-/// If writing fails.
-pub fn generate(params: &Params, config: &Config, out: &mut impl Write) -> io::Result<u64> {
+/// If writing fails; games already written stay in `out`.
+pub fn generate<W: Write + Send>(
+    params: &Params,
+    config: &Config,
+    out: &mut W,
+    progress: &(dyn Fn(u64, u64) + Sync),
+) -> io::Result<u64> {
     let threads = match config.threads {
         0 => thread::available_parallelism().map_or(1, |p| p.get()),
         t => t,
     }
     .min(config.games.max(1) as usize);
-    let buffers: Vec<Vec<f32>> = thread::scope(|scope| {
+    // (writer, games written, records written)
+    let shared = Mutex::new((out, 0u64, 0u64));
+    thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
             .map(|t| {
-                scope.spawn(move || {
+                let shared = &shared;
+                scope.spawn(move || -> io::Result<()> {
                     let mut buf = Vec::new();
                     for game in (t as u64..config.games).step_by(threads) {
+                        buf.clear();
                         play_game(params, config, game, &mut buf);
+                        let bytes: Vec<u8> = buf.iter().flat_map(|x| x.to_le_bytes()).collect();
+                        let mut guard = shared.lock().expect("writer lock poisoned");
+                        let (writer, games, records) = &mut *guard;
+                        writer.write_all(&bytes)?;
+                        *games += 1;
+                        *records += (buf.len() / RECORD_FLOATS) as u64;
+                        progress(*games, *records);
                     }
-                    buf
+                    Ok(())
                 })
             })
             .collect();
         handles
             .into_iter()
-            .map(|h| h.join().expect("self-play worker panicked"))
-            .collect()
-    });
-    let mut records = 0;
-    for buf in buffers {
-        records += (buf.len() / RECORD_FLOATS) as u64;
-        let bytes: Vec<u8> = buf.iter().flat_map(|x| x.to_le_bytes()).collect();
-        out.write_all(&bytes)?;
-    }
+            .try_for_each(|h| h.join().expect("self-play worker panicked"))
+    })?;
+    let (writer, _, records) = shared.into_inner().expect("writer lock poisoned");
+    writer.flush()?;
     Ok(records)
 }
 
@@ -150,7 +163,7 @@ mod tests {
             explore_moves: 2,
         };
         let mut bytes = Vec::new();
-        let records = generate(&params, &config, &mut bytes).unwrap();
+        let records = generate(&params, &config, &mut bytes, &|_, _| {}).unwrap();
         assert!(records > 0);
         assert_eq!(bytes.len() as u64, records * RECORD_FLOATS as u64 * 4);
         let floats: Vec<f32> = bytes
