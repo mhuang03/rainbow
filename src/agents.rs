@@ -44,6 +44,12 @@ pub const AGENT_NAMES: &[&str] = &[
     "cheapest",
     "economist",
     "pimc",
+    "ismcts",
+    "minimax",
+    "dmc",
+    "dqn",
+    "ppo",
+    "nfsp",
 ];
 
 /// Options of a [`create`] spec, as `key=value` pairs.
@@ -194,7 +200,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   inference options of [`parse_inference`].
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid` or `maxn`), `endgame` (cards
 ///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
-/// - `dmc`, `dqn`, `ppo`: `path`, a trained network file.
+/// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dqn`, `ppo` and `nfsp` also
+///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
 ///
 /// Rollout options are `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
 /// cheapest rollout) and `margin` (score-margin reward weight).
@@ -245,16 +252,21 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             };
             Box::new(MinimaxAgent::with_params(params, seed))
         }
-        "dqn" | "ppo" => {
+        "dqn" | "ppo" | "nfsp" => {
             let path: String = opts
                 .take("path")?
                 .ok_or_else(|| format!("{name} requires path=<network file>"))?;
-            let agent = DqnAgent::new(dmc::Mlp::load_cached(&path)?)?;
-            Box::new(if name == "ppo" {
-                agent.named("ppo")
-            } else {
-                agent
-            })
+            let mut agent = DqnAgent::new(dmc::Mlp::load_cached(&path)?)?;
+            agent = match name {
+                "ppo" => agent.named("ppo"),
+                "nfsp" => agent.named("nfsp"),
+                _ => agent,
+            };
+            // NFSP's average policy is a mixed strategy, so it samples by default.
+            if opts.take("sample")?.unwrap_or(name == "nfsp") {
+                agent = agent.sampling(seed);
+            }
+            Box::new(agent)
         }
         "dmc" => {
             let path: String = opts
@@ -281,7 +293,7 @@ mod tests {
     fn every_registered_name_builds() {
         for &name in AGENT_NAMES
             .iter()
-            .filter(|&&n| !["dmc", "dqn", "ppo"].contains(&n))
+            .filter(|&&n| !["dmc", "dqn", "ppo", "nfsp"].contains(&n))
         {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
