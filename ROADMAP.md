@@ -99,7 +99,8 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       (`GameState::encode_full`), Monte Carlo advantages, clipped objective, optional oracle
       guiding (`--oracle-fraction`).
 - [x] `ppo:path=...` Rust agent.
-- [ ] Train and evaluate, with and without oracle guiding.
+- [x] Train and evaluate (v1 Monte Carlo advantages; v2 GAE and league opponents).
+- [ ] Oracle guiding run.
 
 ## Milestone 11: Network-guided ISMCTS
 
@@ -313,6 +314,9 @@ times overstate what the methods need.
 | 36 | 0.80 | 0.16 | 0.60 |
 | 45 | 0.96 | 0.17 | 0.63 |
 
+PPO v2 (GAE with lambda 0.95, two learner seats per game against economist and frozen dmc_v2)
+reached 0.51 at 10 minutes, 0.62 at 40 and 0.89 at 60, against v1's 0.17.
+
 DMC reached 1.17 after 10 minutes on an idle machine, so DMC's action-feature Q-network learns
 far faster than DQN's one-output-per-action head here, matching DouZero's finding. PPO v1 learns
 (it beats random play easily) but only made 343 updates in 45 minutes and stays weak; PPO v2 adds
@@ -329,6 +333,8 @@ GAE and league opponents.
 | ppo_v1 (sampling) | economist | 1.42 | 0.22 | 0.24 | 0.59 |
 | nfsp_v1 (sampling) | economist | 1.16 | 0.79 | 0.63 | 0.73 |
 | nfsp_v1 (sampling) | dmc_v2 | 0.50 | 0.33 | 0.37 | 0.57 |
+| ppo_v2 (GAE, league) | economist | 1.68 | 0.81 | 0.89 | 0.97 |
+| ppo_v2 (GAE, league) | dmc_v2 | 0.87 | 0.31 | 0.38 | 0.70 |
 | dmc_league | economist | 1.81 | 2.09 | 1.74 | 1.78 |
 | dmc_league | dmc_v2 | 1.23 | 1.14 | 1.22 | 0.92 |
 | dmc_league | ismcts (1000 iterations) | 0.96 | 1.59 | 1.46 | 1.16 |
