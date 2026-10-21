@@ -42,6 +42,8 @@ class Rollouts:
         self.action: list[int] = []
         self.logp: list[float] = []
         self.ret: list[float] = []
+        # index of the same seat's next decision in the same game, or -1 after its last
+        self.next: list[int] = []
 
     def __len__(self) -> int:
         return len(self.action)
@@ -54,6 +56,7 @@ class Rollouts:
             torch.tensor(self.action),
             torch.tensor(self.logp),
             torch.tensor(self.ret, dtype=torch.float32),
+            np.array(self.next),
         )
 
 
@@ -92,7 +95,13 @@ class Actors:
         done, returns, scores = self.env.step(actions)
         for i in np.flatnonzero(done):
             final = final_returns_row(returns[i], scores[i], int(players[i]))
-            for seat, o, f, m, act, lp in self.history[i]:
+            base = len(out.action)
+            last: dict[int, int] = {}
+            for k, (seat, o, f, m, act, lp) in enumerate(self.history[i]):
+                if seat in last:
+                    out.next[last[seat]] = base + k
+                last[seat] = base + k
+                out.next.append(-1)
                 out.obs.append(o)
                 out.full.append(f)
                 out.mask.append(m)
@@ -116,15 +125,31 @@ def export_policy(policy: nn.Sequential, use_oracle: bool, path: Path) -> None:
     export(policy, path)
 
 
+def gae(v: np.ndarray, final: np.ndarray, nxt: np.ndarray, lam: float) -> tuple[np.ndarray, np.ndarray]:
+    """Generalised advantage estimates along each seat's chain of decisions (no discounting;
+    the only reward is the final return). Returns (advantages, value targets). With lam = 1 this
+    is the Monte Carlo advantage final - v."""
+    adv = np.zeros_like(v)
+    for t in range(len(v) - 1, -1, -1):
+        n = nxt[t]
+        if n < 0:
+            adv[t] = final[t] - v[t]
+        else:
+            adv[t] = v[n] - v[t] + lam * adv[n]
+    return adv.astype(np.float32), (adv + v).astype(np.float32)
+
+
 def update(policy, value, optimizer, data, oracle, use_oracle, args) -> tuple[float, float, float]:
-    obs, full, mask, action, old_logp, ret = data
+    obs, full, mask, action, old_logp, final, nxt = data
     if use_oracle:
         x_all = torch.cat([obs, full[:, re.OBS_SIZE :] * oracle], dim=1)
     else:
         x_all = obs
     with torch.no_grad():
-        adv = ret - value(full).squeeze(1)
-        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+        v = value(full).squeeze(1).numpy()
+    adv, ret = gae(v, final.numpy(), nxt, args.gae_lambda)
+    adv, ret = torch.from_numpy(adv), torch.from_numpy(ret)
+    adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
     n = len(action)
     stats = []
@@ -160,6 +185,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--minibatch", type=int, default=4096)
     parser.add_argument("--clip", type=float, default=0.2)
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--entropy", type=float, default=0.01)
     parser.add_argument("--value-coef", type=float, default=0.5)
     parser.add_argument("--oracle-fraction", type=float, default=0.0,
