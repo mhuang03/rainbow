@@ -82,6 +82,13 @@ def final_returns(game: re.Game) -> list[float]:
     return out
 
 
+def final_returns_row(returns: np.ndarray, scores: np.ndarray, n: int) -> np.ndarray:
+    """`final_returns` from one row of `VecEnv.step` results, for an `n`-player game."""
+    r, sc = returns[:n], scores[:n].astype(np.float64)
+    best_other = np.array([np.max(np.delete(sc, s)) for s in range(n)])
+    return (r + MARGIN_WEIGHT * (sc - best_other) / 100).astype(np.float32)
+
+
 def arena_relative(spec: str, opponents: list[str], deals: int, arena: Path = ARENA) -> str:
     """Relative win share of `spec` in a Rust arena tournament, or "n/a" without the binary."""
     if not arena.exists():

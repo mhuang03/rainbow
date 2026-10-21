@@ -357,6 +357,180 @@ fn batch_full_observations<'py>(
     out
 }
 
+/// (done, returns, scores) from `VecEnv.step`.
+type StepResult<'py> = (
+    Bound<'py, PyArray1<bool>>,
+    Bound<'py, PyArray2<f32>>,
+    Bound<'py, PyArray2<i64>>,
+);
+
+/// Many games stepped together, for training. Finished games are replaced with new ones
+/// automatically, so every slot always holds a game in progress.
+///
+/// VecEnv(num_envs, seed=None, players=None): `players` fixes the player count; by default
+/// each new game picks 2 to 6 players and a first leader at random.
+#[pyclass(module = "rainbow_engine")]
+struct VecEnv {
+    games: Vec<GameState>,
+    rng: SmallRng,
+    players: Option<usize>,
+}
+
+impl VecEnv {
+    fn new_game(&mut self) -> GameState {
+        let n = self
+            .players
+            .unwrap_or_else(|| self.rng.random_range(MIN_PLAYERS..=MAX_PLAYERS));
+        let leader = self.rng.random_range(0..n);
+        GameState::new(n, leader, &mut self.rng)
+    }
+}
+
+#[pymethods]
+impl VecEnv {
+    #[new]
+    #[pyo3(signature = (num_envs, seed=None, players=None))]
+    fn py_new(num_envs: usize, seed: Option<u64>, players: Option<usize>) -> PyResult<Self> {
+        if players.is_some_and(|n| !(MIN_PLAYERS..=MAX_PLAYERS).contains(&n)) {
+            return Err(PyValueError::new_err("players must be 2 to 6"));
+        }
+        let mut env = Self {
+            games: Vec::with_capacity(num_envs),
+            rng: make_rng(seed),
+            players,
+        };
+        for _ in 0..num_envs {
+            let game = env.new_game();
+            env.games.push(game);
+        }
+        Ok(env)
+    }
+
+    fn __len__(&self) -> usize {
+        self.games.len()
+    }
+
+    /// Current player of each game, as an int64 array of shape (num_envs,).
+    fn current_players<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
+        let seats: Vec<i64> = self
+            .games
+            .iter()
+            .map(|g| g.current_player() as i64)
+            .collect();
+        PyArray1::from_vec(py, seats)
+    }
+
+    /// Player count of each game, as an int64 array of shape (num_envs,).
+    fn num_players<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
+        let n: Vec<i64> = self.games.iter().map(|g| g.num_players() as i64).collect();
+        PyArray1::from_vec(py, n)
+    }
+
+    /// Scores so far, as an int64 array of shape (num_envs, MAX_PLAYERS) (zero-padded).
+    fn scores<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<i64>> {
+        let out = PyArray2::<i64>::zeros(py, [self.games.len(), MAX_PLAYERS], false);
+        {
+            let mut rw = out.readwrite();
+            let slice = rw.as_slice_mut().expect("new arrays are contiguous");
+            for (game, row) in self.games.iter().zip(slice.chunks_exact_mut(MAX_PLAYERS)) {
+                for (o, s) in row.iter_mut().zip(game.scores()) {
+                    *o = s.into();
+                }
+            }
+        }
+        out
+    }
+
+    /// Observations and legal-action masks for each game's current player, like
+    /// `batch_observations`. With `full=True`, also full-information observations.
+    #[pyo3(signature = (full=false))]
+    fn observe<'py>(&self, py: Python<'py>, full: bool) -> Bound<'py, pyo3::types::PyTuple> {
+        let b = self.games.len();
+        let obs = PyArray2::<f32>::zeros(py, [b, OBS_SIZE], false);
+        let masks = PyArray2::<bool>::zeros(py, [b, NUM_ACTIONS], false);
+        let full_obs = full.then(|| PyArray2::<f32>::zeros(py, [b, FULL_OBS_SIZE], false));
+        {
+            let mut obs_rw = obs.readwrite();
+            let mut masks_rw = masks.readwrite();
+            let o = obs_rw.as_slice_mut().expect("contiguous");
+            let m = masks_rw.as_slice_mut().expect("contiguous");
+            for (i, game) in self.games.iter().enumerate() {
+                let seat = game.current_player();
+                game.observe(seat)
+                    .encode(&mut o[i * OBS_SIZE..][..OBS_SIZE]);
+                m[i * NUM_ACTIONS..][..NUM_ACTIONS]
+                    .copy_from_slice(&mask_bits(game.legal_action_mask()));
+            }
+            if let Some(f) = &full_obs {
+                let mut rw = f.readwrite();
+                let f = rw.as_slice_mut().expect("contiguous");
+                for (game, row) in self.games.iter().zip(f.chunks_exact_mut(FULL_OBS_SIZE)) {
+                    game.encode_full(game.current_player(), row);
+                }
+            }
+        }
+        let mut items: Vec<Bound<'py, PyAny>> = vec![obs.into_any(), masks.into_any()];
+        if let Some(f) = full_obs {
+            items.push(f.into_any());
+        }
+        pyo3::types::PyTuple::new(py, items).expect("tuple of arrays")
+    }
+
+    /// Plays one action in every game. Returns (done, returns, scores): for games that ended,
+    /// `done` is True and `returns` / `scores` (shape (num_envs, MAX_PLAYERS)) hold their final
+    /// win shares and points; those games are then replaced with new ones. Raises ValueError on
+    /// an illegal action, leaving earlier games in the batch stepped.
+    fn step<'py>(
+        &mut self,
+        py: Python<'py>,
+        actions: numpy::PyReadonlyArray1<'py, i64>,
+    ) -> PyResult<StepResult<'py>> {
+        let actions = actions.as_slice()?;
+        if actions.len() != self.games.len() {
+            return Err(PyValueError::new_err("need one action per game"));
+        }
+        let b = self.games.len();
+        let mut done = vec![false; b];
+        let returns = PyArray2::<f32>::zeros(py, [b, MAX_PLAYERS], false);
+        let scores = PyArray2::<i64>::zeros(py, [b, MAX_PLAYERS], false);
+        {
+            let mut r_rw = returns.readwrite();
+            let mut s_rw = scores.readwrite();
+            let r = r_rw.as_slice_mut().expect("contiguous");
+            let sc = s_rw.as_slice_mut().expect("contiguous");
+            for i in 0..b {
+                let action = usize::try_from(actions[i])
+                    .map_err(|_| PyValueError::new_err("negative action"))?;
+                self.games[i]
+                    .apply(combo(action)?)
+                    .map_err(|e| PyValueError::new_err(format!("game {i}: {e}")))?;
+                if self.games[i].is_over() {
+                    done[i] = true;
+                    let game = &self.games[i];
+                    for (seat, (&ret, &pts)) in
+                        game.returns().iter().zip(&game.scores()).enumerate()
+                    {
+                        r[i * MAX_PLAYERS + seat] = ret;
+                        sc[i * MAX_PLAYERS + seat] = pts.into();
+                    }
+                    self.games[i] = self.new_game();
+                }
+            }
+        }
+        Ok((PyArray1::from_vec(py, done), returns, scores))
+    }
+
+    /// A copy of game `i`.
+    fn game(&self, i: usize) -> PyResult<Game> {
+        self.games
+            .get(i)
+            .map(|state| Game {
+                state: state.clone(),
+            })
+            .ok_or_else(|| PyIndexError::new_err(format!("no game {i}")))
+    }
+}
+
 /// Human-readable form of an action: "4" (single), "3x4" (three 4s) or "2-5" (run).
 #[pyfunction]
 fn action_to_str(action: usize) -> PyResult<String> {
@@ -377,6 +551,7 @@ fn action_info(action: usize) -> PyResult<(&'static str, u8, u8)> {
 fn rainbow_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Game>()?;
     m.add_class::<RustAgent>()?;
+    m.add_class::<VecEnv>()?;
     m.add_function(wrap_pyfunction!(action_features, m)?)?;
     m.add_function(wrap_pyfunction!(batch_observations, m)?)?;
     m.add_function(wrap_pyfunction!(batch_full_observations, m)?)?;

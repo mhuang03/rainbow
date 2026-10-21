@@ -169,3 +169,29 @@ def test_pickle_round_trip():
         assert re.Game.from_bytes(g.to_bytes()) == g
     with pytest.raises(ValueError):
         re.Game.from_bytes(b"\x07")
+
+
+def test_vec_env_runs_and_resets():
+    env = re.VecEnv(16, seed=1)
+    rng = np.random.default_rng(0)
+    finished = 0
+    for _ in range(200):
+        obs, masks = env.observe()
+        assert obs.shape == (16, re.OBS_SIZE) and masks.any(axis=1).all()
+        before = [env.game(i) for i in range(len(env))]
+        actions = np.array([rng.choice(np.flatnonzero(m)) for m in masks])
+        done, returns, scores = env.step(actions)
+        for i in np.flatnonzero(done):
+            g = before[i]
+            g.step(int(actions[i]))
+            assert g.is_over
+            n = g.num_players
+            assert np.allclose(returns[i, :n], g.returns())
+            assert list(scores[i, :n]) == g.scores()
+            finished += 1
+        assert not done[~done].any()
+    assert finished > 0
+    obs, masks, full = env.observe(full=True)
+    assert full.shape == (16, re.FULL_OBS_SIZE)
+    with pytest.raises(ValueError):
+        env.step(np.zeros(3, dtype=np.int64))

@@ -22,7 +22,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, final_returns, mlp, new_game
+from rl_common import ARENA, arena_relative, export, final_returns_row, mlp
 
 ACTIONS = re.action_features()  # (NUM_ACTIONS, ACTION_FEATURES)
 INPUT_SIZE = re.OBS_SIZE + re.ACTION_FEATURES
@@ -55,44 +55,41 @@ class Actors:
 
     def __init__(self, count: int, rng: np.random.Generator):
         self.rng = rng
-        self.games = [new_game(rng) for _ in range(count)]
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
         # per game: list of (seat, input row) for every decision so far
         self.history: list[list[tuple[int, np.ndarray]]] = [[] for _ in range(count)]
         self.episodes = 0
 
     def step(self, net: nn.Module, epsilon: float, buffer: Buffer) -> int:
         """Advances every game one move; returns the number of decisions made."""
-        obs, masks = re.batch_observations(self.games)
+        obs, masks = self.env.observe()
+        seats = self.env.current_players()
+        players = self.env.num_players()
         legal = [np.flatnonzero(m) for m in masks]
         counts = np.array([len(l) for l in legal])
-        rows = np.concatenate(
-            [np.repeat(obs, counts, axis=0), ACTIONS[np.concatenate(legal)]], axis=1
-        )
+        rows = np.concatenate([np.repeat(obs, counts, axis=0), ACTIONS[np.concatenate(legal)]], axis=1)
         with torch.no_grad():
             q = net(torch.from_numpy(rows)).squeeze(1).numpy()
 
+        actions = np.empty(len(legal), dtype=np.int64)
         start = 0
-        for i, game in enumerate(self.games):
-            n = counts[i]
+        for i, n in enumerate(counts):
             if self.rng.random() < epsilon:
                 choice = int(self.rng.integers(n))
             else:
                 choice = int(np.argmax(q[start : start + n]))
-            self.history[i].append((game.current_player, rows[start + choice]))
-            game.step(int(legal[i][choice]))
+            self.history[i].append((int(seats[i]), rows[start + choice]))
+            actions[i] = legal[i][choice]
             start += n
 
-            if game.is_over:
-                returns = final_returns(game)
-                hist = self.history[i]
-                buffer.add(
-                    np.stack([row for _, row in hist]),
-                    np.array([returns[seat] for seat, _ in hist], dtype=np.float32),
-                )
-                self.episodes += 1
-                self.games[i] = new_game(self.rng)
-                self.history[i] = []
-        return len(self.games)
+        done, returns, scores = self.env.step(actions)
+        for i in np.flatnonzero(done):
+            final = final_returns_row(returns[i], scores[i], int(players[i]))
+            hist = self.history[i]
+            buffer.add(np.stack([row for _, row in hist]), final[[seat for seat, _ in hist]])
+            self.history[i] = []
+            self.episodes += 1
+        return len(legal)
 
 
 def main() -> None:

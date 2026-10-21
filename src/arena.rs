@@ -374,7 +374,10 @@ mod tests {
         assert_eq!(standings.iter().map(|s| s.lineups).sum::<u64>(), 12 * 3);
         assert!(standings[0].name == "economist" || standings[0].name == "cheapest");
         let bottom: Vec<&str> = standings[3..].iter().map(|s| s.name.as_str()).collect();
-        assert!(bottom.contains(&"lowest") && bottom.contains(&"biggest"), "{bottom:?}");
+        assert!(
+            bottom.contains(&"lowest") && bottom.contains(&"biggest"),
+            "{bottom:?}"
+        );
     }
 
     #[test]
