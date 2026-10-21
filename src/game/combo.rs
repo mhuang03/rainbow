@@ -1,243 +1,299 @@
-use crate::constants::{check_count, check_rank};
-use std::cmp::Ordering;
+use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+use crate::constants::{CARDS_PER_RANK, MAX_RANK, MIN_RANK, NUM_RANKS};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ComboKind {
     Single { rank: u8 },
     Set { rank: u8, count: u8 },
     Run { start: u8, end: u8 },
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+/// A validated combo: one card, two or more cards of one rank, or two or more consecutive ranks.
+///
+/// Every combo maps to a unique index in `0..NUM_ACTIONS`, giving learning agents a fixed
+/// action space. Indices are laid out as 6 singles, then 54 sets (rank-major, count 2..=10),
+/// then 15 runs (ordered by start, then end).
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Combo(ComboKind);
 
-impl PartialOrd for ComboKind {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (ComboKind::Single { .. }, ComboKind::Set { .. }) => Some(Ordering::Less),
-            (ComboKind::Single { .. }, ComboKind::Run { .. }) => Some(Ordering::Less),
-            (ComboKind::Set { .. }, ComboKind::Single { .. }) => Some(Ordering::Greater),
-            (ComboKind::Run { .. }, ComboKind::Single { .. }) => Some(Ordering::Greater),
-            (ComboKind::Single { rank: x }, ComboKind::Single { rank: y }) => x.partial_cmp(y),
-            (
-                ComboKind::Set {
-                    rank: x,
-                    count: x_count,
-                },
-                ComboKind::Set {
-                    rank: y,
-                    count: y_count,
-                },
-            ) => Some(x_count.cmp(y_count).then(x.cmp(y))),
-            (
-                ComboKind::Run {
-                    start: x_start,
-                    end: x_end,
-                },
-                ComboKind::Run {
-                    start: y_start,
-                    end: y_end,
-                },
-            ) => {
-                let x_len = x_end - x_start + 1;
-                let y_len = y_end - y_start + 1;
-                Some(x_len.cmp(&y_len).then(x_end.cmp(y_end)))
+const NUM_SET_COUNTS: u8 = CARDS_PER_RANK - 1;
+const SET_BASE: u8 = NUM_RANKS as u8;
+const RUN_BASE: u8 = SET_BASE + NUM_RANKS as u8 * NUM_SET_COUNTS;
+const NUM_RUNS: u8 = (NUM_RANKS * (NUM_RANKS - 1) / 2) as u8;
+
+/// Size of the action space: every distinct combo.
+pub const NUM_ACTIONS: usize = (RUN_BASE + NUM_RUNS) as usize;
+
+/// Index of the first run starting at `start`.
+const fn run_offset(start: u8) -> u8 {
+    let s = start - MIN_RANK;
+    s * MAX_RANK - s * (s + 1) / 2
+}
+
+/// Every combo, indexed by its action index.
+pub const ALL_COMBOS: [Combo; NUM_ACTIONS] = {
+    let mut combos = [Combo(ComboKind::Single { rank: MIN_RANK }); NUM_ACTIONS];
+    let mut i = 0;
+    let mut rank = MIN_RANK;
+    while rank <= MAX_RANK {
+        combos[i] = Combo::single(rank);
+        i += 1;
+        rank += 1;
+    }
+    rank = MIN_RANK;
+    while rank <= MAX_RANK {
+        let mut count = 2;
+        while count <= CARDS_PER_RANK {
+            combos[i] = Combo::set(rank, count);
+            i += 1;
+            count += 1;
+        }
+        rank += 1;
+    }
+    let mut start = MIN_RANK;
+    while start < MAX_RANK {
+        let mut end = start + 1;
+        while end <= MAX_RANK {
+            combos[i] = Combo::run(start, end);
+            i += 1;
+            end += 1;
+        }
+        start += 1;
+    }
+    assert!(i == NUM_ACTIONS);
+    combos
+};
+
+const fn valid_rank(rank: u8) -> bool {
+    MIN_RANK <= rank && rank <= MAX_RANK
+}
+
+impl Combo {
+    /// # Panics
+    /// If `rank` is not in `1..=6`.
+    pub const fn single(rank: u8) -> Self {
+        assert!(valid_rank(rank), "rank must be in 1..=6");
+        Self(ComboKind::Single { rank })
+    }
+
+    /// # Panics
+    /// If `rank` is not in `1..=6` or `count` is not in `2..=10`.
+    pub const fn set(rank: u8, count: u8) -> Self {
+        assert!(valid_rank(rank), "rank must be in 1..=6");
+        assert!(
+            2 <= count && count <= CARDS_PER_RANK,
+            "set count must be in 2..=10"
+        );
+        Self(ComboKind::Set { rank, count })
+    }
+
+    /// # Panics
+    /// If either rank is not in `1..=6` or `start >= end`.
+    pub const fn run(start: u8, end: u8) -> Self {
+        assert!(
+            valid_rank(start) && valid_rank(end),
+            "rank must be in 1..=6"
+        );
+        assert!(start < end, "run start must be less than end");
+        Self(ComboKind::Run { start, end })
+    }
+
+    pub const fn kind(self) -> ComboKind {
+        self.0
+    }
+
+    /// Number of cards in the combo.
+    pub const fn num_cards(self) -> u8 {
+        match self.0 {
+            ComboKind::Single { .. } => 1,
+            ComboKind::Set { count, .. } => count,
+            ComboKind::Run { start, end } => end - start + 1,
+        }
+    }
+
+    /// Highest rank among the combo's cards.
+    pub const fn high_rank(self) -> u8 {
+        match self.0 {
+            ComboKind::Single { rank } | ComboKind::Set { rank, .. } => rank,
+            ComboKind::Run { end, .. } => end,
+        }
+    }
+
+    /// Trick-resolution key: bigger combos (more cards) win, then the highest card.
+    /// Remaining ties go to the combo played earlier, which callers handle with a stable sort.
+    pub const fn strength(self) -> u8 {
+        self.num_cards() * (MAX_RANK + 1) + self.high_rank()
+    }
+
+    /// Number of cards of `rank` in the combo.
+    pub const fn count_of(self, rank: u8) -> u8 {
+        match self.0 {
+            ComboKind::Single { rank: r } => (r == rank) as u8,
+            ComboKind::Set { rank: r, count } => {
+                if r == rank {
+                    count
+                } else {
+                    0
+                }
             }
-            _ => None,
+            ComboKind::Run { start, end } => (start <= rank && rank <= end) as u8,
+        }
+    }
+
+    /// The trick type a combo imposes on the rest of the trick. Singles impose nothing.
+    pub const fn trick_type(self) -> TrickType {
+        match self.0 {
+            ComboKind::Single { .. } => TrickType::Open,
+            ComboKind::Set { .. } => TrickType::Set,
+            ComboKind::Run { .. } => TrickType::Run,
+        }
+    }
+
+    pub const fn action_index(self) -> usize {
+        (match self.0 {
+            ComboKind::Single { rank } => rank - MIN_RANK,
+            ComboKind::Set { rank, count } => {
+                SET_BASE + (rank - MIN_RANK) * NUM_SET_COUNTS + (count - 2)
+            }
+            ComboKind::Run { start, end } => RUN_BASE + run_offset(start) + (end - start - 1),
+        }) as usize
+    }
+
+    pub const fn from_action_index(index: usize) -> Option<Self> {
+        if index < NUM_ACTIONS {
+            Some(ALL_COMBOS[index])
+        } else {
+            None
         }
     }
 }
 
-impl Combo {
-    pub fn new_single(rank: u8) -> Self {
-        check_rank(rank);
-        Self(ComboKind::Single { rank })
+impl fmt::Display for Combo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            ComboKind::Single { rank } => write!(f, "{rank}"),
+            ComboKind::Set { rank, count } => write!(f, "{count}x{rank}"),
+            ComboKind::Run { start, end } => write!(f, "{start}-{end}"),
+        }
+    }
+}
+
+/// Which combos may be played in the current trick.
+#[derive(Debug, Default, PartialEq, Eq, Hash, Copy, Clone)]
+pub enum TrickType {
+    /// Nothing but singles played so far: any combo is allowed.
+    #[default]
+    Open,
+    /// A set has been played: only singles and sets are allowed.
+    Set,
+    /// A run has been played: only singles and runs are allowed.
+    Run,
+}
+
+impl TrickType {
+    pub const fn allows(self, combo: Combo) -> bool {
+        !matches!(
+            (self, combo.0),
+            (TrickType::Set, ComboKind::Run { .. }) | (TrickType::Run, ComboKind::Set { .. })
+        )
     }
 
-    pub fn new_set(rank: u8, count: u8) -> Self {
-        check_rank(rank);
-        check_count(count);
-        assert!(count >= 2, "A set must have at least 2 cards");
-        Self(ComboKind::Set { rank, count })
-    }
-
-    pub fn new_run(start: u8, end: u8) -> Self {
-        check_rank(start);
-        check_rank(end);
-        assert!(start < end, "Start must be less than end for runs");
-        Self(ComboKind::Run { start, end })
-    }
-
-    pub fn kind(&self) -> ComboKind {
-        self.0
+    /// The trick type after `combo` is played.
+    pub const fn after(self, combo: Combo) -> Self {
+        match combo.trick_type() {
+            TrickType::Open => self,
+            t => t,
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use proptest::arbitrary::Arbitrary;
     use proptest::prelude::*;
-
-    impl Arbitrary for ComboKind {
-        type Parameters = ();
-        type Strategy = BoxedStrategy<ComboKind>;
-
-        fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-            prop_oneof![
-                (1..=6u8).prop_map(|rank| ComboKind::Single { rank }),
-                (1..=6u8, 1..=10u8).prop_map(|(rank, count)| ComboKind::Set { rank, count }),
-                (1..=5u8)
-                    .prop_flat_map(|start| (start + 1..=6u8)
-                        .prop_map(move |end| ComboKind::Run { start, end })),
-            ]
-            .boxed()
-        }
-    }
 
     impl Arbitrary for Combo {
         type Parameters = ();
         type Strategy = BoxedStrategy<Combo>;
 
         fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-            any::<ComboKind>().prop_map(Combo).boxed()
+            (0..NUM_ACTIONS).prop_map(|i| ALL_COMBOS[i]).boxed()
         }
+    }
+
+    #[test]
+    fn action_index_round_trips() {
+        assert_eq!(NUM_ACTIONS, 75);
+        for (i, combo) in ALL_COMBOS.iter().enumerate() {
+            assert_eq!(combo.action_index(), i);
+            assert_eq!(Combo::from_action_index(i), Some(*combo));
+        }
+        assert_eq!(Combo::from_action_index(NUM_ACTIONS), None);
+    }
+
+    #[test]
+    fn all_combos_are_distinct() {
+        let set: std::collections::HashSet<_> = ALL_COMBOS.iter().collect();
+        assert_eq!(set.len(), NUM_ACTIONS);
+    }
+
+    #[test]
+    fn strength_follows_rulebook() {
+        // more cards beat fewer, regardless of rank
+        assert!(Combo::set(1, 2).strength() > Combo::single(6).strength());
+        assert!(Combo::run(1, 3).strength() > Combo::set(6, 2).strength());
+        assert!(Combo::set(1, 5).strength() > Combo::run(3, 6).strength());
+        assert!(Combo::run(3, 6).strength() > Combo::set(5, 4).strength());
+        // equal size: highest card wins
+        assert!(Combo::set(5, 2).strength() > Combo::set(4, 2).strength());
+        assert!(Combo::run(2, 4).strength() > Combo::run(1, 3).strength());
+        assert!(Combo::run(4, 5).strength() < Combo::set(6, 2).strength());
+        // equal size and high card: tied (earlier play breaks it)
+        assert_eq!(Combo::single(3).strength(), Combo::single(3).strength());
+    }
+
+    #[test]
+    fn trick_type_restrictions() {
+        let (single, set, run) = (Combo::single(1), Combo::set(1, 2), Combo::run(1, 2));
+        assert!(
+            [single, set, run]
+                .iter()
+                .all(|&c| TrickType::Open.allows(c))
+        );
+        assert!(TrickType::Set.allows(single) && TrickType::Set.allows(set));
+        assert!(!TrickType::Set.allows(run));
+        assert!(TrickType::Run.allows(single) && TrickType::Run.allows(run));
+        assert!(!TrickType::Run.allows(set));
+
+        assert_eq!(TrickType::Open.after(single), TrickType::Open);
+        assert_eq!(TrickType::Open.after(set), TrickType::Set);
+        assert_eq!(TrickType::Run.after(single), TrickType::Run);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_of_one_is_rejected() {
+        Combo::set(3, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn reversed_run_is_rejected() {
+        Combo::run(4, 2);
     }
 
     proptest! {
         #[test]
-        fn test_partial_ord_symmetry(a in any::<ComboKind>(), b in any::<ComboKind>()) {
-            match a.partial_cmp(&b) {
-                Some(Ordering::Greater) => prop_assert!(b < a),
-                Some(Ordering::Less) => prop_assert!(b > a),
-                Some(Ordering::Equal) => prop_assert!(b == a),
-                None => prop_assert!(b.partial_cmp(&a).is_none()),
-            }
+        fn count_of_sums_to_len(combo in any::<Combo>()) {
+            let total: u8 = (MIN_RANK..=MAX_RANK).map(|r| combo.count_of(r)).sum();
+            prop_assert_eq!(total, combo.num_cards());
         }
 
         #[test]
-        fn test_partial_ord_transitivity(
-            a in any::<ComboKind>(),
-            b in any::<ComboKind>(),
-            c in any::<ComboKind>()
-        ) {
-            if let (Some(ab), Some(bc)) = (a.partial_cmp(&b), b.partial_cmp(&c)) {
-                match (ab, bc) {
-                    (Ordering::Less, Ordering::Less)
-                    | (Ordering::Less, Ordering::Equal)
-                    | (Ordering::Equal, Ordering::Less) => {
-                        prop_assert_eq!(a.partial_cmp(&c), Some(Ordering::Less));
-                    }
-                    (Ordering::Greater, Ordering::Greater)
-                    | (Ordering::Greater, Ordering::Equal)
-                    | (Ordering::Equal, Ordering::Greater) => {
-                        prop_assert_eq!(a.partial_cmp(&c), Some(Ordering::Greater));
-                    }
-                    (Ordering::Equal, Ordering::Equal) => {
-                        prop_assert_eq!(a.partial_cmp(&c), Some(Ordering::Equal));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        #[test]
-        fn test_single_comparisons(rank1 in 1..=6u8, rank2 in 1..=6u8) {
-            let combo1 = ComboKind::Single { rank: rank1 };
-            let combo2 = ComboKind::Single { rank: rank2 };
-
-            if rank1 < rank2 {
-                prop_assert!(combo1 < combo2);
-            } else if rank2 < rank1 {
-                prop_assert!(combo2 < combo1);
-            } else {
-                prop_assert_eq!(combo1, combo2);
-            }
-        }
-
-        #[test]
-        fn test_set_comparisons(
-            rank1 in 1..=6u8, count1 in 1..=10u8,
-            rank2 in 1..=6u8, count2 in 1..=10u8,
-        ) {
-            let combo1 = ComboKind::Set { rank: rank1, count: count1 };
-            let combo2 = ComboKind::Set { rank: rank2, count: count2 };
-
-            if count1 < count2 {
-                prop_assert!(combo1 < combo2);
-            } else if count2 < count1 {
-                prop_assert!(combo2 < combo1);
-            } else if rank1 < rank2 {
-                prop_assert!(combo1 < combo2);
-            } else if rank2 < rank1 {
-                prop_assert!(combo2 < combo1);
-            } else {
-                prop_assert_eq!(combo1, combo2);
-            }
-        }
-
-        #[test]
-        fn test_run_comparisons(
-            start1 in 1..=5u8, end1 in 2..=6u8,
-            start2 in 1..=5u8, end2 in 2..=6u8,
-        ) {
-            prop_assume!(start1 < end1);
-            prop_assume!(start2 < end2);
-
-            let combo1 = ComboKind::Run { start: start1, end: end1 };
-            let combo2 = ComboKind::Run { start: start2, end: end2 };
-
-            let combo1_len = end1 - start1 + 1;
-            let combo2_len = end2 - start2 + 1;
-
-            if combo1_len < combo2_len {
-                prop_assert!(combo1 < combo2);
-            } else if combo2_len < combo1_len {
-                prop_assert!(combo2 < combo1);
-            } else if end1 < end2 {
-                prop_assert!(combo1 < combo2);
-            } else if end2 < end1 {
-                prop_assert!(combo2 < combo1);
-            } else {
-                prop_assert_eq!(combo1, combo2);
-            }
-        }
-
-        #[test]
-        fn test_single_vs_set_comparisons(
-            set_rank in 1..=6u8, set_count in 1..=10u8,
-            single_rank in 1..=6u8,
-        ) {
-            let single = ComboKind::Single { rank: single_rank };
-            let set = ComboKind::Set { rank: set_rank, count: set_count };
-
-            prop_assert!(single < set);
-            prop_assert!(set > single);
-        }
-
-        #[test]
-        fn test_single_vs_run_comparisons(
-            run_start in 1..=5u8, run_end in 2..=6u8,
-            single_rank in 1..=6u8,
-        ) {
-            prop_assume!(run_start < run_end);
-            let single = ComboKind::Single { rank: single_rank };
-            let run = ComboKind::Run { start: run_start, end: run_end };
-
-            prop_assert!(single < run);
-            prop_assert!(run > single);
-        }
-
-        #[test]
-        fn test_set_vs_run_comparisons(
-            set_rank in 1..=6u8, set_count in 1..=10u8,
-            run_start in 1..=5u8, run_end in 2..=6u8,
-        ) {
-            prop_assume!(run_start < run_end);
-            let set = ComboKind::Set { rank: set_rank, count: set_count };
-            let run = ComboKind::Run { start: run_start, end: run_end };
-
-            prop_assert_eq!(set.partial_cmp(&run), None);
+        fn strength_orders_by_len_then_high_rank(a in any::<Combo>(), b in any::<Combo>()) {
+            let expected = (a.num_cards(), a.high_rank()).cmp(&(b.num_cards(), b.high_rank()));
+            prop_assert_eq!(a.strength().cmp(&b.strength()), expected);
         }
     }
 }

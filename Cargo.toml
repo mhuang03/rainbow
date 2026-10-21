@@ -3,9 +3,16 @@ name = "rainbow"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["python"]
+
 [dependencies]
 arrayvec = "0.7.8"
 rand = "0.10.2"
 
 [dev-dependencies]
 proptest = "1.11.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

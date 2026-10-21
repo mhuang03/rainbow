@@ -1,10 +1,14 @@
-use std::fmt::Debug;
+use crate::game::{Combo, Observation};
 
-use crate::game::Combo;
-use crate::game::GameView;
-
-pub trait Agent: Debug {
-    fn choose_action(&self, view: GameView, valid_actions: &[Combo]) -> usize;
+/// A player that picks a combo from the legal options given its information set.
+///
+/// Search agents can sample full states consistent with the observation through
+/// [`Observation::determinize`].
+pub trait Agent {
+    /// Chooses one of `legal`, which is never empty.
+    fn act(&mut self, observation: &Observation, legal: &[Combo]) -> Combo;
 }
 
-pub mod random_agent;
+pub mod random;
+
+pub use random::RandomAgent;
