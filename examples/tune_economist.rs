@@ -59,6 +59,7 @@ fn perturb(p: Params, rng: &mut SmallRng, scale: f32) -> Params {
         set_potential: j(p.set_potential, 0.0, 5.0),
         run_potential: j(p.run_potential, 0.0, 5.0),
         endgame_weight: p.endgame_weight,
+        pressure_scaling: p.pressure_scaling,
     }
 }
 
