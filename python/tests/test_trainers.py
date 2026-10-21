@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -57,3 +58,21 @@ def test_belief_and_expert_iteration(tmp_path):
     out = tmp_path / "exit.bin"
     run("train_exit.py", "--init", str(init), "--data", str(data), "--out", str(out), "--epochs", "1", "--eval-deals", "1")
     re.RustAgent(f"dmc:path={out}")
+
+
+def test_gymnasium_env():
+    gym = pytest.importorskip("gymnasium")
+    from gymnasium.utils.env_checker import check_env
+
+    import rainbow_gym
+
+    env = rainbow_gym.RainbowEnv(players=3, opponents=["cheapest", "random"])
+    check_env(env, skip_render_check=True)
+    obs, info = env.reset(seed=1)
+    total = 0.0
+    for _ in range(200):
+        obs, reward, terminated, truncated, info = env.step(int(np.flatnonzero(info["action_mask"])[0]))
+        total += reward
+        if terminated:
+            break
+    assert terminated and -1.0 <= total <= 2.0

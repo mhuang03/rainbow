@@ -11,6 +11,8 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 test = ["pytest"]
+train = ["torch>=2.0"]
+gym = ["gymnasium>=1.0"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

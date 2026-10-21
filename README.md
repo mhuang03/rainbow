@@ -95,6 +95,7 @@ print(game.scores(), game.returns())
 - `Game.clone()`, `determinize(player, seed)` and `rollout(seed)` support MCTS. `rollout` runs without holding the GIL.
 - `VecEnv(num_envs, seed, players, opponents, learners)` steps many games per call and auto-resets finished ones (about 1M steps/s with random actions). With `opponents` (Rust agent specs), the environment plays the non-learner seats itself, for training against a league.
 - `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for a list of `Game`s.
+- `python/rainbow_gym.py` wraps a game as a Gymnasium environment (one learner seat against Rust agents, with `action_masks()` for MaskablePPO-style libraries).
 - `Game` pickles compactly (starting deal plus history), and `to_bytes` / `from_bytes` expose the same encoding.
 - `full_observation(player)` and `batch_full_observations(games)` add every hidden hand, for training value networks.
 - `history()` lists every play so far.
