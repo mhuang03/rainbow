@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+import torch
 from torch import nn
 
 import rainbow_engine as re
@@ -28,6 +29,31 @@ def export(net: nn.Sequential, path: Path) -> None:
             f.write(struct.pack("<II", w.shape[1], w.shape[0]))
             f.write(w.tobytes())
             f.write(b.tobytes())
+
+
+def load(path: Path) -> nn.Sequential:
+    """Reads a network written by `export` (or any `RBMLP1` file)."""
+    data = Path(path).read_bytes()
+    if data[:8] != b"RBMLP1\0\0":
+        raise ValueError(f"{path} is not a Rainbow MLP file")
+    (count,) = struct.unpack_from("<I", data, 8)
+    offset = 12
+    layers: list[nn.Module] = []
+    for i in range(count):
+        inputs, outputs = struct.unpack_from("<II", data, offset)
+        offset += 8
+        w = np.frombuffer(data, "<f4", inputs * outputs, offset).reshape(outputs, inputs)
+        offset += 4 * inputs * outputs
+        b = np.frombuffer(data, "<f4", outputs, offset)
+        offset += 4 * outputs
+        layer = nn.Linear(inputs, outputs)
+        with torch.no_grad():
+            layer.weight.copy_(torch.from_numpy(w.copy()))
+            layer.bias.copy_(torch.from_numpy(b.copy()))
+        layers.append(layer)
+        if i < count - 1:
+            layers.append(nn.ReLU())
+    return nn.Sequential(*layers)
 
 
 def mlp(inputs: int, hidden: list[int], outputs: int) -> nn.Sequential:

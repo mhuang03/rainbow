@@ -13,7 +13,7 @@ use rand::{Rng, RngExt};
 
 use crate::agents::baseline::cheapest_winner;
 use crate::agents::dmc::{DmcAgent, Mlp};
-use crate::game::{Combo, GameState, Observation};
+use crate::game::{Combo, DealWeights, GameState, Observation};
 
 /// How opponents are assumed to choose moves.
 #[derive(Debug, Clone)]
@@ -128,10 +128,19 @@ impl Inference {
         total
     }
 
-    /// Samples candidate deals for `obs` and weights them by likelihood.
-    pub fn sample_pool<R: Rng + ?Sized>(&self, obs: &Observation, rng: &mut R) -> WorldPool {
+    /// Samples candidate deals for `obs` (uniformly, or biased by `prior` weights) and weights
+    /// them by likelihood.
+    pub fn sample_pool<R: Rng + ?Sized>(
+        &self,
+        obs: &Observation,
+        prior: Option<&DealWeights>,
+        rng: &mut R,
+    ) -> WorldPool {
         let worlds: Vec<GameState> = (0..self.candidates.max(1))
-            .map(|_| obs.determinize(rng))
+            .map(|_| match prior {
+                Some(w) => obs.determinize_weighted(w, rng),
+                None => obs.determinize(rng),
+            })
             .collect();
         let logs: Vec<f32> = worlds.iter().map(|w| self.log_likelihood(obs, w)).collect();
         let max = logs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
@@ -172,7 +181,7 @@ mod tests {
             g.apply(legal[rng.random_range(0..legal.len())]).unwrap();
         }
         let obs = g.observe(g.current_player());
-        let pool = inference(0.3).sample_pool(&obs, &mut rng);
+        let pool = inference(0.3).sample_pool(&obs, None, &mut rng);
         assert_eq!(pool.len(), 64);
         for _ in 0..20 {
             assert_eq!(pool.sample(&mut rng).observe(obs.observer()), obs);
@@ -192,10 +201,10 @@ mod tests {
             window: 0,
             ..inference(0.3)
         };
-        let pool = inf.sample_pool(&g.observe(0), &mut rng);
+        let pool = inf.sample_pool(&g.observe(0), None, &mut rng);
         assert!((pool.effective_size() - 64.0).abs() < 1e-2);
         // with scoring on, the cheapest model separates deals
-        let pool = inference(0.3).sample_pool(&g.observe(0), &mut rng);
+        let pool = inference(0.3).sample_pool(&g.observe(0), None, &mut rng);
         assert!(pool.effective_size() < 64.0);
     }
 

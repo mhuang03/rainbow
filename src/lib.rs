@@ -12,6 +12,7 @@ pub mod agents;
 pub mod arena;
 pub mod constants;
 pub mod game;
+pub mod selfplay;
 
 pub use game::{
     ActionError, Combo, ComboKind, GameState, Hand, NUM_ACTIONS, Observation, Play, TrickType,

@@ -150,7 +150,10 @@ def main() -> None:
     parser.add_argument("--eval-deals", type=int, default=200)
     parser.add_argument("--arena", type=Path, default=ARENA)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--threads", type=int, default=0, help="torch threads (0: torch default)")
     args = parser.parse_args()
+    if args.threads:
+        torch.set_num_threads(args.threads)
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)

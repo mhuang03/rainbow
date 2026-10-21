@@ -3,6 +3,7 @@
 use crate::game::{Combo, Observation};
 
 pub mod baseline;
+pub mod belief;
 pub mod dmc;
 pub mod dqn;
 pub mod economist;
@@ -134,15 +135,69 @@ fn parse_inference(opts: &mut Options) -> Result<Option<inference::Inference>, S
     }))
 }
 
+/// Parameters for an `ismcts` spec's options, e.g. `"n=200,prior=model.bin"`.
+///
+/// # Errors
+/// If an option is unknown or invalid.
+pub fn ismcts_params(options: &str) -> Result<ismcts::Params, String> {
+    let mut opts = Options::parse(options)?;
+    let params = parse_ismcts(&mut opts)?;
+    opts.finish()?;
+    Ok(params)
+}
+
+fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
+    let d = ismcts::Params::default();
+    let rollout = match d.evaluator {
+        value::Evaluator::Rollout(r) => r,
+        value::Evaluator::Dmc(_) => unreachable!("default evaluator is a rollout"),
+    };
+    let rollout = parse_rollout(opts, rollout)?;
+    let evaluator = match opts.take::<String>("leaf")? {
+        None => value::Evaluator::Rollout(rollout),
+        Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+    };
+    let prior = match opts.take::<String>("prior")? {
+        None => None,
+        Some(path) => Some(ismcts::Prior {
+            net: load_dmc(&path)?,
+            temperature: opts.take("ptemp")?.unwrap_or(0.1),
+            c_puct: opts.take("cpuct")?.unwrap_or(1.0),
+        }),
+    };
+    let params = ismcts::Params {
+        iterations: opts.take("n")?.unwrap_or(d.iterations),
+        exploration: opts.take("c")?.unwrap_or(d.exploration),
+        evaluator,
+        reward: rollout::Reward {
+            margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
+        },
+        prior,
+        belief: match opts.take::<String>("belief")? {
+            None => None,
+            Some(path) => Some(std::sync::Arc::new(belief::Belief::new(
+                dmc::Mlp::load_cached(&path)?,
+            )?)),
+        },
+        inference: parse_inference(opts)?,
+    };
+    Ok(params)
+}
+
 /// Builds an agent from a spec `name[:key=value,...]`, seeding its randomness with `seed`.
 ///
-/// Options: `pimc` takes `k` (deals per decision); `ismcts` takes `n` (iterations), `c`
-/// (exploration), `leaf` (a DMC network path for leaf values), `prior` (a DMC network path for
-/// PUCT priors) with `ptemp` (softmax temperature) and `cpuct`, plus the inference options below. Both take `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
-/// cheapest rollout) and `margin` (score-margin reward weight). `dmc` requires `path`, a trained
-/// network file, and so do `dqn` and `ppo`. `minimax` takes `k` (deals), `depth` (plies), `mode` (`paranoid` or `maxn`) and
-/// `endgame` (cards left at which to search to the end) and `leaf` (a DMC network path for leaf
-/// values instead of `cheapest` playouts).
+/// Options:
+/// - `pimc`: `k` (deals per decision), plus the rollout options.
+/// - `ismcts`: `n` (iterations), `c` (exploration), `leaf` (DMC network path for leaf values),
+///   `prior` (DMC network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
+///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
+///   inference options of [`parse_inference`].
+/// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid` or `maxn`), `endgame` (cards
+///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
+/// - `dmc`, `dqn`, `ppo`: `path`, a trained network file.
+///
+/// Rollout options are `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
+/// cheapest rollout) and `margin` (score-margin reward weight).
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
@@ -166,37 +221,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             };
             Box::new(PimcAgent::with_params(params, seed))
         }
-        "ismcts" => {
-            let d = ismcts::Params::default();
-            let rollout = match d.evaluator {
-                value::Evaluator::Rollout(r) => r,
-                value::Evaluator::Dmc(_) => unreachable!("default evaluator is a rollout"),
-            };
-            let rollout = parse_rollout(&mut opts, rollout)?;
-            let evaluator = match opts.take::<String>("leaf")? {
-                None => value::Evaluator::Rollout(rollout),
-                Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
-            };
-            let prior = match opts.take::<String>("prior")? {
-                None => None,
-                Some(path) => Some(ismcts::Prior {
-                    net: load_dmc(&path)?,
-                    temperature: opts.take("ptemp")?.unwrap_or(0.1),
-                    c_puct: opts.take("cpuct")?.unwrap_or(1.0),
-                }),
-            };
-            let params = ismcts::Params {
-                iterations: opts.take("n")?.unwrap_or(d.iterations),
-                exploration: opts.take("c")?.unwrap_or(d.exploration),
-                evaluator,
-                reward: rollout::Reward {
-                    margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
-                },
-                prior,
-                inference: parse_inference(&mut opts)?,
-            };
-            Box::new(IsmctsAgent::with_params(params, seed))
-        }
+        "ismcts" => Box::new(IsmctsAgent::with_params(parse_ismcts(&mut opts)?, seed)),
         "minimax" => {
             let d = minimax::Params::default();
             let mode = match opts.take::<String>("mode")?.as_deref() {

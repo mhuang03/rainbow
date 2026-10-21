@@ -14,6 +14,7 @@ use rand::{RngExt, SeedableRng};
 use std::sync::Arc;
 
 use crate::agents::Agent;
+use crate::agents::belief::Belief;
 use crate::agents::dmc::{DmcAgent, Mlp};
 use crate::agents::inference::Inference;
 use crate::agents::rollout::{Reward, Rollout};
@@ -31,6 +32,8 @@ pub struct Params {
     pub reward: Reward,
     /// Network move priors. When set, selection uses PUCT (as in AlphaZero) instead of UCB.
     pub prior: Option<Prior>,
+    /// Bias sampled deals towards a hand-prediction network's expectations.
+    pub belief: Option<Arc<Belief>>,
     /// Weight sampled deals by how well they explain opponents' past moves, instead of
     /// sampling uniformly.
     pub inference: Option<Inference>,
@@ -46,6 +49,7 @@ impl Default for Params {
             evaluator: Evaluator::Rollout(Rollout::Cheapest { epsilon: 0.3 }),
             reward: Reward::default(),
             prior: None,
+            belief: None,
             inference: None,
         }
     }
@@ -241,13 +245,14 @@ impl IsmctsAgent {
         self.nodes[best].visits == 0
     }
 
-    /// Runs the search and returns visit counts of the root's moves.
-    pub fn search(&mut self, obs: &Observation) -> Vec<(Combo, u32)> {
+    /// Runs the search and returns statistics for each of the root's moves.
+    pub fn search(&mut self, obs: &Observation) -> Vec<RootMove> {
         let p = self.params.clone();
+        let weights = p.belief.as_ref().map(|b| b.weights(obs));
         let pool = p
             .inference
             .as_ref()
-            .map(|inference| inference.sample_pool(obs, &mut self.rng));
+            .map(|inference| inference.sample_pool(obs, weights.as_ref(), &mut self.rng));
         self.nodes.clear();
         // The root's own fields are unused; only its children matter.
         self.nodes.push(Node {
@@ -264,7 +269,10 @@ impl IsmctsAgent {
         for _ in 0..p.iterations {
             let mut state = match &pool {
                 Some(pool) => pool.sample(&mut self.rng).clone(),
-                None => obs.determinize(&mut self.rng),
+                None => match &weights {
+                    Some(w) => obs.determinize_weighted(w, &mut self.rng),
+                    None => obs.determinize(&mut self.rng),
+                },
             };
             let mut node = 0;
             path.clear();
@@ -294,13 +302,28 @@ impl IsmctsAgent {
             .children
             .iter()
             .map(|&ch| {
-                (
-                    self.nodes[ch as usize].combo,
-                    self.nodes[ch as usize].visits,
-                )
+                let n = &self.nodes[ch as usize];
+                RootMove {
+                    combo: n.combo,
+                    visits: n.visits,
+                    mean: if n.visits > 0 {
+                        n.total / n.visits as f32
+                    } else {
+                        f32::NAN
+                    },
+                }
             })
             .collect()
     }
+}
+
+/// Search statistics for one of the root's moves.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RootMove {
+    pub combo: Combo,
+    pub visits: u32,
+    /// Mean reward for the root player over the move's visits (NaN if unvisited).
+    pub mean: f32,
 }
 
 impl Agent for IsmctsAgent {
@@ -314,9 +337,9 @@ impl Agent for IsmctsAgent {
         }
         self.search(obs)
             .into_iter()
-            .filter(|(c, _)| legal.contains(c))
-            .max_by_key(|&(_, visits)| visits)
-            .map_or(legal[0], |(c, _)| c)
+            .filter(|m| legal.contains(&m.combo))
+            .max_by_key(|m| m.visits)
+            .map_or(legal[0], |m| m.combo)
     }
 }
 
@@ -367,7 +390,7 @@ mod tests {
             let mut state = GameState::new(n, 0, &mut rng);
             let mut agent = IsmctsAgent::with_params(params.clone(), 3);
             let visits = agent.search(&state.observe(0));
-            assert_eq!(visits.iter().map(|&(_, v)| v).sum::<u32>(), 60);
+            assert_eq!(visits.iter().map(|m| m.visits).sum::<u32>(), 60);
             while !state.is_over() {
                 let seat = state.current_player();
                 let combo = agent.act(&state.observe(seat), &state.legal_actions());
@@ -387,7 +410,12 @@ mod tests {
             2,
         );
         let visits = agent.search(&state.observe(0));
-        assert_eq!(visits.iter().map(|&(_, v)| v).sum::<u32>(), 300);
+        assert_eq!(visits.iter().map(|m| m.visits).sum::<u32>(), 300);
+        assert!(
+            visits
+                .iter()
+                .all(|m| m.visits == 0 || (-1.0..=2.0).contains(&m.mean))
+        );
         // the observer's own hand fixes the root moves
         assert_eq!(visits.len(), state.legal_actions().len());
     }

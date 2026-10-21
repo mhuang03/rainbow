@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::{Rng, RngExt};
 
 use crate::constants::{
     CARDS_PER_RANK, DECK_SIZE, MAX_GAME_PLAYS, MAX_HAND_SIZE, MAX_PILES, MAX_PLAYERS,
@@ -9,6 +9,26 @@ use crate::constants::{
 use crate::game::combo::{Combo, TrickType};
 use crate::game::hand::Hand;
 use crate::game::state::{GameState, Play, PlayerState};
+
+/// Per-rank weights for [`Observation::determinize_weighted`], indexed by absolute seat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DealWeights {
+    pub hands: [[f32; NUM_RANKS]; MAX_PLAYERS],
+    pub reserves: [[f32; NUM_RANKS]; MAX_PLAYERS],
+    /// For the cards set aside in 3-player games.
+    pub aside: [f32; NUM_RANKS],
+}
+
+impl Default for DealWeights {
+    /// Equal weights: the uniform deal.
+    fn default() -> Self {
+        Self {
+            hands: [[1.0; NUM_RANKS]; MAX_PLAYERS],
+            reserves: [[1.0; NUM_RANKS]; MAX_PLAYERS],
+            aside: [1.0; NUM_RANKS],
+        }
+    }
+}
 
 /// What every player can see about a seat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -185,7 +205,91 @@ impl Observation {
             assert_eq!(hand.len(), n as usize, "observation is inconsistent");
             hand
         };
+        let mut hands = [Hand::EMPTY; MAX_PLAYERS];
+        let mut reserves = [Hand::EMPTY; MAX_PLAYERS];
+        for (seat, p) in self.players.iter().enumerate() {
+            if seat != self.observer as usize {
+                hands[seat] = deal(p.hand_size);
+            }
+            reserves[seat] = deal(p.reserve_size);
+        }
+        self.world(&hands, &reserves)
+    }
 
+    /// Like [`Self::determinize`], but each unknown card goes to a hidden hand, reserve or the
+    /// set-aside cards with probability proportional to that container's weight for the card's
+    /// rank (among containers with room left). Sizes always match the observation. Weights come
+    /// from e.g. a hand-prediction network; equal weights give the uniform deal.
+    pub fn determinize_weighted<R: Rng + ?Sized>(
+        &self,
+        weights: &DealWeights,
+        rng: &mut R,
+    ) -> GameState {
+        const FLOOR: f32 = 1e-3;
+        let n = self.players.len();
+        let observer = self.observer as usize;
+        let mut pool: ArrayVec<u8, DECK_SIZE> = self.unknown().cards().collect();
+        pool.shuffle(rng);
+
+        // containers: hands of other seats, then every seat's reserve, then the set-aside cards
+        let mut room: ArrayVec<usize, { 2 * MAX_PLAYERS + 1 }> = ArrayVec::new();
+        let mut rank_weights: ArrayVec<&[f32; NUM_RANKS], { 2 * MAX_PLAYERS + 1 }> =
+            ArrayVec::new();
+        let mut owner: ArrayVec<(usize, bool), { 2 * MAX_PLAYERS + 1 }> = ArrayVec::new();
+        for seat in (0..n).filter(|&s| s != observer) {
+            room.push(self.players[seat].hand_size as usize);
+            rank_weights.push(&weights.hands[seat]);
+            owner.push((seat, false));
+        }
+        for seat in 0..n {
+            room.push(self.players[seat].reserve_size as usize);
+            rank_weights.push(&weights.reserves[seat]);
+            owner.push((seat, true));
+        }
+        let hidden: usize = room.iter().sum();
+        assert!(hidden <= pool.len(), "observation is inconsistent");
+        room.push(pool.len() - hidden);
+        rank_weights.push(&weights.aside);
+
+        let mut hands = [Hand::EMPTY; MAX_PLAYERS];
+        let mut reserves = [Hand::EMPTY; MAX_PLAYERS];
+        for &rank in &pool {
+            let r = (rank - MIN_RANK) as usize;
+            let w = |c: usize| {
+                if room[c] > 0 {
+                    rank_weights[c][r].max(0.0) + FLOOR
+                } else {
+                    0.0
+                }
+            };
+            let total: f32 = (0..room.len()).map(w).sum();
+            let mut x = rng.random::<f32>() * total;
+            let mut chosen = (0..room.len())
+                .rev()
+                .find(|&c| room[c] > 0)
+                .expect("room for every card");
+            for c in 0..room.len() {
+                let wc = w(c);
+                if x < wc {
+                    chosen = c;
+                    break;
+                }
+                x -= wc;
+            }
+            room[chosen] -= 1;
+            if let Some(&(seat, reserve)) = owner.get(chosen) {
+                if reserve {
+                    reserves[seat].add_card(rank);
+                } else {
+                    hands[seat].add_card(rank);
+                }
+            }
+        }
+        self.world(&hands, &reserves)
+    }
+
+    /// The full state with the given hidden hands and reserves (the observer's hand is known).
+    fn world(&self, hands: &[Hand; MAX_PLAYERS], reserves: &[Hand; MAX_PLAYERS]) -> GameState {
         let players = self
             .players
             .iter()
@@ -194,9 +298,9 @@ impl Observation {
                 hand: if seat == self.observer as usize {
                     self.hand
                 } else {
-                    deal(p.hand_size)
+                    hands[seat]
                 },
-                reserve: deal(p.reserve_size),
+                reserve: reserves[seat],
                 points: p.points,
             })
             .collect();
@@ -386,6 +490,24 @@ mod tests {
     }
 
     #[test]
+    fn weights_bias_the_deal() {
+        let g = GameState::new(4, 0, &mut SmallRng::seed_from_u64(3));
+        let obs = g.observe(0);
+        let mut weights = DealWeights::default();
+        weights.hands[2] = [100.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let mut rng = SmallRng::seed_from_u64(4);
+        let (mut biased, mut uniform) = (0, 0);
+        for _ in 0..200 {
+            biased += obs
+                .determinize_weighted(&weights, &mut rng)
+                .hand(2)
+                .count(1) as u32;
+            uniform += obs.determinize(&mut rng).hand(2).count(1) as u32;
+        }
+        assert!(biased > uniform * 2, "{biased} vs {uniform}");
+    }
+
+    #[test]
     fn three_player_unknown_includes_set_aside() {
         let g = GameState::new(3, 0, &mut SmallRng::seed_from_u64(0));
         let obs = g.observe(0);
@@ -425,6 +547,23 @@ mod tests {
                 // the sampled world looks identical from the observer's seat
                 prop_assert_eq!(&d.observe(seat), &obs);
                 prop_assert_eq!(!d.legal_actions().is_empty(), !g.is_over());
+            }
+        }
+
+        #[test]
+        fn weighted_determinization_is_consistent(
+            seed in any::<u64>(),
+            num_players in MIN_PLAYERS..=MAX_PLAYERS,
+            moves in 0..40usize,
+        ) {
+            let g = midgame(seed, num_players, moves);
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let mut weights = DealWeights::default();
+            weights.hands[1] = [5.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+            for seat in 0..num_players {
+                let obs = g.observe(seat);
+                let d = obs.determinize_weighted(&weights, &mut rng);
+                prop_assert_eq!(&d.observe(seat), &obs);
             }
         }
 

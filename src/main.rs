@@ -3,6 +3,7 @@
 //! ```text
 //! rainbow bench [num_players] [num_games] [seed]
 //! rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]
+//! rainbow selfplay [-g games] [-s seed] [-t threads] [-p players] [-x explore] -o FILE [OPTIONS]
 //! ```
 
 use std::process::ExitCode;
@@ -17,13 +18,17 @@ const USAGE: &str = "usage:
   rainbow bench [num_players] [num_games] [seed]
   rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]
 
-AGENT is name[:key=value,...], e.g. pimc:k=64,rollout=random";
+  rainbow selfplay [-g games] [-s seed] [-t threads] [-p players] [-x explore] -o FILE [OPTIONS]
+
+AGENT is name[:key=value,...], e.g. pimc:k=64,rollout=random
+selfplay OPTIONS are ismcts options, e.g. n=200,prior=models/dmc_v2.bin,leaf=models/dmc_v2.bin";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("bench") => bench(&args[1..]),
         Some("arena") => run_arena(&args[1..]),
+        Some("selfplay") => selfplay(&args[1..]),
         _ => Err(USAGE.to_owned()),
     };
     match result {
@@ -98,5 +103,43 @@ fn run_arena(args: &[String]) -> Result<(), String> {
     let report = arena::run(&lineup, &config).map_err(|e| e.to_string())?;
     print!("{report}");
     println!("({:.1}s)", start.elapsed().as_secs_f64());
+    Ok(())
+}
+
+/// Writes ISMCTS self-play records for expert iteration (see `rainbow::selfplay`).
+fn selfplay(args: &[String]) -> Result<(), String> {
+    let mut config = rainbow::selfplay::Config {
+        games: 100,
+        seed: 0,
+        threads: 0,
+        players: None,
+        explore_moves: 3,
+    };
+    let mut out = None;
+    let mut options = String::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-g" => config.games = parse(args.next(), "games")?,
+            "-s" => config.seed = parse(args.next(), "seed")?,
+            "-t" => config.threads = parse(args.next(), "threads")?,
+            "-p" => config.players = Some(parse(args.next(), "players")?),
+            "-x" => config.explore_moves = parse(args.next(), "explore")?,
+            "-o" => out = Some(parse::<String>(args.next(), "output file")?),
+            opts => options = opts.to_owned(),
+        }
+    }
+    let out = out.ok_or_else(|| format!("{USAGE}\n\nselfplay needs -o FILE"))?;
+    let params = rainbow::agents::ismcts_params(&options)?;
+    let file = std::fs::File::create(&out).map_err(|e| format!("cannot create {out}: {e}"))?;
+    let mut writer = std::io::BufWriter::new(file);
+    let start = Instant::now();
+    let records = rainbow::selfplay::generate(&params, &config, &mut writer)
+        .map_err(|e| format!("writing {out}: {e}"))?;
+    println!(
+        "{records} records from {} games in {:.1}s -> {out}",
+        config.games,
+        start.elapsed().as_secs_f64()
+    );
     Ok(())
 }
