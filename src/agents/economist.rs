@@ -44,6 +44,11 @@ pub struct Params {
     pub run_potential: f32,
     /// Bonus or penalty for ending the game while winning or losing, in points.
     pub endgame_weight: f32,
+    /// Scale the spare-card cost by card pressure (cards still needed / cards left), so cards
+    /// the rest of the game can't use are free to spend. Off by default: it lost to the default
+    /// weights at 3, 4 and 6 players (0.83-0.91 relative), despite the DMC network ending games
+    /// with fewer cards left than the Economist.
+    pub pressure_scaling: bool,
 }
 
 impl Default for Params {
@@ -58,6 +63,7 @@ impl Default for Params {
             set_potential: 0.8,
             run_potential: 0.6,
             endgame_weight: 50.0,
+            pressure_scaling: false,
         }
     }
 }
@@ -272,7 +278,13 @@ impl Agent for EconomistAgent {
             let left = (my_cards - combo.num_cards() as usize) as f32;
             let needed = (tricks_left - 1.0) * f32::from(setup.combos_per_turn);
             let deficit = (needed - left).clamp(0.0, extra);
-            let card_cost = deficit * p.scarce_card_cost * income + extra * p.spare_card_cost;
+            let pressure = if p.pressure_scaling {
+                (needed / left.max(1.0)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            let card_cost =
+                deficit * p.scarce_card_cost * income + extra * p.spare_card_cost * pressure;
 
             let mut after = hand;
             after.remove_combo(combo);

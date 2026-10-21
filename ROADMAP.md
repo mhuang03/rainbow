@@ -276,6 +276,21 @@ Opponent inference with the DMC network as the opponent model (4p, with plain IS
 Economists): inference 1.26, plain 1.12. Smaller than the `cheapest` model's gain against
 Economists, but positive.
 
+### Playing style (`python/analyze_play.py`, 4p, 300 games, one seat each)
+
+| Agent | Win share | Cards/play | Points/card | Leads a set | Leads a run | Lead size | Wins when last | Cards left at end |
+|---|---|---|---|---|---|---|---|---|
+| dmc v2 | 0.611 | 1.64 | 3.51 | 0.19 | 0.20 | 1.53 | 0.42 | 0.2 |
+| economist | 0.246 | 1.50 | 3.56 | 0.18 | 0.08 | 1.42 | 0.41 | 1.4 |
+| cheapest | 0.136 | 1.52 | 3.28 | 0.00 | 0.00 | 1.00 | 0.69 | 1.1 |
+| random | 0.007 | 1.73 | 2.56 | 0.30 | 0.26 | 1.82 | 0.36 | 0.2 |
+
+The network trades cards for points no more efficiently than the Economist, but it leads runs
+far more often and finishes with almost no cards left. Making surplus cards free in the
+Economist (`economist:pressure=true`) made it worse (0.83-0.91 relative against default
+Economists at 3-6 players), so the network's edge is in choosing which tricks to spend on, not in
+spending more. Retuning the Economist for 3-player games alone gained only 0.05 (within noise).
+
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.
 

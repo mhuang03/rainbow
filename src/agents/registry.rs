@@ -2,8 +2,8 @@
 
 use crate::agents::{
     Agent, BiggestAgent, CheapestAgent, DmcAgent, DqnAgent, EconomistAgent, IsmctsAgent,
-    LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, dmc, inference, ismcts, minimax,
-    pimc, rollout, value,
+    LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, dmc, economist, inference, ismcts,
+    minimax, pimc, rollout, value,
 };
 
 /// Names accepted by [`create`].
@@ -166,6 +166,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// Builds an agent from a spec `name[:key=value,...]`, seeding its randomness with `seed`.
 ///
 /// Options:
+/// - `economist`: `pressure` (`true` to make surplus cards free to spend).
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
@@ -194,7 +195,14 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         "lowest" => Box::new(LowestAgent),
         "biggest" => Box::new(BiggestAgent),
         "cheapest" => Box::new(CheapestAgent),
-        "economist" => Box::new(EconomistAgent::new(seed)),
+        "economist" => {
+            let d = economist::Params::default();
+            let params = economist::Params {
+                pressure_scaling: opts.take("pressure")?.unwrap_or(d.pressure_scaling),
+                ..d
+            };
+            Box::new(EconomistAgent::with_params(params, seed))
+        }
         "pimc" => {
             let d = pimc::Params::default();
             let params = pimc::Params {
