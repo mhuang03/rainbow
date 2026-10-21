@@ -1,0 +1,15 @@
+[package]
+name = "rainbow-py"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "rainbow_engine"
+crate-type = ["cdylib"]
+
+[dependencies]
+rainbow = { path = ".." }
+numpy = "0.30"
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
+rand = "0.10.2"

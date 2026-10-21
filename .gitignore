@@ -1,2 +1,5 @@
 /target
 /proptest-regressions
+__pycache__/
+*.so
+.venv/
