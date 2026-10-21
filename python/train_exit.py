@@ -25,15 +25,22 @@ ACTIONS = re.action_features()
 RECORD = re.OBS_SIZE + 2 * re.NUM_ACTIONS + 1
 
 
-def training_rows(paths: list[Path]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(inputs, targets, weights): one row per visited root move, weighted by visit share."""
+def training_rows(paths: list[Path], return_weight: float = 0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(inputs, targets, weights): one row per visited root move, weighted by visit share.
+
+    With `return_weight` w, the most-visited move's target (usually the move played) blends in the
+    game's actual result: (1 - w) * search value + w * final return."""
     records = np.concatenate([np.fromfile(p, "<f4").reshape(-1, RECORD) for p in paths])
     obs = records[:, : re.OBS_SIZE]
     values = records[:, re.OBS_SIZE : re.OBS_SIZE + re.NUM_ACTIONS]
     visits = records[:, re.OBS_SIZE + re.NUM_ACTIONS : RECORD - 1]
     rec, act = np.nonzero(visits > 0)
     x = np.concatenate([obs[rec], ACTIONS[act]], axis=1)
-    y = values[rec, act]
+    y = values[rec, act].copy()
+    if return_weight > 0:
+        chosen = visits[rec, act] == visits[rec].max(axis=1)
+        final = records[rec, RECORD - 1]
+        y[chosen] = (1 - return_weight) * y[chosen] + return_weight * final[chosen]
     w = visits[rec, act] / visits[rec].sum(axis=1)
     print(f"{len(records)} decisions, {len(x)} (state, move) rows")
     return x.astype(np.float32), y.astype(np.float32), w.astype(np.float32)
@@ -44,7 +51,9 @@ def main() -> None:
     parser.add_argument("--init", type=Path, required=True, help="network to start from")
     parser.add_argument("--data", type=Path, nargs="+", required=True, help="selfplay record files")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument("--epochs", type=int, default=2, help="validation error usually stops improving after 1-2")
+    parser.add_argument("--return-weight", type=float, default=0.0,
+                        help="blend the game result into the most-visited move's target")
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--batch", type=int, default=1024)
     parser.add_argument("--eval-deals", type=int, default=200)
@@ -57,7 +66,7 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
 
     net = load(args.init)
-    x, y, w = training_rows(args.data)
+    x, y, w = training_rows(args.data, args.return_weight)
     # hold out 10% of rows to watch for overfitting
     perm = rng.permutation(len(x))
     split = len(x) // 10
