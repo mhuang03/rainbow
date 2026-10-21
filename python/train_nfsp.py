@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, mlp, new_game
+from rl_common import ARENA, arena_relative, export, mlp
 from train_dqn import POINTS_SCALE, Replay, train_step
 
 
@@ -60,17 +60,16 @@ class Actors:
         self.rng = rng
         self.eta = eta
         self.points_weight = points_weight
-        self.games = [new_game(rng) for _ in range(count)]
-        self.modes = [self.new_modes(g) for g in self.games]
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
+        # per game, per seat: True to play the best response this game
+        self.modes = rng.random((count, re.MAX_PLAYERS)) < eta
         self.pending: list[dict[int, tuple]] = [{} for _ in range(count)]
         self.episodes = 0
 
-    def new_modes(self, game: re.Game) -> list[bool]:
-        """Per seat: True to play the best response this game."""
-        return [bool(self.rng.random() < self.eta) for _ in range(game.num_players)]
-
     def step(self, best: nn.Module, average: nn.Module, epsilon: float, replay: Replay, reservoir: Reservoir) -> int:
-        obs, masks = re.batch_observations(self.games)
+        obs, masks = self.env.observe()
+        seats = self.env.current_players()
+        points = self.env.scores()
         x = torch.from_numpy(obs)
         with torch.no_grad():
             q = best(x).numpy()
@@ -78,35 +77,32 @@ class Actors:
             sampled = torch.distributions.Categorical(logits=logits).sample().numpy()
         q[~masks] = -np.inf
 
-        for i, game in enumerate(self.games):
-            seat = game.current_player
-            scores = game.scores()
+        actions = np.empty(len(obs), dtype=np.int64)
+        for i in range(len(obs)):
+            seat = int(seats[i])
             if seat in self.pending[i]:
                 p_obs, p_action, p_points = self.pending[i].pop(seat)
-                reward = self.points_weight * (scores[seat] - p_points) / POINTS_SCALE
+                reward = self.points_weight * (points[i, seat] - p_points) / POINTS_SCALE
                 replay.add(p_obs, p_action, reward, obs[i], masks[i], False)
-
-            if self.modes[i][seat]:
+            if self.modes[i, seat]:
                 if self.rng.random() < epsilon:
-                    action = int(self.rng.choice(np.flatnonzero(masks[i])))
+                    actions[i] = self.rng.choice(np.flatnonzero(masks[i]))
                 else:
-                    action = int(np.argmax(q[i]))
-                reservoir.add(obs[i], masks[i], action)
+                    actions[i] = np.argmax(q[i])
+                reservoir.add(obs[i], masks[i], int(actions[i]))
             else:
-                action = int(sampled[i])
-            self.pending[i][seat] = (obs[i], action, scores[seat])
-            game.step(action)
+                actions[i] = sampled[i]
+            self.pending[i][seat] = (obs[i], int(actions[i]), int(points[i, seat]))
 
-            if game.is_over:
-                final, returns = game.scores(), game.returns()
-                for s, (p_obs, p_action, p_points) in self.pending[i].items():
-                    reward = self.points_weight * (final[s] - p_points) / POINTS_SCALE + returns[s]
-                    replay.add(p_obs, p_action, reward, None, None, True)
-                self.pending[i] = {}
-                self.games[i] = new_game(self.rng)
-                self.modes[i] = self.new_modes(self.games[i])
-                self.episodes += 1
-        return len(self.games)
+        done, returns, final = self.env.step(actions)
+        for i in np.flatnonzero(done):
+            for s, (p_obs, p_action, p_points) in self.pending[i].items():
+                reward = self.points_weight * (final[i, s] - p_points) / POINTS_SCALE + returns[i, s]
+                replay.add(p_obs, p_action, reward, None, None, True)
+            self.pending[i] = {}
+            self.modes[i] = self.rng.random(re.MAX_PLAYERS) < self.eta
+            self.episodes += 1
+        return len(obs)
 
 
 def main() -> None:

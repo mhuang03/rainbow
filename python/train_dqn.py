@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, mlp, new_game
+from rl_common import ARENA, arena_relative, export, mlp
 
 POINTS_SCALE = 100.0
 
@@ -73,46 +73,44 @@ class Actors:
         self.rng = rng
         self.win_weight = win_weight
         self.points_weight = points_weight
-        self.games = [new_game(rng) for _ in range(count)]
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
         # per game, per seat: (obs, action, points when acting) awaiting its next observation
         self.pending: list[dict[int, tuple[np.ndarray, int, int]]] = [{} for _ in range(count)]
         self.episodes = 0
 
     def step(self, net: nn.Module, epsilon: float, replay: Replay) -> int:
-        obs, masks = re.batch_observations(self.games)
+        obs, masks = self.env.observe()
+        seats = self.env.current_players()
+        points = self.env.scores()
         with torch.no_grad():
             q = net(torch.from_numpy(obs)).numpy()
         q[~masks] = -np.inf
 
-        for i, game in enumerate(self.games):
-            seat = game.current_player
-            scores = game.scores()
+        actions = np.empty(len(obs), dtype=np.int64)
+        for i in range(len(obs)):
+            seat = int(seats[i])
             # close this seat's previous transition now that it observes again
             if seat in self.pending[i]:
                 p_obs, p_action, p_points = self.pending[i].pop(seat)
-                reward = self.points_weight * (scores[seat] - p_points) / POINTS_SCALE
+                reward = self.points_weight * (points[i, seat] - p_points) / POINTS_SCALE
                 replay.add(p_obs, p_action, reward, obs[i], masks[i], False)
-
             if self.rng.random() < epsilon:
-                action = int(self.rng.choice(np.flatnonzero(masks[i])))
+                actions[i] = self.rng.choice(np.flatnonzero(masks[i]))
             else:
-                action = int(np.argmax(q[i]))
-            self.pending[i][seat] = (obs[i], action, scores[seat])
-            game.step(action)
+                actions[i] = np.argmax(q[i])
+            self.pending[i][seat] = (obs[i], int(actions[i]), int(points[i, seat]))
 
-            if game.is_over:
-                final = game.scores()
-                returns = game.returns()
-                for s, (p_obs, p_action, p_points) in self.pending[i].items():
-                    reward = (
-                        self.points_weight * (final[s] - p_points) / POINTS_SCALE
-                        + self.win_weight * returns[s]
-                    )
-                    replay.add(p_obs, p_action, reward, None, None, True)
-                self.pending[i] = {}
-                self.games[i] = new_game(self.rng)
-                self.episodes += 1
-        return len(self.games)
+        done, returns, final = self.env.step(actions)
+        for i in np.flatnonzero(done):
+            for s, (p_obs, p_action, p_points) in self.pending[i].items():
+                reward = (
+                    self.points_weight * (final[i, s] - p_points) / POINTS_SCALE
+                    + self.win_weight * returns[i, s]
+                )
+                replay.add(p_obs, p_action, reward, None, None, True)
+            self.pending[i] = {}
+            self.episodes += 1
+        return len(obs)
 
 
 def train_step(net, target, optimizer, batch, gamma: float) -> float:

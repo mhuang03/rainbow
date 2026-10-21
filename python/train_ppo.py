@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, final_returns, mlp, new_game
+from rl_common import ARENA, arena_relative, export, final_returns_row, mlp
 
 
 class Rollouts:
@@ -70,39 +70,38 @@ def masked_logits(policy: nn.Module, x: torch.Tensor, mask: torch.Tensor) -> tor
 class Actors:
     def __init__(self, count: int, rng: np.random.Generator):
         self.rng = rng
-        self.games = [new_game(rng) for _ in range(count)]
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
         # per game: (seat, obs, full, mask, action, logp) for every decision so far
         self.history: list[list[tuple]] = [[] for _ in range(count)]
         self.episodes = 0
 
     def step(self, policy: nn.Module, oracle: float, use_oracle: bool, out: Rollouts) -> int:
-        obs, masks = re.batch_observations(self.games)
-        full = re.batch_full_observations(self.games)
+        obs, masks, full = self.env.observe(full=True)
+        seats = self.env.current_players()
+        players = self.env.num_players()
         x = policy_input(obs, full, oracle, use_oracle)
         with torch.no_grad():
             logits = masked_logits(policy, torch.from_numpy(x), torch.from_numpy(masks))
             dist = torch.distributions.Categorical(logits=logits)
             actions = dist.sample()
             logps = dist.log_prob(actions).numpy()
-        actions = actions.numpy()
+        actions = actions.numpy().astype(np.int64)
 
-        for i, game in enumerate(self.games):
-            a = int(actions[i])
-            self.history[i].append((game.current_player, obs[i], full[i], masks[i], a, float(logps[i])))
-            game.step(a)
-            if game.is_over:
-                returns = final_returns(game)
-                for seat, o, f, m, act, lp in self.history[i]:
-                    out.obs.append(o)
-                    out.full.append(f)
-                    out.mask.append(m)
-                    out.action.append(act)
-                    out.logp.append(lp)
-                    out.ret.append(returns[seat])
-                self.history[i] = []
-                self.games[i] = new_game(self.rng)
-                self.episodes += 1
-        return len(self.games)
+        for i in range(len(actions)):
+            self.history[i].append((int(seats[i]), obs[i], full[i], masks[i], int(actions[i]), float(logps[i])))
+        done, returns, scores = self.env.step(actions)
+        for i in np.flatnonzero(done):
+            final = final_returns_row(returns[i], scores[i], int(players[i]))
+            for seat, o, f, m, act, lp in self.history[i]:
+                out.obs.append(o)
+                out.full.append(f)
+                out.mask.append(m)
+                out.action.append(act)
+                out.logp.append(lp)
+                out.ret.append(float(final[seat]))
+            self.history[i] = []
+            self.episodes += 1
+        return len(actions)
 
 
 def export_policy(policy: nn.Sequential, use_oracle: bool, path: Path) -> None:
