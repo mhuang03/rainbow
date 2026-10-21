@@ -338,6 +338,7 @@ GAE and league opponents.
 | dmc_league | economist | 1.81 | 2.09 | 1.74 | 1.78 |
 | dmc_league | dmc_v2 | 1.23 | 1.14 | 1.22 | 0.92 |
 | dmc_league | ismcts (1000 iterations) | 0.96 | 1.59 | 1.46 | 1.16 |
+| dmc_v2 | ismcts (1000 iterations) | 0.68 | 1.41 | 1.54 | 1.05 |
 
 DMC's (observation, action) scoring is the most effective learner per unit of compute; DQN beats
 the Economist at 2-3 players but loses to DMC everywhere. Fine-tuning DMC v2 for 45 minutes
