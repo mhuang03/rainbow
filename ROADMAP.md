@@ -60,22 +60,54 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] Q(observation, action) network with action features (card counts per rank).
 - [x] Rust or Python inference agent entered in the ladder.
 
-## Later milestones
+## Milestone 6: Play history
 
-- **Longer DMC training**, larger networks, and play-history features (DouZero uses an LSTM over
-  past moves).
+- [x] `GameState` and `Observation` record every play, the opening point cards and the first
+      leader; `GameState::from_deal` starts a game from an explicit deal.
+- [x] Observation encoding adds each relative seat's played cards (172 features).
+- [ ] Retrain DMC with history features (v2) and compare with v1.
 
-- **Play history in `Observation`**, needed for opponent inference.
-- **Inference-weighted determinization**: weight sampled deals by how likely opponents' past
-  plays were under them (Skat-style policy inference); plug into PIMC and ISMCTS.
-- **Depth-limited determinized search** (best-reply / paranoid alpha-beta) with exact endgame
-  solving.
-- **Masked Double DQN** with per-trick point rewards and frozen-opponent pools.
-- **PPO with a perfect-information critic** (PerfectDou) and oracle guiding (Suphx).
-- **Network-guided ISMCTS** trained by expert iteration.
+## Milestone 7: Inference-weighted determinization
+
+- [x] `Observation::start_of` rebuilds a sampled world's starting deal so its history can be
+      replayed.
+- [x] Candidate deals weighted by how likely an opponent model finds the opponents' recent plays
+      (`cheapest`-with-noise or a DMC softmax), then sampled by weight in ISMCTS
+      (`ismcts:infer=cheapest` or `infer=<model path>`).
+- [ ] Evaluate the DMC opponent model.
+
+## Milestone 8: Depth-limited minimax over sampled deals
+
+- [x] Paranoid alpha-beta and max-n search per sampled deal, with exact endgames
+      (`minimax:mode=paranoid|maxn,depth=3,k=16`).
+- [x] Pluggable leaf evaluation: deterministic `cheapest` playouts or a DMC network.
+- [ ] Evaluate DMC leaves.
+
+## Milestone 9: Masked Double DQN
+
+- [x] `python/train_dqn.py`: Q(observation) over all 75 actions with masking, Double DQN targets,
+      Polyak target network, dense per-decision point rewards plus the final win share.
+- [x] `dqn:path=...` Rust agent.
+- [ ] Train and evaluate.
+
+## Milestone 10: PPO with a perfect-information critic
+
+- [x] `python/train_ppo.py`: masked policy over observations, value network over full information
+      (`GameState::encode_full`), Monte Carlo advantages, clipped objective, optional oracle
+      guiding (`--oracle-fraction`).
+- [x] `ppo:path=...` Rust agent.
+- [ ] Train and evaluate, with and without oracle guiding.
+
+## Milestone 11: Network-guided ISMCTS
+
+- [x] DMC leaf values (`ismcts:leaf=<model>`) and PUCT priors (`ismcts:prior=<model>`).
+- [ ] Evaluate; then expert iteration (train the network on search results).
+
+## Later
+
 - **NFSP** as an exploitability check.
 - **Hand-prediction network** for inference and auxiliary losses.
-- Engine: full-information encoder, per-trick rewards, score-margin returns option.
+- **Larger DMC networks** and longer runs.
 
 ## Results
 
@@ -158,6 +190,35 @@ The network picks moves with one forward pass per decision, yet beats 1000-itera
 in 3- to 6-player games. ISMCTS still wins 2-player games, where search can plan through the
 whole game. The model is small and saw only 40 minutes of training, so longer runs, bigger
 networks and play-history features are the obvious next steps.
+
+### Opponent inference (ISMCTS, 4p, 200-300 deals)
+
+| Lineup | Inference ISMCTS | Plain ISMCTS |
+|---|---|---|
+| with 2 Economists, `infer=cheapest` | 1.33 | 1.08 |
+| with 2 Economists, `infer=cheapest,ipower=0.5` | 1.33 | 1.06 |
+| with 2 Economists, `infer=cheapest,iwindow=30` | 1.39 | 1.11 |
+| 3p vs 2 plain ISMCTS, `iwindow=30` | 0.99 | 1.01 |
+| 2p vs plain ISMCTS, `iwindow=30` | 1.03 | 0.97 |
+
+Inference helps when the opponent model fits the opponents: the `cheapest` model captures how
+the Economist takes cheap wins, and gains about 0.25-0.3 (about three standard errors). Against
+ISMCTS opponents it does nothing, because they don't play like `cheapest`.
+
+### Minimax with `cheapest` leaves (4p vs 3 Economists, 40-50 deals)
+
+| Variant | Relative |
+|---|---|
+| paranoid, depth 3, k=16 | 0.14 |
+| paranoid, depth 2, k=8 | 0.17 |
+| max-n, depth 2, k=8 | 0.30 |
+| max-n, depth 1, k=8 | 0.20 |
+
+Badly beaten. Even depth 1 (sampled deals plus a deterministic `cheapest` playout) loses, so the
+leaf evaluation is the problem, not the search rule: it is the same biased opponent model that
+sank PIMC with `cheapest` rollouts, compounded by determinized search assuming everyone sees all
+cards. Paranoid is worse still because with three colluding opponents almost every move looks
+lost.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.
