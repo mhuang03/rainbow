@@ -233,10 +233,12 @@ ISMCTS opponents it does nothing, because they don't play like `cheapest`.
 | ismcts vs ismcts + 2 Economists | 1.33 | 1.08 |
 | 3p: ismcts vs 2 plain ismcts | 1.04 | 0.98 |
 | ismcts + `infer=cheapest` vs `infer=cheapest` + 2 Economists | 1.40 | 1.10 |
+| guided ismcts (n=200, DMC prior and leaf) vs the same without belief + 2 Economists (150 deals) | 1.78 | 1.53 |
 
 The hand-prediction network (trained on games by DMC, Economist, `cheapest` and random agents)
 helps as much as the `cheapest` inference model against Economists, without needing a
-hand-picked opponent model, and the two stack. Against ISMCTS opponents, whose play it never saw,
+hand-picked opponent model, and the two stack. It also adds 0.25 on top of network-guided
+search, making `ismcts:n=200,prior=<dmc>,leaf=<dmc>,belief=<belief>` the strongest agent. Against ISMCTS opponents, whose play it never saw,
 the gain is within noise.
 
 ### Minimax with `cheapest` leaves (4p vs 3 Economists, 40-50 deals)
