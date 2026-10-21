@@ -287,7 +287,7 @@ times overstate what the methods need.
 | 18 | 0.60 | 0.15 | 0.27 |
 | 27 | 0.60 | 0.17 | 0.32 |
 | 36 | 0.80 | 0.16 | 0.60 |
-| 45 | 0.96 | 0.17 | - |
+| 45 | 0.96 | 0.17 | 0.63 |
 
 DMC reached 1.17 after 10 minutes on an idle machine, so DMC's action-feature Q-network learns
 far faster than DQN's one-output-per-action head here, matching DouZero's finding. PPO v1 learns
