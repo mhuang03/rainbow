@@ -327,7 +327,7 @@ mod tests {
             };
             let v = s.paranoid(
                 &state,
-                4,
+                3,
                 f32::NEG_INFINITY,
                 f32::INFINITY,
                 best_reply,
