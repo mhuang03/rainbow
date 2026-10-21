@@ -2,7 +2,8 @@
 //! scored by its mean relative win share over 2-6 player games against a mixed field of
 //! `cheapest`, `random` and default-weight economists, so it can't overfit one opponent.
 //!
-//! Usage: `cargo run --release --example tune_economist [iterations] [deals]`
+//! Usage: `cargo run --release --example tune_economist [iterations] [deals] [counts] [threads]`,
+//! where `counts` is a comma-separated list of player counts (default `2,3,4,6`).
 
 use rainbow::agents::economist::{EconomistAgent, Params};
 use rainbow::agents::{Agent, CheapestAgent, RandomAgent};
@@ -22,9 +23,8 @@ fn opponent(kind: usize) -> Entrant {
     }
 }
 
-fn evaluate(params: Params, deals: u64, seed: u64) -> f64 {
+fn evaluate(params: Params, deals: u64, seed: u64, counts: &[usize], threads: usize) -> f64 {
     let mut total = 0.0;
-    let counts = [2, 3, 4, 6];
     for (i, &n) in counts.iter().enumerate() {
         let mut lineup = vec![Entrant::new("candidate", move |s| {
             Box::new(EconomistAgent::with_params(params, s)) as Box<dyn Agent>
@@ -33,7 +33,7 @@ fn evaluate(params: Params, deals: u64, seed: u64) -> f64 {
         let config = arena::Config {
             deals,
             seed,
-            threads: 0,
+            threads,
         };
         let report = arena::run(&lineup, &config).expect("legal play");
         total += report
@@ -66,16 +66,23 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let iterations: usize = args.next().map_or(60, |a| a.parse().unwrap());
     let deals: u64 = args.next().map_or(300, |a| a.parse().unwrap());
+    let counts: Vec<usize> = args
+        .next()
+        .map_or("2,3,4,6".to_owned(), |a| a)
+        .split(',')
+        .map(|c| c.parse().unwrap())
+        .collect();
+    let threads: usize = args.next().map_or(0, |a| a.parse().unwrap());
     let mut rng = SmallRng::seed_from_u64(7);
 
     let mut best = Params::default();
-    let mut best_score = evaluate(best, deals, 1);
+    let mut best_score = evaluate(best, deals, 1, &counts, threads);
     println!("default: {best_score:.3}");
     for i in 0..iterations {
         // broad exploration first, then local refinement
         let scale = if i < iterations / 2 { 1.0 } else { 0.3 };
         let candidate = perturb(best, &mut rng, scale);
-        let score = evaluate(candidate, deals, 1);
+        let score = evaluate(candidate, deals, 1, &counts, threads);
         if score > best_score {
             best = candidate;
             best_score = score;
@@ -85,8 +92,8 @@ fn main() {
     // re-check the winner on fresh deals
     println!(
         "held-out: default {:.3}, tuned {:.3}",
-        evaluate(Params::default(), deals * 4, 99),
-        evaluate(best, deals * 4, 99)
+        evaluate(Params::default(), deals * 4, 99, &counts, threads),
+        evaluate(best, deals * 4, 99, &counts, threads)
     );
     println!("{best:#?}");
 }
