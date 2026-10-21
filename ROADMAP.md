@@ -83,7 +83,8 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] Paranoid alpha-beta and max-n search per sampled deal, with exact endgames
       (`minimax:mode=paranoid|maxn,depth=3,k=16`).
 - [x] Pluggable leaf evaluation: deterministic `cheapest` playouts or a DMC network.
-- [ ] Evaluate DMC leaves.
+- [x] Best-reply search mode (`minimax:mode=brs`, BRS+).
+- [ ] Evaluate DMC leaves and BRS.
 
 ## Milestone 9: Masked Double DQN
 
