@@ -41,11 +41,12 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Milestone 3: Sampled-deal Monte Carlo (PIMC)
 
-- [ ] For each legal move, play it out on K sampled deals (`Observation::determinize`) with a
+- [x] For each legal move, play it out on K sampled deals (`Observation::determinize`) with a
       fast rollout policy; pick the move with the best mean result. The same deals are reused for
       every move to reduce variance.
-- [ ] Shared `Rollout` policies over the full state (random, cheapest).
-- [ ] Objective option: win share or score margin.
+- [x] Shared `Rollout` policies over the full state (random, cheapest with epsilon-random moves).
+- [x] Objective option: win share plus a weighted score margin.
+- [x] Registry specs with options, e.g. `pimc:k=128,rollout=cheapest,eps=0.3,margin=0`.
 
 ## Milestone 4: Information-set MCTS
 
@@ -100,6 +101,23 @@ count, so 1.0 is an average player. All runs are duplicate tournaments (`rainbow
 Untuned weights scored about 1.06 against `cheapest` on average. Tuning against `cheapest` alone
 overfitted (it learned that opponents rarely contest), so the final weights were tuned against a
 mixed field.
+
+### PIMC (400 deals; k=64, random rollouts)
+
+| Lineup | PIMC relative win share |
+|---|---|
+| 2p vs cheapest | 1.87 |
+| 2p vs economist | 1.80 |
+| 3p vs cheapest x2 | 1.47 |
+| 3p vs economist x2 | 0.95 |
+| 4p vs economist x3 | 0.98 |
+| 6p vs economist x5 | 1.35 |
+
+Rollout policy matters more than sample count. With `cheapest` rollouts, PIMC assumes every
+opponent plays like `cheapest`: it scores 3.05 against three `cheapest` players but only 0.38
+against two Economists, and k=128 is no better than k=32. Random rollouts are less biased, and
+then more samples help (k=96 reaches parity with the Economist in 3- and 4-player games). Fixing
+this properly means modelling opponents in the search itself (ISMCTS) or in the rollouts.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.

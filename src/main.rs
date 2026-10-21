@@ -9,14 +9,15 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use rainbow::GameState;
-use rainbow::agents::AGENT_NAMES;
 use rainbow::arena::{self, Entrant};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
 
 const USAGE: &str = "usage:
   rainbow bench [num_players] [num_games] [seed]
-  rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]";
+  rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]
+
+AGENT is name[:key=value,...], e.g. pimc:k=64,rollout=random";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -86,12 +87,7 @@ fn run_arena(args: &[String]) -> Result<(), String> {
             "-d" => config.deals = parse(args.next(), "deals")?,
             "-s" => config.seed = parse(args.next(), "seed")?,
             "-t" => config.threads = parse(args.next(), "threads")?,
-            name => lineup.push(Entrant::registered(name).ok_or_else(|| {
-                format!(
-                    "unknown agent {name:?}; known agents: {}",
-                    AGENT_NAMES.join(", ")
-                )
-            })?),
+            spec => lineup.push(Entrant::registered(spec)?),
         }
     }
     if !(2..=6).contains(&lineup.len()) {

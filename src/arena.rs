@@ -32,11 +32,14 @@ impl Entrant {
         }
     }
 
-    /// An entrant for an agent from the [registry](crate::agents::create).
-    pub fn registered(name: &str) -> Option<Self> {
-        crate::agents::create(name, 0)?;
-        let owned = name.to_owned();
-        Some(Self::new(name, move |seed| {
+    /// An entrant for an agent [spec](crate::agents::create), named by the spec.
+    ///
+    /// # Errors
+    /// If the spec is invalid.
+    pub fn registered(spec: &str) -> Result<Self, String> {
+        crate::agents::create(spec, 0)?;
+        let owned = spec.to_owned();
+        Ok(Self::new(spec, move |seed| {
             crate::agents::create(&owned, seed).expect("checked on construction")
         }))
     }
