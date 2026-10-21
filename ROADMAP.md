@@ -56,11 +56,14 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Milestone 5: Deep Monte Carlo (DouZero-style)
 
-- [ ] Python training loop (PyTorch) with parallel self-play actors using the bindings.
-- [ ] Q(observation, action) network with action features (card counts per rank).
-- [ ] Rust or Python inference agent entered in the ladder.
+- [x] Python training loop (PyTorch) with parallel self-play actors using the bindings.
+- [x] Q(observation, action) network with action features (card counts per rank).
+- [x] Rust or Python inference agent entered in the ladder.
 
 ## Later milestones
+
+- **Longer DMC training**, larger networks, and play-history features (DouZero uses an LSTM over
+  past moves).
 
 - **Play history in `Observation`**, needed for opponent inference.
 - **Inference-weighted determinization**: weight sampled deals by how likely opponents' past
@@ -135,6 +138,26 @@ cheapest rollouts with eps 0.2 / 0.3 / 0.5 / 0.7 gave 1.37 / 1.45 / 1.29 / 1.32;
 1.31 (with random rollouts). Unlike PIMC, ISMCTS prefers the sharper `cheapest` rollouts, because
 the tree itself models opponents' near-term choices and the rollout only covers the distant
 future. Exploration between 0.5 and 1.0 and margin weights from 0 to 0.5 made little difference.
+
+### DMC (`models/dmc_v1.bin`, 400 deals)
+
+Trained for 40 minutes on 4 CPU cores with `python/train_dmc.py` defaults: about 2M self-play
+games, MLP 256-256-128, epsilon 0.1 to 0.02, all player counts. Checks against three Economists
+during training: 0.59 at 5 minutes, 1.17 at 10, 1.33 at 20, 1.34 at 40.
+
+| Players | vs Economist | vs ISMCTS |
+|---|---|---|
+| 2 | 1.78 | 0.86 |
+| 3 | 1.59 | 1.40 |
+| 4 | 1.36 | 1.50 |
+| 6 | 1.43 | 1.19 (150 deals) |
+
+Mixed 4-player table: dmc 1.52, ismcts 1.22, economist 0.72, pimc 0.54.
+
+The network picks moves with one forward pass per decision, yet beats 1000-iteration ISMCTS
+in 3- to 6-player games. ISMCTS still wins 2-player games, where search can plan through the
+whole game. The model is small and saw only 40 minutes of training, so longer runs, bigger
+networks and play-history features are the obvious next steps.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.

@@ -53,8 +53,8 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
-| `ismcts` | Information-set MCTS with max-n backups. The strongest agent so far. |
-| `dmc` | Plays a network trained by Deep Monte Carlo self-play (`dmc:path=model.bin`). |
+| `ismcts` | Information-set MCTS with max-n backups. The strongest agent in 2-player games. |
+| `dmc` | Plays a network trained by Deep Monte Carlo self-play (`dmc:path=models/dmc_v1.bin`). The strongest agent in 3- to 6-player games. |
 
 `rainbow arena` runs a duplicate tournament: every deal is replayed once per seat rotation, on all cores. Agents take options after a colon:
 
