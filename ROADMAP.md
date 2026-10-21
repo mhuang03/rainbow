@@ -65,7 +65,7 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] `GameState` and `Observation` record every play, the opening point cards and the first
       leader; `GameState::from_deal` starts a game from an explicit deal.
 - [x] Observation encoding adds each relative seat's played cards (172 features).
-- [ ] Retrain DMC with history features (v2) and compare with v1.
+- [x] Retrain DMC with history features (v2, 60 minutes) and compare with v1.
 
 ## Milestone 7: Inference-weighted determinization
 
@@ -74,7 +74,9 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] Candidate deals weighted by how likely an opponent model finds the opponents' recent plays
       (`cheapest`-with-noise or a DMC softmax), then sampled by weight in ISMCTS
       (`ismcts:infer=cheapest` or `infer=<model path>`).
-- [ ] Evaluate the DMC opponent model.
+- [x] Evaluate the DMC opponent model.
+- [x] Hand-prediction network (`train_belief.py`, `ismcts:belief=`) and weighted determinization.
+- [ ] Evaluate belief-weighted deals.
 
 ## Milestone 8: Depth-limited minimax over sampled deals
 
@@ -101,13 +103,21 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 ## Milestone 11: Network-guided ISMCTS
 
 - [x] DMC leaf values (`ismcts:leaf=<model>`) and PUCT priors (`ismcts:prior=<model>`).
-- [ ] Evaluate; then expert iteration (train the network on search results).
+- [x] Evaluate.
+- [x] Expert iteration tooling: `rainbow selfplay` records search values; `train_exit.py`
+      fine-tunes the network on them.
+- [ ] Run expert-iteration rounds and evaluate.
+
+## Milestone 12: NFSP
+
+- [x] `python/train_nfsp.py`: Double DQN best response plus a reservoir-trained average policy;
+      `nfsp:path=...` samples from the average policy.
+- [ ] Train and evaluate.
 
 ## Later
 
-- **NFSP** as an exploitability check.
-- **Hand-prediction network** for inference and auxiliary losses.
 - **Larger DMC networks** and longer runs.
+- **Hand-prediction as an auxiliary loss** for the DMC and PPO networks.
 
 ## Results
 
@@ -219,6 +229,41 @@ leaf evaluation is the problem, not the search rule: it is the same biased oppon
 sank PIMC with `cheapest` rollouts, compounded by determinized search assuming everyone sees all
 cards. Paranoid is worse still because with three colluding opponents almost every move looks
 lost.
+
+### DMC v2 (`models/dmc_v2.bin`, 400 deals)
+
+Same setup as v1 plus per-seat played-card features, trained for 60 minutes (2.4M games) while
+other jobs shared the CPU. v1 can no longer be loaded (the observation size changed), so the
+comparison is through common opponents:
+
+| Players | v1 vs Economist | v2 vs Economist | v1 vs ISMCTS | v2 vs ISMCTS |
+|---|---|---|---|---|
+| 2 | 1.78 | 1.72 | 0.86 | 0.73 |
+| 3 | 1.59 | 1.63 | 1.40 | 1.44 |
+| 4 | 1.36 | 1.35 | 1.50 | 1.56 |
+| 6 | 1.43 | 1.49 | 1.19 | - |
+
+History features changed little at this budget; the unknown-card features already carry most of
+what card counting gives.
+
+### Network-guided ISMCTS (4p vs 3 Economists, 200 deals)
+
+| Agent | Relative |
+|---|---|
+| ismcts (1000 iterations, rollouts) | 1.41 |
+| dmc v2 alone | 1.35 |
+| ismcts n=200, DMC priors (PUCT) | 1.39 |
+| ismcts n=1000, DMC priors | 1.74 |
+| ismcts n=200, DMC leaf values | 2.00 |
+| ismcts n=200, DMC priors and leaf values | **2.20** |
+
+ISMCTS with DMC priors (n=1000) also beats three copies of the DMC network itself: 1.16 against
+0.95. Leaf values matter most: replacing rollouts with the network's estimate doubles the win
+share at a fifth of the iterations. The combination is the strongest agent so far.
+
+Opponent inference with the DMC network as the opponent model (4p, with plain ISMCTS and two
+Economists): inference 1.26, plain 1.12. Smaller than the `cheapest` model's gain against
+Economists, but positive.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.

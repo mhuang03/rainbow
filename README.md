@@ -33,10 +33,10 @@ while !game.is_over() {
 println!("{:?} won with {:?}", game.winners(), game.scores());
 ```
 
-- `GameState` is 148 bytes with no heap data, and is `Clone + Eq + Hash`, so it is cheap to copy for search and usable as a transposition-table key.
+- `GameState` is 400 bytes with no heap data (including the full play history), and is `Clone + Eq + Hash`, so it is cheap to copy for search and usable as a transposition-table key.
 - There are 75 actions. `Combo::action_index` and `Combo::from_action_index` map combos to and from that fixed space, and `legal_action_mask()` returns a `u128` bitmask for masking network outputs.
 - `observe(seat)` returns an `Observation`: that player's own hand plus all public information.
-  - `Observation::encode` writes a 136-float feature vector, with seats relative to the observer. The layout is documented in `game::encoding`.
+  - `Observation::encode` writes a 172-float feature vector, with seats relative to the observer. The layout is documented in `game::encoding`.
   - `Observation::determinize` samples a full `GameState` consistent with what the player knows (the determinization step of ISMCTS).
 - `returns()`: winners split 1.0 equally. `scores()` gives raw points.
 - `agents::Agent` and `game::run_game` play a game between agents.
@@ -53,8 +53,12 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
-| `ismcts` | Information-set MCTS with max-n backups. The strongest agent in 2-player games. |
-| `dmc` | Plays a network trained by Deep Monte Carlo self-play (`dmc:path=models/dmc_v1.bin`). The strongest agent in 3- to 6-player games. |
+| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from `models/dmc_v2.bin` it is the strongest agent. |
+| `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
+| `dmc` | A DouZero-style network trained by self-play (`dmc:path=models/dmc_v2.bin`). The strongest agent that doesn't search. |
+| `dqn` | A masked Double DQN network. |
+| `ppo` | A PPO policy trained with a full-information critic. |
+| `nfsp` | An NFSP average policy (played by sampling). |
 
 `rainbow arena` runs a duplicate tournament: every deal is replayed once per seat rotation, on all cores. Agents take options after a colon:
 
@@ -63,6 +67,8 @@ cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random 
 ```
 
 [ROADMAP.md](ROADMAP.md) tracks planned agents and records tournament results.
+
+`rainbow selfplay` plays games with network-guided ISMCTS and records the search's value for every root move, as training data for expert iteration.
 
 ## Python bindings
 
@@ -88,6 +94,8 @@ print(game.scores(), game.returns())
 
 - `Game.clone()`, `determinize(player, seed)` and `rollout(seed)` support MCTS. `rollout` runs without holding the GIL.
 - `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for vectorised training.
+- `full_observation(player)` and `batch_full_observations(games)` add every hidden hand, for training value networks.
+- `history()` lists every play so far.
 - `RustAgent(spec, seed)` plays any agent from the Rust registry, e.g. `RustAgent("ismcts").act(game)`.
 - `action_features()` returns the per-action feature table used by the DMC network.
 - Type hints are in `python/rainbow_engine.pyi`.
@@ -102,3 +110,16 @@ cargo build --release
 cd python && python train_dmc.py --minutes 30 --out models/dmc.bin
 ../target/release/rainbow arena dmc:path=python/models/dmc.bin economist economist economist
 ```
+
+### Other trainers
+
+All trainers play many games at once through the bindings, check progress in the Rust arena, and export networks the Rust agents load. Pass `--threads` to share cores between runs.
+
+| Script | Trains |
+|---|---|
+| `train_dmc.py` | Deep Monte Carlo Q(observation, action) network (`dmc`). |
+| `train_dqn.py` | Masked Double DQN over all 75 actions, with per-decision point rewards (`dqn`). |
+| `train_ppo.py` | PPO policy with a value network that sees every hand; `--oracle-fraction` adds oracle guiding (`ppo`). |
+| `train_nfsp.py` | NFSP best-response and average-policy networks (`nfsp`). |
+| `train_belief.py` | Hand-prediction network for `ismcts:belief=` (supervised, from `Game.full_observation`). |
+| `train_exit.py` | Expert iteration: fine-tunes a DMC network on `rainbow selfplay` search values. |
