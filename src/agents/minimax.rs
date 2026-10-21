@@ -16,6 +16,7 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
 use crate::agents::Agent;
+use crate::agents::baseline::cheapest_winner;
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
 use crate::constants::{MAX_LEGAL_ACTIONS, MAX_PLAYERS};
@@ -25,6 +26,10 @@ use crate::game::{Combo, GameState, Observation};
 pub enum Mode {
     Paranoid,
     MaxN,
+    /// Best-reply search (BRS+, Esser et al. 2013): between two of the root player's turns only
+    /// one opponent may deviate to hurt the root; the others play the `cheapest` default move.
+    /// Less pessimistic than paranoid search and with far less branching.
+    BestReply,
 }
 
 #[derive(Debug, Clone)]
@@ -81,7 +86,17 @@ impl Search {
             .value(state, seat, self.params.reward, &mut self.rng)
     }
 
-    fn paranoid(&mut self, state: &GameState, depth: u32, mut alpha: f32, mut beta: f32) -> f32 {
+    /// Paranoid alpha-beta. With `best_reply`, at most one opponent move between root turns
+    /// may differ from the default policy (`deviated` records whether one already has).
+    fn paranoid(
+        &mut self,
+        state: &GameState,
+        depth: u32,
+        mut alpha: f32,
+        mut beta: f32,
+        best_reply: bool,
+        deviated: bool,
+    ) -> f32 {
         self.nodes += 1;
         if state.is_over() {
             return self.params.reward.of(state, self.root);
@@ -95,10 +110,22 @@ impl Search {
         } else {
             f32::INFINITY
         };
-        for combo in ordered_moves(state) {
+        let mut moves = ordered_moves(state);
+        let default = (best_reply && !maximizing).then(|| cheapest_winner(state.trick(), &moves));
+        if deviated && let Some(d) = default {
+            moves.clear();
+            moves.push(d);
+        }
+        for combo in moves {
             let mut child = state.clone();
             child.apply(combo).expect("legal move");
-            let value = self.paranoid(&child, depth - 1, alpha, beta);
+            // the root's turn starts a new segment in which one opponent may deviate
+            let child_deviated = if maximizing {
+                false
+            } else {
+                deviated || default.is_some_and(|d| d != combo)
+            };
+            let value = self.paranoid(&child, depth - 1, alpha, beta, best_reply, child_deviated);
             if maximizing {
                 best = best.max(value);
                 alpha = alpha.max(value);
@@ -147,7 +174,17 @@ impl Search {
             self.params.depth.saturating_sub(1)
         };
         match self.params.mode {
-            Mode::Paranoid => self.paranoid(&child, depth, f32::NEG_INFINITY, f32::INFINITY),
+            Mode::Paranoid => self.paranoid(
+                &child,
+                depth,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                false,
+                false,
+            ),
+            Mode::BestReply => {
+                self.paranoid(&child, depth, f32::NEG_INFINITY, f32::INFINITY, true, false)
+            }
             Mode::MaxN => self.max_n(&child, depth)[self.root],
         }
     }
@@ -214,7 +251,7 @@ mod tests {
 
     #[test]
     fn plays_legal_moves_for_whole_games() {
-        for mode in [Mode::Paranoid, Mode::MaxN] {
+        for mode in [Mode::Paranoid, Mode::MaxN, Mode::BestReply] {
             for n in [2, 3, 6] {
                 let mut rng = SmallRng::seed_from_u64(n as u64);
                 let mut state = GameState::new(n, 0, &mut rng);
@@ -254,7 +291,7 @@ mod tests {
         };
         fn plain(s: &mut Search, state: &GameState, depth: u32) -> f32 {
             if state.is_over() || depth == 0 {
-                return s.paranoid(state, 0, f32::NEG_INFINITY, f32::INFINITY);
+                return s.paranoid(state, 0, f32::NEG_INFINITY, f32::INFINITY, false, false);
             }
             let values = state.legal_actions().into_iter().map(|c| {
                 let mut child = state.clone();
@@ -268,7 +305,7 @@ mod tests {
                 values.into_iter().fold(f32::INFINITY, f32::min)
             }
         }
-        let pruned = s.paranoid(&state, 3, f32::NEG_INFINITY, f32::INFINITY);
+        let pruned = s.paranoid(&state, 3, f32::NEG_INFINITY, f32::INFINITY, false, false);
         let pruned_nodes = s.nodes;
         let full = plain(&mut s, &state, 3);
         assert_eq!(pruned, full);
@@ -276,6 +313,33 @@ mod tests {
             pruned_nodes < s.nodes - pruned_nodes,
             "pruning should save work"
         );
+    }
+
+    #[test]
+    fn best_reply_searches_less_and_is_no_more_pessimistic() {
+        let state = GameState::new(4, 0, &mut SmallRng::seed_from_u64(11));
+        let search = |best_reply: bool| {
+            let mut s = Search {
+                params: Params::default(),
+                root: 0,
+                rng: SmallRng::seed_from_u64(0),
+                nodes: 0,
+            };
+            let v = s.paranoid(
+                &state,
+                4,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                best_reply,
+                false,
+            );
+            (v, s.nodes)
+        };
+        let (paranoid, paranoid_nodes) = search(false);
+        let (brs, brs_nodes) = search(true);
+        // opponents have fewer options under BRS, so the root can only do as well or better
+        assert!(brs >= paranoid);
+        assert!(brs_nodes < paranoid_nodes);
     }
 
     #[test]

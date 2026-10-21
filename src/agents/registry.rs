@@ -172,7 +172,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `prior` (DMC network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options below.
-/// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid` or `maxn`), `endgame` (cards
+/// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards
 ///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
 /// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dqn`, `ppo` and `nfsp` also
 ///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
@@ -213,6 +213,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 None => d.mode,
                 Some("paranoid") => minimax::Mode::Paranoid,
                 Some("maxn") => minimax::Mode::MaxN,
+                Some("brs") => minimax::Mode::BestReply,
                 Some(other) => return Err(format!("unknown minimax mode {other:?}")),
             };
             let params = minimax::Params {
