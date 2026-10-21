@@ -27,13 +27,17 @@ games (Skat, Bridge); see [References](#references).
 Scores every legal combo as expected pile value, minus card cost, minus hand-structure damage,
 plus an endgame term. All weights live in a `Params` struct so they can be tuned in the arena.
 
-- [ ] **Expected pile**: exact rank against plays already made; the chance each later player
+- [x] **Expected pile**: exact rank against plays already made; the chance each later player
       beats the combo, estimated by sampling their hands from the unknown cards.
-- [ ] **Card cost**: cards beyond what's needed to last until the game is expected to end are
+- [x] **Card cost**: cards beyond what's needed to last until the game is expected to end are
       nearly free; cards below that cost about one trick's pile each.
-- [ ] **Structure damage**: penalty for breaking pairs, sets and runs.
-- [ ] **Endgame**: when running out would end the game, play to end it only if winning.
-- [ ] Beat every baseline in 3-, 4- and 6-player games.
+- [x] **Structure damage**: penalty for breaking pairs, sets and runs.
+- [x] **Endgame**: when running out would end the game, play to end it only if winning.
+- [x] Weights tuned by random search and hill climbing against a mixed field
+      (`examples/tune_economist.rs`).
+- [ ] Beat every baseline in 3-, 4- and 6-player games. Done for 2, 4 and 6 players; level with
+      `cheapest` in 3-player games. Ideas: model which pile values the played cards will create
+      for the next trick ("feeding"), and lead-type choice.
 
 ## Milestone 3: Sampled-deal Monte Carlo (PIMC)
 
@@ -82,6 +86,20 @@ count, so 1.0 is an average player. All runs are duplicate tournaments (`rainbow
 | 3p: cheapest, lowest, biggest | cheapest 2.72, lowest 0.27, biggest 0.01 |
 | 4p: cheapest, lowest, biggest, random | cheapest 2.43, random 1.43, biggest 0.09, lowest 0.05 |
 | 6p: cheapest x2, lowest x2, biggest, random | cheapest 2.01, random 1.50, biggest 0.35, lowest 0.06 |
+
+### Economist (3000 deals, tuned weights)
+
+| Lineup | Economist relative win share |
+|---|---|
+| 2p vs cheapest | 1.45 |
+| 3p vs cheapest x2 | 1.00 |
+| 4p vs cheapest x3 | 1.34 |
+| 6p vs cheapest x5 | 1.39 |
+| 4p vs cheapest, random, lowest | 3.34 |
+
+Untuned weights scored about 1.06 against `cheapest` on average. Tuning against `cheapest` alone
+overfitted (it learned that opponents rarely contest), so the final weights were tuned against a
+mixed field.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.

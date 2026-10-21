@@ -3,9 +3,11 @@
 use crate::game::{Combo, Observation};
 
 pub mod baseline;
+pub mod economist;
 pub mod random;
 
 pub use baseline::{BiggestAgent, CheapestAgent, LowestAgent};
+pub use economist::EconomistAgent;
 pub use random::RandomAgent;
 
 /// A player that picks a combo from the legal options given its information set.
@@ -21,7 +23,7 @@ pub trait Agent {
 }
 
 /// Names accepted by [`create`].
-pub const AGENT_NAMES: &[&str] = &["random", "lowest", "biggest", "cheapest"];
+pub const AGENT_NAMES: &[&str] = &["random", "lowest", "biggest", "cheapest", "economist"];
 
 /// Builds the agent registered under `name`, seeding any randomness it uses with `seed`.
 pub fn create(name: &str, seed: u64) -> Option<Box<dyn Agent>> {
@@ -30,6 +32,7 @@ pub fn create(name: &str, seed: u64) -> Option<Box<dyn Agent>> {
         "lowest" => Box::new(LowestAgent),
         "biggest" => Box::new(BiggestAgent),
         "cheapest" => Box::new(CheapestAgent),
+        "economist" => Box::new(EconomistAgent::new(seed)),
         _ => return None,
     })
 }

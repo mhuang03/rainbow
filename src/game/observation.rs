@@ -73,6 +73,11 @@ impl Observation {
         self.current as usize
     }
 
+    /// Number of plays the current trick will contain.
+    pub fn trick_size(&self) -> usize {
+        self.trick_size as usize
+    }
+
     pub fn tricks_played(&self) -> usize {
         self.tricks_played as usize
     }
