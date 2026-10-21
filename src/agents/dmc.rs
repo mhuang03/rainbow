@@ -26,8 +26,10 @@ struct Layer {
     bias: Vec<f32>,
 }
 
-/// Dot product with eight independent partial sums. Float addition isn't associative, so a plain
+/// Dot product with eight independent partial sums (inlined so callers compiled with wider
+/// SIMD features vectorise it with them). Float addition isn't associative, so a plain
 /// `iter().sum()` must add one element at a time; separate lanes let the compiler use SIMD.
+#[inline(always)]
 fn dot(a: &[f32], b: &[f32]) -> f32 {
     const LANES: usize = 8;
     let split = a.len().min(b.len()) / LANES * LANES;
@@ -45,6 +47,42 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 impl Layer {
+    /// [`Self::forward`] for `n` inputs stored row after row in `x`, writing `n` output rows.
+    /// Uses AVX2 and FMA when the CPU has them.
+    fn forward_batch(&self, x: &[f32], n: usize, out: &mut Vec<f32>, relu: bool) {
+        out.clear();
+        out.resize(n * self.outputs, 0.0);
+        #[cfg(target_arch = "x86_64")]
+        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
+        {
+            // SAFETY: the CPU supports the features the function is compiled for.
+            unsafe { self.forward_batch_avx2(x, out, relu) };
+            return;
+        }
+        self.forward_batch_into(x, out, relu);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2,fma")]
+    fn forward_batch_avx2(&self, x: &[f32], out: &mut [f32], relu: bool) {
+        self.forward_batch_into(x, out, relu);
+    }
+
+    #[inline(always)]
+    fn forward_batch_into(&self, x: &[f32], out: &mut [f32], relu: bool) {
+        for (o, (row, &b)) in self
+            .weights
+            .chunks_exact(self.inputs)
+            .zip(&self.bias)
+            .enumerate()
+        {
+            for (a, input) in x.chunks_exact(self.inputs).enumerate() {
+                let y = dot(row, input) + b;
+                out[a * self.outputs + o] = if relu { y.max(0.0) } else { y };
+            }
+        }
+    }
+
     /// `out = W x + b`, applying ReLU if `relu`.
     fn forward(&self, x: &[f32], out: &mut Vec<f32>, relu: bool) {
         out.clear();
@@ -231,32 +269,32 @@ impl DmcAgent {
             .map(|(row, b)| dot(&row[..OBS_SIZE], &observation) + b)
             .collect();
 
+        // Evaluate every action together, layer by layer, so each weight row is loaded once
+        // per evaluation rather than once per action.
+        let n = legal.len();
+        let single_layer = self.net.layers.len() == 1;
+        let mut hidden = Vec::with_capacity(n * first.outputs);
         let mut action = [0.0; ACTION_FEATURES];
-        let mut hidden = Vec::with_capacity(first.outputs);
-        let mut next = Vec::new();
-        legal
-            .iter()
-            .map(|&combo| {
-                encoding::encode_action(combo, &mut action);
-                hidden.clear();
-                hidden.extend(first.weights.chunks_exact(first.inputs).zip(&shared).map(
-                    |(row, s)| {
+        for &combo in legal {
+            encoding::encode_action(combo, &mut action);
+            hidden.extend(
+                first
+                    .weights
+                    .chunks_exact(first.inputs)
+                    .zip(&shared)
+                    .map(|(row, s)| {
                         let y = s + dot(&row[OBS_SIZE..], &action);
-                        if self.net.layers.len() > 1 {
-                            y.max(0.0)
-                        } else {
-                            y
-                        }
-                    },
-                ));
-                let last = self.net.layers.len() - 1;
-                for (i, layer) in self.net.layers.iter().enumerate().skip(1) {
-                    layer.forward(&hidden, &mut next, i < last);
-                    std::mem::swap(&mut hidden, &mut next);
-                }
-                hidden[0]
-            })
-            .collect()
+                        if single_layer { y } else { y.max(0.0) }
+                    }),
+            );
+        }
+        let last = self.net.layers.len() - 1;
+        let mut next = Vec::new();
+        for (i, layer) in self.net.layers.iter().enumerate().skip(1) {
+            layer.forward_batch(&hidden, n, &mut next, i < last);
+            std::mem::swap(&mut hidden, &mut next);
+        }
+        hidden
     }
 }
 
