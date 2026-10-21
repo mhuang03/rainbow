@@ -465,6 +465,68 @@ impl GameState {
         }
     }
 
+    /// The starting deal of this game: every played card returned to the hand or reserve it
+    /// came from. Replaying [`Self::history`] from it reproduces `self`.
+    pub fn starting_state(&self) -> Self {
+        self.observe(0).start_of(self)
+    }
+
+    /// A compact byte encoding of the game: the starting deal and the play history.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let start = self.starting_state();
+        let mut out = vec![self.num_players() as u8, self.first_leader];
+        out.extend(self.initial_middle.counts());
+        for p in &start.players {
+            out.extend(p.hand.counts());
+            out.extend(p.reserve.counts());
+        }
+        for play in &self.history {
+            out.push(play.seat);
+            out.push(play.combo.action_index() as u8);
+        }
+        out
+    }
+
+    /// Decodes [`Self::to_bytes`].
+    ///
+    /// # Errors
+    /// If the bytes are malformed or describe an illegal game.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        use crate::constants::NUM_RANKS;
+        let (&n, rest) = bytes.split_first().ok_or("empty game encoding")?;
+        let n = n as usize;
+        let (&leader, rest) = rest.split_first().ok_or("truncated game encoding")?;
+        let deal_len = NUM_RANKS * (1 + 2 * n);
+        if rest.len() < deal_len || !(rest.len() - deal_len).is_multiple_of(2) || n > MAX_PLAYERS {
+            return Err("malformed game encoding".to_owned());
+        }
+        let (deal, plays) = rest.split_at(deal_len);
+        let hand = |i: usize| -> Result<Hand, String> {
+            let counts: [u8; NUM_RANKS] = deal[i * NUM_RANKS..][..NUM_RANKS]
+                .try_into()
+                .expect("6 bytes");
+            if counts.iter().any(|&c| c > CARDS_PER_RANK) {
+                return Err("too many copies of a rank".to_owned());
+            }
+            Ok(Hand::from_counts(counts))
+        };
+        let hands = (0..n)
+            .map(|s| hand(1 + 2 * s))
+            .collect::<Result<Vec<_>, _>>()?;
+        let reserves = (0..n)
+            .map(|s| hand(2 + 2 * s))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut state = Self::from_deal(&hands, &reserves, hand(0)?, leader as usize)?;
+        for pair in plays.chunks_exact(2) {
+            let combo = Combo::from_action_index(pair[1] as usize).ok_or("invalid action")?;
+            if state.current_player() != pair[0] as usize {
+                return Err("play out of turn".to_owned());
+            }
+            state.apply(combo).map_err(|e| e.to_string())?;
+        }
+        Ok(state)
+    }
+
     /// Everything `seat` is allowed to know: their own hand plus public information.
     pub fn observe(&self, seat: usize) -> Observation {
         Observation {
@@ -878,6 +940,26 @@ mod tests {
                 replay.apply(play.combo).unwrap();
             }
             prop_assert_eq!(replay, g);
+        }
+
+        #[test]
+        fn byte_encoding_round_trips(
+            seed in any::<u64>(),
+            num_players in MIN_PLAYERS..=MAX_PLAYERS,
+            moves in 0..80usize,
+        ) {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let mut g = GameState::new(num_players, seed as usize % num_players, &mut rng);
+            for _ in 0..moves {
+                if g.is_over() {
+                    break;
+                }
+                let actions = g.legal_actions();
+                g.apply(actions[rng.random_range(0..actions.len())]).unwrap();
+            }
+            let bytes = g.to_bytes();
+            prop_assert_eq!(GameState::from_bytes(&bytes).unwrap(), g);
+            prop_assert!(GameState::from_bytes(&bytes[..bytes.len() - 1]).is_err() || bytes.len() <= 2);
         }
 
         #[test]

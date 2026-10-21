@@ -152,3 +152,20 @@ def test_full_observation_extends_observation():
     assert np.allclose(full[re.OBS_SIZE : re.OBS_SIZE + 6] * 10, g.hand(1))
     batch = re.batch_full_observations([g])
     assert np.array_equal(batch[0], g.full_observation(g.current_player))
+
+
+def test_pickle_round_trip():
+    import pickle
+
+    rng = random.Random(5)
+    for n in range(2, 7):
+        g = re.Game(n, seed=n)
+        for _ in range(rng.randrange(40)):
+            if g.is_over:
+                break
+            g.step(rng.choice(g.legal_actions()))
+        restored = pickle.loads(pickle.dumps(g))
+        assert restored == g
+        assert re.Game.from_bytes(g.to_bytes()) == g
+    with pytest.raises(ValueError):
+        re.Game.from_bytes(b"\x07")

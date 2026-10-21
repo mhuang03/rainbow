@@ -8,6 +8,7 @@
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use rainbow::agents::{self, Agent};
 use rainbow::constants::{MAX_PLAYERS, MIN_PLAYERS};
 use rainbow::game::encoding::{self, ACTION_FEATURES, FULL_OBS_SIZE, HIDDEN_SIZE, OBS_SIZE};
@@ -130,6 +131,27 @@ impl Game {
 
     fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
         Clone::clone(self)
+    }
+
+    /// Compact encoding (starting deal and play history) for pickling and storage.
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.state.to_bytes())
+    }
+
+    /// Rebuilds a game from `to_bytes`.
+    #[staticmethod]
+    fn from_bytes(data: &[u8]) -> PyResult<Self> {
+        Ok(Self {
+            state: GameState::from_bytes(data).map_err(PyValueError::new_err)?,
+        })
+    }
+
+    fn __reduce__<'py>(
+        slf: &Bound<'py, Self>,
+    ) -> PyResult<(Bound<'py, PyAny>, (Bound<'py, PyBytes>,))> {
+        let py = slf.py();
+        let from_bytes = slf.get_type().getattr("from_bytes")?;
+        Ok((from_bytes, (slf.borrow().to_bytes(py),)))
     }
 
     fn scores(&self) -> Vec<u32> {
