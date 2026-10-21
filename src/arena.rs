@@ -4,18 +4,21 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 use std::thread;
 
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use rand::seq::SliceRandom;
 
 use crate::agents::Agent;
 use crate::game::{GameState, RunError, run_game};
 
 /// Builds a fresh agent for one game from a seed.
-pub type Factory = Box<dyn Fn(u64) -> Box<dyn Agent> + Send + Sync>;
+pub type Factory = Arc<dyn Fn(u64) -> Box<dyn Agent> + Send + Sync>;
 
 /// One seat in a lineup. Entrants with the same name are pooled in the report.
+#[derive(Clone)]
 pub struct Entrant {
     pub name: String,
     pub make: Factory,
@@ -28,7 +31,7 @@ impl Entrant {
     ) -> Self {
         Self {
             name: name.into(),
-            make: Box::new(make),
+            make: Arc::new(make),
         }
     }
 
@@ -247,6 +250,86 @@ pub fn run(lineup: &[Entrant], config: &Config) -> Result<Report, RunError> {
     })
 }
 
+/// Settings for [`ladder`].
+#[derive(Debug, Clone, Copy)]
+pub struct LadderConfig {
+    /// Seats per game (2 to 6).
+    pub players: usize,
+    /// Random lineups to play, each drawn from the pool without repeats.
+    pub lineups: u64,
+    /// Duplicate deals per lineup.
+    pub deals: u64,
+    pub seed: u64,
+    /// Worker threads per lineup; 0 means one per available core.
+    pub threads: usize,
+}
+
+/// An agent's ladder result: its relative win share averaged over the lineups it played in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LadderStanding {
+    pub name: String,
+    pub lineups: u64,
+    /// Mean relative win share (1.0 is an average player in its lineups).
+    pub relative: f64,
+    /// Standard error of `relative` across lineups.
+    pub stderr: f64,
+}
+
+/// Ranks a pool of agents by playing many random lineups of `config.players` distinct agents.
+/// Every agent faces a varied field, so the ranking doesn't depend on one particular table.
+///
+/// # Errors
+/// If an agent makes an illegal move.
+///
+/// # Panics
+/// If the pool has fewer agents than seats, or the seat count is unsupported.
+pub fn ladder(pool: &[Entrant], config: &LadderConfig) -> Result<Vec<LadderStanding>, RunError> {
+    assert!(
+        pool.len() >= config.players,
+        "the pool needs at least {} agents",
+        config.players
+    );
+    let mut samples: Vec<Vec<f64>> = vec![Vec::new(); pool.len()];
+    let mut order: Vec<usize> = (0..pool.len()).collect();
+    let mut rng = SmallRng::seed_from_u64(mix(config.seed));
+    for lineup in 0..config.lineups {
+        order.shuffle(&mut rng);
+        let seats = &order[..config.players];
+        let entrants: Vec<Entrant> = seats.iter().map(|&i| pool[i].clone()).collect();
+        let arena = Config {
+            deals: config.deals,
+            seed: mix(config.seed ^ mix(lineup + 1)),
+            threads: config.threads,
+        };
+        let report = run(&entrants, &arena)?;
+        for &i in seats {
+            let standing = report
+                .standings
+                .iter()
+                .find(|s| s.name == pool[i].name)
+                .expect("every entrant is reported");
+            samples[i].push(standing.relative);
+        }
+    }
+    let mut out: Vec<LadderStanding> = pool
+        .iter()
+        .zip(&samples)
+        .map(|(entrant, xs)| {
+            let k = xs.len().max(1) as f64;
+            let mean = xs.iter().sum::<f64>() / k;
+            let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (k - 1.0).max(1.0);
+            LadderStanding {
+                name: entrant.name.clone(),
+                lineups: xs.len() as u64,
+                relative: mean,
+                stderr: (var / k).sqrt(),
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.relative.total_cmp(&a.relative));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +357,24 @@ mod tests {
             // pooled returns of every seat always sum to one win per game
             assert!((s.relative - 1.0).abs() < 1e-9, "{report}");
         }
+    }
+
+    #[test]
+    fn ladder_ranks_the_pool() {
+        let pool = lineup(&["cheapest", "random", "lowest", "biggest", "economist"]);
+        let config = LadderConfig {
+            players: 3,
+            lineups: 12,
+            deals: 20,
+            seed: 3,
+            threads: 2,
+        };
+        let standings = ladder(&pool, &config).unwrap();
+        assert_eq!(standings.len(), 5);
+        assert_eq!(standings.iter().map(|s| s.lineups).sum::<u64>(), 12 * 3);
+        assert!(standings[0].name == "economist" || standings[0].name == "cheapest");
+        let bottom: Vec<&str> = standings[3..].iter().map(|s| s.name.as_str()).collect();
+        assert!(bottom.contains(&"lowest") && bottom.contains(&"biggest"), "{bottom:?}");
     }
 
     #[test]

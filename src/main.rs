@@ -3,6 +3,7 @@
 //! ```text
 //! rainbow bench [num_players] [num_games] [seed]
 //! rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]
+//! rainbow ladder [-p players] [-l lineups] [-d deals] [-s seed] [-t threads] AGENT...
 //! rainbow selfplay [-g games] [-s seed] [-t threads] [-p players] [-x explore] -o FILE [OPTIONS]
 //! ```
 
@@ -18,6 +19,7 @@ const USAGE: &str = "usage:
   rainbow bench [num_players] [num_games] [seed]
   rainbow arena [-d deals] [-s seed] [-t threads] AGENT AGENT [AGENT...]
 
+  rainbow ladder [-p players] [-l lineups] [-d deals] [-s seed] [-t threads] AGENT AGENT AGENT...
   rainbow selfplay [-g games] [-s seed] [-t threads] [-p players] [-x explore] -o FILE [OPTIONS]
 
 AGENT is name[:key=value,...], e.g. pimc:k=64,rollout=random
@@ -29,6 +31,7 @@ fn main() -> ExitCode {
         Some("bench") => bench(&args[1..]),
         Some("arena") => run_arena(&args[1..]),
         Some("selfplay") => selfplay(&args[1..]),
+        Some("ladder") => run_ladder(&args[1..]),
         _ => Err(USAGE.to_owned()),
     };
     match result {
@@ -141,5 +144,55 @@ fn selfplay(args: &[String]) -> Result<(), String> {
         config.games,
         start.elapsed().as_secs_f64()
     );
+    Ok(())
+}
+
+/// Ranks agents over random lineups drawn from a pool.
+fn run_ladder(args: &[String]) -> Result<(), String> {
+    let mut config = arena::LadderConfig {
+        players: 4,
+        lineups: 20,
+        deals: 50,
+        seed: 0,
+        threads: 0,
+    };
+    let mut pool = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-p" => config.players = parse(args.next(), "players")?,
+            "-l" => config.lineups = parse(args.next(), "lineups")?,
+            "-d" => config.deals = parse(args.next(), "deals")?,
+            "-s" => config.seed = parse(args.next(), "seed")?,
+            "-t" => config.threads = parse(args.next(), "threads")?,
+            spec => pool.push(Entrant::registered(spec)?),
+        }
+    }
+    if rainbow::constants::Setup::for_players(config.players).is_none() {
+        return Err("players must be 2 to 6".to_owned());
+    }
+    if pool.len() < config.players {
+        return Err(format!(
+            "{USAGE}\n\nthe pool needs at least {} agents",
+            config.players
+        ));
+    }
+    let start = Instant::now();
+    let standings = arena::ladder(&pool, &config).map_err(|e| e.to_string())?;
+    println!(
+        "{} players, {} lineups x {} deals x {} rotations",
+        config.players, config.lineups, config.deals, config.players
+    );
+    println!(
+        "{:<44} {:>8} {:>9} {:>8}",
+        "agent", "lineups", "relative", "+/-"
+    );
+    for s in standings {
+        println!(
+            "{:<44} {:>8} {:>9.3} {:>8.3}",
+            s.name, s.lineups, s.relative, s.stderr
+        );
+    }
+    println!("({:.1}s)", start.elapsed().as_secs_f64());
     Ok(())
 }
