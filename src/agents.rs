@@ -4,16 +4,22 @@ use crate::game::{Combo, Observation};
 
 pub mod baseline;
 pub mod dmc;
+pub mod dqn;
 pub mod economist;
+pub mod inference;
 pub mod ismcts;
+pub mod minimax;
 pub mod pimc;
 pub mod random;
 pub mod rollout;
+pub mod value;
 
 pub use baseline::{BiggestAgent, CheapestAgent, LowestAgent};
 pub use dmc::DmcAgent;
+pub use dqn::DqnAgent;
 pub use economist::EconomistAgent;
 pub use ismcts::IsmctsAgent;
+pub use minimax::MinimaxAgent;
 pub use pimc::PimcAgent;
 pub use random::RandomAgent;
 
@@ -94,12 +100,49 @@ fn parse_rollout(
     })
 }
 
+/// Loads a DMC network and checks its shape.
+fn load_dmc(path: &str) -> Result<std::sync::Arc<dmc::Mlp>, String> {
+    let net = dmc::Mlp::load_cached(path)?;
+    DmcAgent::new(std::sync::Arc::clone(&net))?;
+    Ok(net)
+}
+
+/// Opponent inference options: `infer` (`cheapest` or a DMC network path), `icands` (candidate
+/// deals), `iwindow` (recent plays scored), `ipower` (likelihood exponent), `ieps` (cheapest
+/// model's random-move rate) and `itemp` (DMC softmax temperature).
+fn parse_inference(opts: &mut Options) -> Result<Option<inference::Inference>, String> {
+    let Some(model) = opts.take::<String>("infer")? else {
+        return Ok(None);
+    };
+    let model = match model.as_str() {
+        "cheapest" => inference::OpponentModel::Cheapest {
+            epsilon: opts.take("ieps")?.unwrap_or(0.3),
+        },
+        path => {
+            let net = load_dmc(path)?;
+            inference::OpponentModel::Dmc {
+                net,
+                temperature: opts.take("itemp")?.unwrap_or(0.1),
+            }
+        }
+    };
+    Ok(Some(inference::Inference {
+        model,
+        candidates: opts.take("icands")?.unwrap_or(200),
+        window: opts.take("iwindow")?.unwrap_or(12),
+        power: opts.take("ipower")?.unwrap_or(1.0),
+    }))
+}
+
 /// Builds an agent from a spec `name[:key=value,...]`, seeding its randomness with `seed`.
 ///
-/// Options: `pimc` takes `k` (deals per decision); `ismcts` takes `n` (iterations) and `c`
-/// (exploration). Both take `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
+/// Options: `pimc` takes `k` (deals per decision); `ismcts` takes `n` (iterations), `c`
+/// (exploration), `leaf` (a DMC network path for leaf values), `prior` (a DMC network path for
+/// PUCT priors) with `ptemp` (softmax temperature) and `cpuct`, plus the inference options below. Both take `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
 /// cheapest rollout) and `margin` (score-margin reward weight). `dmc` requires `path`, a trained
-/// network file.
+/// network file, and so do `dqn` and `ppo`. `minimax` takes `k` (deals), `depth` (plies), `mode` (`paranoid` or `maxn`) and
+/// `endgame` (cards left at which to search to the end) and `leaf` (a DMC network path for leaf
+/// values instead of `cheapest` playouts).
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
@@ -125,15 +168,68 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         }
         "ismcts" => {
             let d = ismcts::Params::default();
+            let rollout = match d.evaluator {
+                value::Evaluator::Rollout(r) => r,
+                value::Evaluator::Dmc(_) => unreachable!("default evaluator is a rollout"),
+            };
+            let rollout = parse_rollout(&mut opts, rollout)?;
+            let evaluator = match opts.take::<String>("leaf")? {
+                None => value::Evaluator::Rollout(rollout),
+                Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+            };
+            let prior = match opts.take::<String>("prior")? {
+                None => None,
+                Some(path) => Some(ismcts::Prior {
+                    net: load_dmc(&path)?,
+                    temperature: opts.take("ptemp")?.unwrap_or(0.1),
+                    c_puct: opts.take("cpuct")?.unwrap_or(1.0),
+                }),
+            };
             let params = ismcts::Params {
                 iterations: opts.take("n")?.unwrap_or(d.iterations),
                 exploration: opts.take("c")?.unwrap_or(d.exploration),
-                rollout: parse_rollout(&mut opts, d.rollout)?,
+                evaluator,
                 reward: rollout::Reward {
                     margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
                 },
+                prior,
+                inference: parse_inference(&mut opts)?,
             };
             Box::new(IsmctsAgent::with_params(params, seed))
+        }
+        "minimax" => {
+            let d = minimax::Params::default();
+            let mode = match opts.take::<String>("mode")?.as_deref() {
+                None => d.mode,
+                Some("paranoid") => minimax::Mode::Paranoid,
+                Some("maxn") => minimax::Mode::MaxN,
+                Some(other) => return Err(format!("unknown minimax mode {other:?}")),
+            };
+            let params = minimax::Params {
+                determinizations: opts.take("k")?.unwrap_or(d.determinizations),
+                depth: opts.take("depth")?.unwrap_or(d.depth),
+                mode,
+                reward: rollout::Reward {
+                    margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
+                },
+                endgame_cards: opts.take("endgame")?.unwrap_or(d.endgame_cards),
+                leaf: match opts.take::<String>("leaf")? {
+                    None => d.leaf,
+                    Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+                },
+            };
+            Box::new(MinimaxAgent::with_params(params, seed))
+        }
+        "dqn" | "ppo" => {
+            let path: String = opts
+                .take("path")?
+                .ok_or_else(|| format!("{name} requires path=<network file>"))?;
+            let agent = DqnAgent::new(dmc::Mlp::load_cached(&path)?)?;
+            Box::new(if name == "ppo" {
+                agent.named("ppo")
+            } else {
+                agent
+            })
         }
         "dmc" => {
             let path: String = opts
@@ -158,7 +254,10 @@ mod tests {
 
     #[test]
     fn every_registered_name_builds() {
-        for &name in AGENT_NAMES.iter().filter(|&&n| n != "dmc") {
+        for &name in AGENT_NAMES
+            .iter()
+            .filter(|&&n| !["dmc", "dqn", "ppo"].contains(&n))
+        {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
         }
@@ -168,6 +267,8 @@ mod tests {
         assert!(create("pimc:depth=3", 0).is_err());
         assert!(create("random:k=3", 0).is_err());
         assert!(create("dmc", 0).is_err());
+        assert!(create("ismcts:n=10,infer=cheapest,icands=20,iwindow=6", 0).is_ok());
+        assert!(create("ismcts:infer=/nonexistent", 0).is_err());
         assert!(create("dmc:path=/nonexistent", 0).is_err());
     }
 }

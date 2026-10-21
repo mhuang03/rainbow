@@ -14,8 +14,6 @@ Checkpoints are exported in the Rust MLP format, so they can enter the arena dir
 from __future__ import annotations
 
 import argparse
-import struct
-import subprocess
 import time
 from pathlib import Path
 
@@ -24,46 +22,10 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
+from rl_common import ARENA, arena_relative, export, final_returns, mlp, new_game
 
 ACTIONS = re.action_features()  # (NUM_ACTIONS, ACTION_FEATURES)
 INPUT_SIZE = re.OBS_SIZE + re.ACTION_FEATURES
-MARGIN_WEIGHT = 0.2  # matches the Rust search agents' default reward
-
-
-def make_net(hidden: list[int]) -> nn.Sequential:
-    layers: list[nn.Module] = []
-    size = INPUT_SIZE
-    for h in hidden:
-        layers += [nn.Linear(size, h), nn.ReLU()]
-        size = h
-    layers.append(nn.Linear(size, 1))
-    return nn.Sequential(*layers)
-
-
-def export(net: nn.Sequential, path: Path) -> None:
-    """Writes the network in the format read by `rainbow::agents::dmc::Mlp`."""
-    linears = [m for m in net if isinstance(m, nn.Linear)]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(b"RBMLP1\0\0")
-        f.write(struct.pack("<I", len(linears)))
-        for layer in linears:
-            w = layer.weight.detach().cpu().numpy().astype("<f4")
-            b = layer.bias.detach().cpu().numpy().astype("<f4")
-            f.write(struct.pack("<II", w.shape[1], w.shape[0]))
-            f.write(w.tobytes())
-            f.write(b.tobytes())
-
-
-def episode_returns(game: re.Game) -> list[float]:
-    """Win share plus a small score-margin term for every seat."""
-    scores = game.scores()
-    returns = game.returns()
-    out = []
-    for seat, ret in enumerate(returns):
-        best_other = max(s for i, s in enumerate(scores) if i != seat)
-        out.append(ret + MARGIN_WEIGHT * (scores[seat] - best_other) / 100)
-    return out
 
 
 class Buffer:
@@ -93,14 +55,10 @@ class Actors:
 
     def __init__(self, count: int, rng: np.random.Generator):
         self.rng = rng
-        self.games = [self.new_game() for _ in range(count)]
+        self.games = [new_game(rng) for _ in range(count)]
         # per game: list of (seat, input row) for every decision so far
         self.history: list[list[tuple[int, np.ndarray]]] = [[] for _ in range(count)]
         self.episodes = 0
-
-    def new_game(self) -> re.Game:
-        n = int(self.rng.integers(re.MIN_PLAYERS, re.MAX_PLAYERS + 1))
-        return re.Game(n, seed=int(self.rng.integers(1 << 62)), leader=int(self.rng.integers(n)))
 
     def step(self, net: nn.Module, epsilon: float, buffer: Buffer) -> int:
         """Advances every game one move; returns the number of decisions made."""
@@ -125,28 +83,16 @@ class Actors:
             start += n
 
             if game.is_over:
-                returns = episode_returns(game)
+                returns = final_returns(game)
                 hist = self.history[i]
                 buffer.add(
                     np.stack([row for _, row in hist]),
                     np.array([returns[seat] for seat, _ in hist], dtype=np.float32),
                 )
                 self.episodes += 1
-                self.games[i] = self.new_game()
+                self.games[i] = new_game(self.rng)
                 self.history[i] = []
         return len(self.games)
-
-
-def evaluate(model: Path, arena: Path, deals: int) -> str:
-    """Runs the Rust arena: the model against three Economists in 4-player games."""
-    result = subprocess.run(
-        [str(arena), "arena", "-d", str(deals), f"dmc:path={model}", "economist", "economist", "economist"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    line = next(l for l in result.stdout.splitlines() if l.startswith("dmc"))
-    return line.split()[4]  # relative win share
 
 
 def main() -> None:
@@ -162,13 +108,13 @@ def main() -> None:
     parser.add_argument("--epsilon", type=float, nargs=2, default=[0.1, 0.02], help="start and end")
     parser.add_argument("--eval-every", type=float, default=5, help="minutes between arena checks")
     parser.add_argument("--eval-deals", type=int, default=200)
-    parser.add_argument("--arena", type=Path, default=Path(__file__).parent.parent / "target/release/rainbow")
+    parser.add_argument("--arena", type=Path, default=ARENA)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    net = make_net(args.hidden)
+    net = mlp(INPUT_SIZE, args.hidden, 1)
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     buffer = Buffer(args.buffer)
     actors = Actors(args.actors, rng)
@@ -198,7 +144,7 @@ def main() -> None:
             next_eval += args.eval_every * 60
             export(net, args.out)
             elapsed = (time.monotonic() - start) / 60
-            rel = evaluate(args.out, args.arena, args.eval_deals) if args.arena.exists() else "n/a"
+            rel = arena_relative(f"dmc:path={args.out}", ["economist"] * 3, args.eval_deals, args.arena)
             loss = np.mean(losses[-200:]) if losses else float("nan")
             print(
                 f"{elapsed:6.1f} min  episodes {actors.episodes:>8}  decisions {decisions:>9}  "

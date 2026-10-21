@@ -130,3 +130,25 @@ def test_rust_agents_play_legal_moves(spec):
         agent.act(g)
     with pytest.raises(ValueError):
         re.RustAgent("nonsense")
+
+
+def test_history_records_every_play():
+    rng = random.Random(3)
+    g = re.Game(3, seed=3)
+    played = []
+    while not g.is_over:
+        seat, action = g.current_player, rng.choice(g.legal_actions())
+        g.step(action)
+        played.append((seat, action))
+    assert g.history() == played
+
+
+def test_full_observation_extends_observation():
+    g = re.Game(4, seed=8)
+    full = g.full_observation(1)
+    assert full.shape == (re.FULL_OBS_SIZE,) and re.FULL_OBS_SIZE == re.OBS_SIZE + re.HIDDEN_SIZE
+    assert np.array_equal(full[: re.OBS_SIZE], g.observation(1))
+    # the first hidden block is the player's own hand
+    assert np.allclose(full[re.OBS_SIZE : re.OBS_SIZE + 6] * 10, g.hand(1))
+    batch = re.batch_full_observations([g])
+    assert np.array_equal(batch[0], g.full_observation(g.current_player))

@@ -136,8 +136,46 @@ impl Mlp {
         self.layers[0].inputs
     }
 
+    /// Runs the network on one input vector.
+    ///
+    /// # Panics
+    /// If `x.len() != self.inputs()`.
+    pub fn forward(&self, x: &[f32]) -> Vec<f32> {
+        assert_eq!(x.len(), self.inputs(), "wrong input size");
+        let (mut h, mut next) = (x.to_vec(), Vec::new());
+        let last = self.layers.len() - 1;
+        for (i, layer) in self.layers.iter().enumerate() {
+            layer.forward(&h, &mut next, i < last);
+            std::mem::swap(&mut h, &mut next);
+        }
+        h
+    }
+
     pub fn outputs(&self) -> usize {
         self.layers.last().expect("at least one layer").outputs
+    }
+}
+
+/// A network with the given layer sizes and deterministic pseudo-random weights, for tests.
+#[cfg(test)]
+pub(crate) fn test_mlp(layers: &[(usize, usize)], seed: u64) -> Mlp {
+    let mut x = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+    let mut next = || {
+        x = x
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((x >> 40) as f32 / (1u64 << 24) as f32 - 0.5) * 0.5
+    };
+    Mlp {
+        layers: layers
+            .iter()
+            .map(|&(inputs, outputs)| Layer {
+                inputs,
+                outputs,
+                weights: (0..inputs * outputs).map(|_| next()).collect(),
+                bias: (0..outputs).map(|_| next()).collect(),
+            })
+            .collect(),
     }
 }
 
@@ -282,12 +320,8 @@ mod tests {
             let mut a = [0.0; ACTION_FEATURES];
             encoding::encode_action(combo, &mut a);
             x.extend(a);
-            let (mut h, mut next) = (x, Vec::new());
-            for (i, layer) in net.layers.iter().enumerate() {
-                layer.forward(&h, &mut next, i + 1 < net.layers.len());
-                std::mem::swap(&mut h, &mut next);
-            }
-            assert!((h[0] - value).abs() < 1e-4, "{} vs {value}", h[0]);
+            let plain = net.forward(&x)[0];
+            assert!((plain - value).abs() < 1e-4, "{plain} vs {value}");
         }
     }
 

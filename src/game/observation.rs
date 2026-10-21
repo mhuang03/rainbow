@@ -3,8 +3,8 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 use crate::constants::{
-    CARDS_PER_RANK, DECK_SIZE, MAX_HAND_SIZE, MAX_PILES, MAX_PLAYERS, MAX_PLAYS_PER_TRICK,
-    MAX_RANK, MIN_PLAYERS, MIN_RANK, NUM_RANKS,
+    CARDS_PER_RANK, DECK_SIZE, MAX_GAME_PLAYS, MAX_HAND_SIZE, MAX_PILES, MAX_PLAYERS,
+    MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_PLAYERS, MIN_RANK, NUM_RANKS,
 };
 use crate::game::combo::{Combo, TrickType};
 use crate::game::hand::Hand;
@@ -37,6 +37,9 @@ pub struct Observation {
     pub(crate) tricks_played: u8,
     pub(crate) seen: Hand,
     pub(crate) is_over: bool,
+    pub(crate) history: ArrayVec<Play, MAX_GAME_PLAYS>,
+    pub(crate) initial_middle: Hand,
+    pub(crate) first_leader: u8,
 }
 
 impl Observation {
@@ -91,11 +94,80 @@ impl Observation {
         self.seen
     }
 
+    /// Every play so far, in order.
+    pub fn history(&self) -> &[Play] {
+        &self.history
+    }
+
+    /// The face-up point cards dealt before the first trick.
+    pub fn initial_middle(&self) -> Hand {
+        self.initial_middle
+    }
+
+    /// The seat that led the first trick.
+    pub fn first_leader(&self) -> usize {
+        self.first_leader as usize
+    }
+
+    /// Cards `seat` has played so far.
+    pub fn played_by(&self, seat: usize) -> Hand {
+        let mut hand = Hand::EMPTY;
+        for play in self.history.iter().filter(|p| p.seat as usize == seat) {
+            hand.add_combo(play.combo);
+        }
+        hand
+    }
+
     /// Cards the observer cannot locate: opponents' hands, all reserves and set-aside cards.
     pub fn unknown(&self) -> Hand {
         Hand::FULL_DECK
             .difference(&self.seen)
             .difference(&self.hand)
+    }
+
+    /// Rebuilds the starting deal of `world`, a determinization of this observation (or the
+    /// true state), by returning every played card to the hand or reserve it came from.
+    /// Replaying [`Self::history`] from the result reproduces `world`.
+    ///
+    /// # Panics
+    /// If `world` is not consistent with this observation.
+    pub fn start_of(&self, world: &GameState) -> GameState {
+        let n = self.players.len();
+        let setup = crate::constants::Setup::for_players(n).expect("valid player count");
+        let mut hands: ArrayVec<Hand, MAX_PLAYERS> = ArrayVec::new();
+        let mut reserves: ArrayVec<Hand, MAX_PLAYERS> = ArrayVec::new();
+        for seat in 0..n {
+            let mut hand = world.players[seat].hand;
+            let mut reserve = world.players[seat].reserve;
+            let plays = self.history.iter().filter(|p| p.seat as usize == seat);
+            if setup.reserve_size > 0 && reserve.is_empty() {
+                // The reserve was picked up when the first `hand_size` cards had been played:
+                // those plays came from the starting hand, later ones from the reserve.
+                let mut initial = Hand::EMPTY;
+                for play in plays {
+                    if initial.len() < setup.hand_size as usize {
+                        initial.add_combo(play.combo);
+                    } else {
+                        hand.add_combo(play.combo);
+                    }
+                }
+                reserve = hand;
+                hand = initial;
+            } else {
+                for play in plays {
+                    hand.add_combo(play.combo);
+                }
+            }
+            hands.push(hand);
+            reserves.push(reserve);
+        }
+        GameState::from_deal(
+            &hands,
+            &reserves,
+            self.initial_middle,
+            self.first_leader as usize,
+        )
+        .expect("world is consistent with the observation")
     }
 
     /// Samples a full game state consistent with this information set, by dealing the
@@ -139,6 +211,9 @@ impl Observation {
             tricks_played: self.tricks_played,
             seen: self.seen,
             is_over: self.is_over,
+            history: self.history.clone(),
+            initial_middle: self.initial_middle,
+            first_leader: self.first_leader,
         }
     }
 
@@ -191,6 +266,14 @@ impl Observation {
         out[NUM_PLAYERS + n - MIN_PLAYERS] = 1.0;
         out[PROGRESS] = self.trick.len() as f32 / MAX_PLAYS_PER_TRICK as f32;
         out[PROGRESS + 1] = f32::from(self.tricks_played) / TRICKS_SCALE;
+
+        let scale = 1.0 / f32::from(CARDS_PER_RANK);
+        for play in &self.history {
+            let o = &mut out[PLAYED + rel(play.seat) * NUM_RANKS..][..NUM_RANKS];
+            for (x, rank) in o.iter_mut().zip(MIN_RANK..=MAX_RANK) {
+                *x += f32::from(play.combo.count_of(rank)) * scale;
+            }
+        }
     }
 
     /// Allocating convenience wrapper around [`Self::encode`].
@@ -224,7 +307,9 @@ pub mod encoding {
     pub const NUM_PLAYERS: usize = TRICK_TYPE + 3;
     /// Plays so far in this trick / 6, tricks completed / 30.
     pub const PROGRESS: usize = NUM_PLAYERS + MAX_PLAYERS - MIN_PLAYERS + 1;
-    pub const OBS_SIZE: usize = PROGRESS + 2;
+    /// Per relative seat: cards played so far this game, count per rank / 10.
+    pub const PLAYED: usize = PROGRESS + 2;
+    pub const OBS_SIZE: usize = PLAYED + MAX_PLAYERS * NUM_RANKS;
 
     /// Upper bound on a score: every card's value plus the 2-player end-of-game bonus.
     pub(super) const POINTS_SCALE: f32 = (CARDS_PER_RANK as usize
@@ -255,6 +340,12 @@ pub mod encoding {
         out[NUM_RANKS + 3] = f32::from(combo.num_cards()) / f32::from(CARDS_PER_RANK);
         out[NUM_RANKS + 4] = f32::from(combo.strength()) / f32::from(MAX_STRENGTH);
     }
+
+    /// Hidden information for full-information critics: per relative seat, hand then reserve,
+    /// card count per rank / 10.
+    pub const HIDDEN_SIZE: usize = MAX_PLAYERS * 2 * NUM_RANKS;
+    /// [`OBS_SIZE`] observation features followed by [`HIDDEN_SIZE`] hidden features.
+    pub const FULL_OBS_SIZE: usize = OBS_SIZE + HIDDEN_SIZE;
 
     /// Strength of the strongest combo, ten 6s.
     const MAX_STRENGTH: u8 = Combo::set(MAX_RANK, CARDS_PER_RANK).strength();
@@ -316,7 +407,7 @@ mod tests {
 
     #[test]
     fn encoding_layout_is_contiguous() {
-        assert_eq!(OBS_SIZE, 136);
+        assert_eq!(OBS_SIZE, 172);
     }
 
     proptest! {
@@ -334,6 +425,24 @@ mod tests {
                 // the sampled world looks identical from the observer's seat
                 prop_assert_eq!(&d.observe(seat), &obs);
                 prop_assert_eq!(!d.legal_actions().is_empty(), !g.is_over());
+            }
+        }
+
+        #[test]
+        fn start_of_replays_to_the_world(
+            seed in any::<u64>(),
+            num_players in MIN_PLAYERS..=MAX_PLAYERS,
+            moves in 0..70usize,
+        ) {
+            let g = midgame(seed, num_players, moves);
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let obs = g.observe(seed as usize % num_players);
+            for world in [g.clone(), obs.determinize(&mut rng)] {
+                let mut replay = obs.start_of(&world);
+                for play in obs.history() {
+                    replay.apply(play.combo).unwrap();
+                }
+                prop_assert_eq!(replay, world);
             }
         }
 

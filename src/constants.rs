@@ -19,6 +19,9 @@ pub const EMPTY_HANDS_TO_END_GAME: usize = 2;
 /// Upper bound on plays in one trick: 6 players x 1 combo, or 2 players x 2 combos.
 pub const MAX_PLAYS_PER_TRICK: usize = MAX_PLAYERS;
 
+/// Upper bound on plays in a whole game: every play uses at least one card.
+pub const MAX_GAME_PLAYS: usize = DECK_SIZE;
+
 /// One point pile is available per play in a trick.
 pub const MAX_PILES: usize = MAX_PLAYS_PER_TRICK;
 

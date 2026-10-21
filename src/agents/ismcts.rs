@@ -11,18 +11,29 @@
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
 
-use crate::agents::Agent;
-use crate::agents::rollout::{Reward, Rollout};
-use crate::game::{Combo, Observation};
+use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use crate::agents::Agent;
+use crate::agents::dmc::{DmcAgent, Mlp};
+use crate::agents::inference::Inference;
+use crate::agents::rollout::{Reward, Rollout};
+use crate::agents::value::Evaluator;
+use crate::game::{Combo, GameState, Observation};
+
+#[derive(Debug, Clone)]
 pub struct Params {
     /// Iterations (sampled deals) per decision.
     pub iterations: usize,
     /// UCB exploration constant.
     pub exploration: f32,
-    pub rollout: Rollout,
+    /// Values new leaves: a rollout, or a DMC network.
+    pub evaluator: Evaluator,
     pub reward: Reward,
+    /// Network move priors. When set, selection uses PUCT (as in AlphaZero) instead of UCB.
+    pub prior: Option<Prior>,
+    /// Weight sampled deals by how well they explain opponents' past moves, instead of
+    /// sampling uniformly.
+    pub inference: Option<Inference>,
 }
 
 impl Default for Params {
@@ -32,9 +43,35 @@ impl Default for Params {
         Self {
             iterations: 1000,
             exploration: 0.7,
-            rollout: Rollout::Cheapest { epsilon: 0.3 },
+            evaluator: Evaluator::Rollout(Rollout::Cheapest { epsilon: 0.3 }),
             reward: Reward::default(),
+            prior: None,
+            inference: None,
         }
+    }
+}
+
+/// Move priors from a DMC network: a softmax over its predicted returns.
+#[derive(Debug, Clone)]
+pub struct Prior {
+    pub net: Arc<Mlp>,
+    pub temperature: f32,
+    /// PUCT exploration constant.
+    pub c_puct: f32,
+}
+
+impl Prior {
+    fn probabilities(&self, state: &GameState, legal: &[Combo]) -> Vec<f32> {
+        let q = DmcAgent::new(Arc::clone(&self.net))
+            .expect("validated on construction")
+            .evaluate(&state.observe(state.current_player()), legal);
+        let max = q.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let exp: Vec<f32> = q
+            .iter()
+            .map(|&v| ((v - max) / self.temperature).exp())
+            .collect();
+        let sum: f32 = exp.iter().sum();
+        exp.into_iter().map(|e| e / sum).collect()
     }
 }
 
@@ -48,6 +85,8 @@ struct Node {
     available: u32,
     /// Sum of the mover's rewards over visits.
     total: f32,
+    /// Prior probability of the move (PUCT only).
+    prior: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -79,14 +118,136 @@ impl IsmctsAgent {
             visits: 0,
             available: 1,
             total: 0.0,
+            prior: 1.0,
         });
         self.nodes[parent].children.push(id as u32);
         id
     }
 
+    fn child_for(&self, node: usize, combo: Combo) -> Option<usize> {
+        self.nodes[node]
+            .children
+            .iter()
+            .map(|&ch| ch as usize)
+            .find(|&ch| self.nodes[ch].combo == combo)
+    }
+
+    /// Counts a visit's availability for every legal child of `node`.
+    fn mark_available(&mut self, node: usize, legal: &[Combo]) {
+        for i in 0..self.nodes[node].children.len() {
+            let ch = self.nodes[node].children[i] as usize;
+            if legal.contains(&self.nodes[ch].combo) {
+                self.nodes[ch].available += 1;
+            }
+        }
+    }
+
+    /// One UCB selection step from `node`, applying the chosen move to `state`. Expands a random
+    /// untried move if there is one; returns whether it did.
+    fn select_ucb(
+        &mut self,
+        node: &mut usize,
+        state: &mut GameState,
+        legal: &[Combo],
+        c: f32,
+    ) -> bool {
+        let mover = state.current_player() as u8;
+        let untried: Vec<Combo> = legal
+            .iter()
+            .copied()
+            .filter(|&combo| self.child_for(*node, combo).is_none())
+            .collect();
+        if !untried.is_empty() {
+            let combo = untried[self.rng.random_range(0..untried.len())];
+            *node = self.add_node(*node, combo, mover);
+            state.apply(combo).expect("legal move");
+            return true;
+        }
+        let best = legal
+            .iter()
+            .map(|&combo| {
+                self.child_for(*node, combo)
+                    .expect("every legal move has a child")
+            })
+            .max_by(|&a, &b| {
+                let ucb = |ch: usize| {
+                    let n = &self.nodes[ch];
+                    let visits = n.visits.max(1) as f32;
+                    n.total / visits + c * ((n.available as f32).ln() / visits).sqrt()
+                };
+                ucb(a).total_cmp(&ucb(b))
+            })
+            .expect("legal moves are never empty");
+        self.mark_available(*node, legal);
+        *node = best;
+        state
+            .apply(self.nodes[best].combo)
+            .expect("child moves are legal here");
+        false
+    }
+
+    /// One PUCT selection step from `node`. Children for all legal moves are created with
+    /// network priors on first sight; returns whether the chosen child was unvisited.
+    fn select_puct(
+        &mut self,
+        node: &mut usize,
+        state: &mut GameState,
+        legal: &[Combo],
+        prior: &Prior,
+    ) -> bool {
+        let mover = state.current_player() as u8;
+        if legal.iter().any(|&c| self.child_for(*node, c).is_none()) {
+            let probs = prior.probabilities(state, legal);
+            for (&combo, &p) in legal.iter().zip(&probs) {
+                if self.child_for(*node, combo).is_none() {
+                    let id = self.add_node(*node, combo, mover);
+                    self.nodes[id].prior = p;
+                    self.nodes[id].available = 0;
+                }
+            }
+        }
+        let children: Vec<usize> = legal
+            .iter()
+            .map(|&c| self.child_for(*node, c).expect("created above"))
+            .collect();
+        let (visits, total) = children.iter().fold((0u32, 0.0f32), |(v, t), &ch| {
+            (v + self.nodes[ch].visits, t + self.nodes[ch].total)
+        });
+        // Unvisited moves start at the mean value of their visited siblings.
+        let fpu = if visits > 0 {
+            total / visits as f32
+        } else {
+            0.0
+        };
+        let sqrt_n = (visits.max(1) as f32).sqrt();
+        let best = *children
+            .iter()
+            .max_by(|&&a, &&b| {
+                let score = |ch: usize| {
+                    let n = &self.nodes[ch];
+                    let q = if n.visits > 0 {
+                        n.total / n.visits as f32
+                    } else {
+                        fpu
+                    };
+                    q + prior.c_puct * n.prior * sqrt_n / (1.0 + n.visits as f32)
+                };
+                score(a).total_cmp(&score(b))
+            })
+            .expect("legal moves are never empty");
+        self.mark_available(*node, legal);
+        *node = best;
+        state.apply(self.nodes[best].combo).expect("legal move");
+        self.nodes[best].visits == 0
+    }
+
     /// Runs the search and returns visit counts of the root's moves.
     pub fn search(&mut self, obs: &Observation) -> Vec<(Combo, u32)> {
-        let p = self.params;
+        let p = self.params.clone();
+        let pool = p
+            .inference
+            .as_ref()
+            .map(|inference| inference.sample_pool(obs, &mut self.rng));
         self.nodes.clear();
         // The root's own fields are unused; only its children matter.
         self.nodes.push(Node {
@@ -96,67 +257,32 @@ impl IsmctsAgent {
             visits: 0,
             available: 0,
             total: 0.0,
+            prior: 1.0,
         });
         let mut path: Vec<usize> = Vec::new();
 
         for _ in 0..p.iterations {
-            let mut state = obs.determinize(&mut self.rng);
+            let mut state = match &pool {
+                Some(pool) => pool.sample(&mut self.rng).clone(),
+                None => obs.determinize(&mut self.rng),
+            };
             let mut node = 0;
             path.clear();
 
             // Selection and expansion.
             while !state.is_over() {
                 let legal = state.legal_actions();
-                let mover = state.current_player() as u8;
-                let untried: Vec<Combo> = legal
-                    .iter()
-                    .copied()
-                    .filter(|c| {
-                        !self.nodes[node]
-                            .children
-                            .iter()
-                            .any(|&ch| self.nodes[ch as usize].combo == *c)
-                    })
-                    .collect();
-                if !untried.is_empty() {
-                    let combo = untried[self.rng.random_range(0..untried.len())];
-                    node = self.add_node(node, combo, mover);
-                    state.apply(combo).expect("legal move");
-                    path.push(node);
+                let expanded = match &p.prior {
+                    None => self.select_ucb(&mut node, &mut state, &legal, p.exploration),
+                    Some(prior) => self.select_puct(&mut node, &mut state, &legal, prior),
+                };
+                path.push(node);
+                if expanded {
                     break;
                 }
-
-                let mut best = None;
-                let mut best_ucb = f32::NEG_INFINITY;
-                for &ch in &self.nodes[node].children {
-                    let child = &self.nodes[ch as usize];
-                    if !legal.contains(&child.combo) {
-                        continue;
-                    }
-                    let mean = child.total / child.visits.max(1) as f32;
-                    let explore = p.exploration
-                        * ((child.available as f32).ln() / child.visits.max(1) as f32).sqrt();
-                    if mean + explore > best_ucb {
-                        best_ucb = mean + explore;
-                        best = Some(ch as usize);
-                    }
-                }
-                // Every legal move has a child here, so all of them were available.
-                for i in 0..self.nodes[node].children.len() {
-                    let ch = self.nodes[node].children[i] as usize;
-                    if legal.contains(&self.nodes[ch].combo) {
-                        self.nodes[ch].available += 1;
-                    }
-                }
-                node = best.expect("legal moves are never empty");
-                state
-                    .apply(self.nodes[node].combo)
-                    .expect("child moves are legal here");
-                path.push(node);
             }
 
-            p.rollout.play_out(&mut state, &mut self.rng);
-            let rewards = p.reward.all(&state);
+            let rewards = p.evaluator.values(&state, p.reward, &mut self.rng);
             for &id in &path {
                 let n = &mut self.nodes[id];
                 n.visits += 1;
@@ -211,6 +337,37 @@ mod tests {
                 },
                 1,
             );
+            while !state.is_over() {
+                let seat = state.current_player();
+                let combo = agent.act(&state.observe(seat), &state.legal_actions());
+                state.apply(combo).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn network_guided_search_plays_legal_moves() {
+        use crate::game::encoding::{ACTION_FEATURES, OBS_SIZE};
+        let net = Arc::new(crate::agents::dmc::test_mlp(
+            &[(OBS_SIZE + ACTION_FEATURES, 16), (16, 1)],
+            7,
+        ));
+        let params = Params {
+            iterations: 60,
+            evaluator: Evaluator::Dmc(Arc::clone(&net)),
+            prior: Some(Prior {
+                net,
+                temperature: 0.5,
+                c_puct: 1.0,
+            }),
+            ..Params::default()
+        };
+        for n in [2, 4] {
+            let mut rng = SmallRng::seed_from_u64(n as u64);
+            let mut state = GameState::new(n, 0, &mut rng);
+            let mut agent = IsmctsAgent::with_params(params.clone(), 3);
+            let visits = agent.search(&state.observe(0));
+            assert_eq!(visits.iter().map(|&(_, v)| v).sum::<u32>(), 60);
             while !state.is_over() {
                 let seat = state.current_player();
                 let combo = agent.act(&state.observe(seat), &state.legal_actions());

@@ -10,7 +10,7 @@ use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
 use rainbow::agents::{self, Agent};
 use rainbow::constants::{MAX_PLAYERS, MIN_PLAYERS};
-use rainbow::game::encoding::{self, ACTION_FEATURES, OBS_SIZE};
+use rainbow::game::encoding::{self, ACTION_FEATURES, FULL_OBS_SIZE, HIDDEN_SIZE, OBS_SIZE};
 use rainbow::{Combo, ComboKind, GameState, NUM_ACTIONS, TrickType};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
@@ -165,6 +165,15 @@ impl Game {
             .collect()
     }
 
+    /// (seat, action) for every play so far this game, in order.
+    fn history(&self) -> Vec<(u8, usize)> {
+        self.state
+            .history()
+            .iter()
+            .map(|p| (p.seat, p.combo.action_index()))
+            .collect()
+    }
+
     /// `player`'s information set as a float32 array of shape (OBS_SIZE,).
     fn observation<'py>(
         &self,
@@ -173,6 +182,18 @@ impl Game {
     ) -> PyResult<Bound<'py, PyArray1<f32>>> {
         let obs = self.state.observe(self.seat(player)?);
         Ok(PyArray1::from_slice(py, &obs.encoded()))
+    }
+
+    /// `player`'s observation followed by every hand and reserve (seats relative to `player`),
+    /// as a float32 array of shape (FULL_OBS_SIZE,). For training value networks only.
+    fn full_observation<'py>(
+        &self,
+        py: Python<'py>,
+        player: usize,
+    ) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        let mut out = [0.0; FULL_OBS_SIZE];
+        self.state.encode_full(self.seat(player)?, &mut out);
+        Ok(PyArray1::from_slice(py, &out))
     }
 
     /// A full game sampled uniformly from the states `player` cannot tell apart from this one.
@@ -296,6 +317,24 @@ impl RustAgent {
     }
 }
 
+/// Full-information observations (see `Game.full_observation`) for each game's current player,
+/// as an array of shape (len(games), FULL_OBS_SIZE).
+#[pyfunction]
+fn batch_full_observations<'py>(
+    py: Python<'py>,
+    games: Vec<PyRef<'py, Game>>,
+) -> Bound<'py, PyArray2<f32>> {
+    let out = PyArray2::<f32>::zeros(py, [games.len(), FULL_OBS_SIZE], false);
+    {
+        let mut rw = out.readwrite();
+        let slice = rw.as_slice_mut().expect("new arrays are contiguous");
+        for (game, row) in games.iter().zip(slice.chunks_exact_mut(FULL_OBS_SIZE)) {
+            game.state.encode_full(game.state.current_player(), row);
+        }
+    }
+    out
+}
+
 /// Human-readable form of an action: "4" (single), "3x4" (three 4s) or "2-5" (run).
 #[pyfunction]
 fn action_to_str(action: usize) -> PyResult<String> {
@@ -318,11 +357,14 @@ fn rainbow_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustAgent>()?;
     m.add_function(wrap_pyfunction!(action_features, m)?)?;
     m.add_function(wrap_pyfunction!(batch_observations, m)?)?;
+    m.add_function(wrap_pyfunction!(batch_full_observations, m)?)?;
     m.add_function(wrap_pyfunction!(action_to_str, m)?)?;
     m.add_function(wrap_pyfunction!(action_info, m)?)?;
     m.add("NUM_ACTIONS", NUM_ACTIONS)?;
     m.add("OBS_SIZE", OBS_SIZE)?;
     m.add("ACTION_FEATURES", ACTION_FEATURES)?;
+    m.add("HIDDEN_SIZE", HIDDEN_SIZE)?;
+    m.add("FULL_OBS_SIZE", FULL_OBS_SIZE)?;
     m.add("MIN_PLAYERS", MIN_PLAYERS)?;
     m.add("MAX_PLAYERS", MAX_PLAYERS)?;
     Ok(())

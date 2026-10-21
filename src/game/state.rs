@@ -5,8 +5,8 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 use crate::constants::{
-    DECK_SIZE, EMPTY_HANDS_TO_END_GAME, MAX_LEGAL_ACTIONS, MAX_PILES, MAX_PLAYERS,
-    MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_PLAYERS, MIN_RANK, Setup,
+    CARDS_PER_RANK, DECK_SIZE, EMPTY_HANDS_TO_END_GAME, MAX_GAME_PLAYS, MAX_LEGAL_ACTIONS,
+    MAX_PILES, MAX_PLAYERS, MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_PLAYERS, MIN_RANK, Setup,
 };
 use crate::game::combo::{Combo, TrickType};
 use crate::game::hand::Hand;
@@ -81,6 +81,12 @@ pub struct GameState {
     /// Every card that has been face up: initial point cards and all played combos.
     pub(crate) seen: Hand,
     pub(crate) is_over: bool,
+    /// Every play so far, in order.
+    pub(crate) history: ArrayVec<Play, MAX_GAME_PLAYS>,
+    /// The face-up point cards dealt before the first trick.
+    pub(crate) initial_middle: Hand,
+    /// The seat that led the first trick.
+    pub(crate) first_leader: u8,
 }
 
 impl GameState {
@@ -107,24 +113,75 @@ impl GameState {
         };
 
         let middle = deal(setup.middle_cards);
-        let players = (0..num_players)
-            .map(|_| PlayerState {
-                hand: deal(setup.hand_size),
-                reserve: deal(setup.reserve_size),
-                points: 0,
-            })
-            .collect();
+        let hands: ArrayVec<Hand, MAX_PLAYERS> =
+            (0..num_players).map(|_| deal(setup.hand_size)).collect();
+        let reserves: ArrayVec<Hand, MAX_PLAYERS> =
+            (0..num_players).map(|_| deal(setup.reserve_size)).collect();
+        Self::start(&hands, &reserves, middle, leader)
+    }
 
+    /// Starts a game from an explicit deal: one hand and one reserve per seat (reserves are
+    /// empty except in 2-player games), the face-up point cards, and the first leader.
+    ///
+    /// # Errors
+    /// If the player count is unsupported, the sizes don't match the official setup, or the deal
+    /// uses more copies of a rank than the deck has.
+    pub fn from_deal(
+        hands: &[Hand],
+        reserves: &[Hand],
+        middle: Hand,
+        leader: usize,
+    ) -> Result<Self, String> {
+        let n = hands.len();
+        let setup = Setup::for_players(n)
+            .ok_or_else(|| format!("Rainbow supports {MIN_PLAYERS}-{MAX_PLAYERS} players"))?;
+        if reserves.len() != n || leader >= n {
+            return Err("need one reserve per hand and a valid leader".to_owned());
+        }
+        if middle.len() != setup.middle_cards as usize
+            || hands.iter().any(|h| h.len() != setup.hand_size as usize)
+            || reserves
+                .iter()
+                .any(|r| r.len() != setup.reserve_size as usize)
+        {
+            return Err("hand, reserve or middle sizes don't match the setup".to_owned());
+        }
+        let mut used = middle.counts();
+        for h in hands.iter().chain(reserves) {
+            for (u, c) in used.iter_mut().zip(h.counts()) {
+                *u += c;
+            }
+        }
+        if used.iter().any(|&u| u > CARDS_PER_RANK) {
+            return Err("the deal uses a rank more than 10 times".to_owned());
+        }
+        Ok(Self::start(hands, reserves, middle, leader))
+    }
+
+    fn start(hands: &[Hand], reserves: &[Hand], middle: Hand, leader: usize) -> Self {
+        let n = hands.len();
+        let setup = Setup::for_players(n).expect("validated by callers");
         Self {
-            players,
+            players: hands
+                .iter()
+                .zip(reserves)
+                .map(|(&hand, &reserve)| PlayerState {
+                    hand,
+                    reserve,
+                    points: 0,
+                })
+                .collect(),
             piles: middle.cards().rev().collect(),
             trick: ArrayVec::new(),
             trick_type: TrickType::Open,
-            trick_size: num_players as u8 * setup.combos_per_turn,
+            trick_size: n as u8 * setup.combos_per_turn,
             current: leader as u8,
             tricks_played: 0,
             seen: middle,
             is_over: false,
+            history: ArrayVec::new(),
+            initial_middle: middle,
+            first_leader: leader as u8,
         }
     }
 
@@ -159,6 +216,21 @@ impl GameState {
         &self.piles
     }
 
+    /// Every play so far, in order.
+    pub fn history(&self) -> &[Play] {
+        &self.history
+    }
+
+    /// The face-up point cards dealt before the first trick.
+    pub fn initial_middle(&self) -> Hand {
+        self.initial_middle
+    }
+
+    /// The seat that led the first trick.
+    pub fn first_leader(&self) -> usize {
+        self.first_leader as usize
+    }
+
     pub fn tricks_played(&self) -> usize {
         self.tricks_played as usize
     }
@@ -166,6 +238,11 @@ impl GameState {
     /// The cards in `seat`'s hand. Hidden information: agents should use [`Self::observe`].
     pub fn hand(&self, seat: usize) -> Hand {
         self.players[seat].hand
+    }
+
+    /// The face-down reserve of `seat` (2-player games only). Hidden information.
+    pub fn reserve(&self, seat: usize) -> Hand {
+        self.players[seat].reserve
     }
 
     pub fn points(&self, seat: usize) -> u8 {
@@ -267,6 +344,7 @@ impl GameState {
         self.seen.add_combo(combo);
         self.trick_type = self.trick_type.after(combo);
         self.trick.push(Play { seat, combo });
+        self.history.push(Play { seat, combo });
 
         if player.hand.is_empty() {
             if !player.reserve.is_empty() {
@@ -360,6 +438,33 @@ impl GameState {
         self.current = self.next_seat_with_cards(winner);
     }
 
+    /// `seat`'s observation encoding followed by every hand and reserve, with seats relative to
+    /// `seat`: features for a value network trained with perfect information (see
+    /// [`encoding::FULL_OBS_SIZE`](crate::game::encoding::FULL_OBS_SIZE)). Agents must not act
+    /// on this.
+    ///
+    /// # Panics
+    /// If `out.len()` is not `FULL_OBS_SIZE`.
+    pub fn encode_full(&self, seat: usize, out: &mut [f32]) {
+        use crate::constants::NUM_RANKS;
+        use crate::game::encoding::{FULL_OBS_SIZE, OBS_SIZE};
+        assert_eq!(out.len(), FULL_OBS_SIZE, "buffer has the wrong size");
+        let (obs, hidden) = out.split_at_mut(OBS_SIZE);
+        self.observe(seat).encode(obs);
+        hidden.fill(0.0);
+        let n = self.players.len();
+        for (s, p) in self.players.iter().enumerate() {
+            let rel = (s + n - seat) % n;
+            let block = &mut hidden[rel * 2 * NUM_RANKS..][..2 * NUM_RANKS];
+            for (o, c) in block
+                .iter_mut()
+                .zip(p.hand.counts().into_iter().chain(p.reserve.counts()))
+            {
+                *o = f32::from(c) / f32::from(CARDS_PER_RANK);
+            }
+        }
+    }
+
     /// Everything `seat` is allowed to know: their own hand plus public information.
     pub fn observe(&self, seat: usize) -> Observation {
         Observation {
@@ -382,6 +487,9 @@ impl GameState {
             tricks_played: self.tricks_played,
             seen: self.seen,
             is_over: self.is_over,
+            history: self.history.clone(),
+            initial_middle: self.initial_middle,
+            first_leader: self.first_leader,
         }
     }
 
@@ -703,7 +811,75 @@ mod tests {
         assert_eq!(g.winners().as_slice(), &[0]);
     }
 
+    #[test]
+    fn full_encoding_appends_hidden_hands() {
+        use crate::game::encoding::{FULL_OBS_SIZE, OBS_SIZE};
+        let g = game(2);
+        let mut full = [0.0; FULL_OBS_SIZE];
+        g.encode_full(1, &mut full);
+        assert_eq!(&full[..OBS_SIZE], &g.observe(1).encoded()[..]);
+        // relative seat 1 from seat 1's view is seat 0: hand then reserve
+        let h = &full[OBS_SIZE + 12..OBS_SIZE + 24];
+        let expected: Vec<f32> = g.players[0]
+            .hand
+            .counts()
+            .into_iter()
+            .chain(g.players[0].reserve.counts())
+            .map(|c| f32::from(c) / 10.0)
+            .collect();
+        assert_eq!(h, &expected[..]);
+    }
+
+    #[test]
+    fn from_deal_validates() {
+        let h = Hand::from_counts([3, 3, 2, 2, 2, 2]);
+        let m = Hand::from_counts([1, 1, 1, 0, 0, 0]);
+        assert!(GameState::from_deal(&[h; 3], &[Hand::EMPTY; 3], m, 0).is_ok());
+        assert!(GameState::from_deal(&[h; 3], &[Hand::EMPTY; 3], m, 3).is_err());
+        assert!(GameState::from_deal(&[h; 3], &[Hand::EMPTY; 2], m, 0).is_err());
+        // four hands of three 1s each plus the middle's 1 would need 13 ones
+        assert!(
+            GameState::from_deal(
+                &[h; 4],
+                &[Hand::EMPTY; 4],
+                Hand::from_counts([1, 1, 1, 1, 0, 0]),
+                0
+            )
+            .is_err()
+        );
+        let small = Hand::from_counts([1, 0, 0, 0, 0, 0]);
+        assert!(GameState::from_deal(&[small; 3], &[Hand::EMPTY; 3], m, 0).is_err());
+    }
+
     proptest! {
+        #[test]
+        fn replaying_history_reproduces_the_game(
+            seed in any::<u64>(),
+            num_players in MIN_PLAYERS..=MAX_PLAYERS,
+            moves in 0..80usize,
+        ) {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let start = GameState::new(num_players, seed as usize % num_players, &mut rng);
+            let hands: Vec<Hand> = start.players.iter().map(|p| p.hand).collect();
+            let reserves: Vec<Hand> = start.players.iter().map(|p| p.reserve).collect();
+            let mut g = start.clone();
+            for _ in 0..moves {
+                if g.is_over() {
+                    break;
+                }
+                let actions = g.legal_actions();
+                g.apply(actions[rng.random_range(0..actions.len())]).unwrap();
+            }
+            prop_assert_eq!(g.initial_middle(), start.seen);
+            let mut replay = GameState::from_deal(&hands, &reserves, g.initial_middle(), g.first_leader()).unwrap();
+            prop_assert_eq!(&replay, &start);
+            for play in g.history() {
+                prop_assert_eq!(replay.current_player(), play.seat as usize);
+                replay.apply(play.combo).unwrap();
+            }
+            prop_assert_eq!(replay, g);
+        }
+
         #[test]
         fn random_games_preserve_invariants(
             seed in any::<u64>(),
