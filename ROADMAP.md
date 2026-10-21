@@ -111,8 +111,12 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       436,630 state-move rows), 8 epochs of fine-tuning from v2. Validation error against search
       values fell from 0.0248 to 0.0117, but the network got worse: head-to-head against v2 it
       scores 0.99 (2p) and 0.83 (4p), though 1.37 against v2's 1.31 versus three Economists.
-- [ ] Next attempts: blend search values with game returns, more self-play data per round, and
-      one or two epochs (validation error stopped improving after the first).
+- [x] Round 1b on the same data: the most-visited move's target blends in the game result
+      (`--return-weight 0.5`), 2 epochs. 1.54 against v2's 1.22 versus three Economists (100
+      deals), but still worse head-to-head against v2: 0.94 (2p) and 0.92 (4p).
+- [ ] At this budget expert iteration raises scores against the Economist while losing to its
+      own predecessor; league training (+0.22 head-to-head) is the better use of CPU. Worth
+      revisiting with stronger searches (more iterations) and much more data per round.
 
 ## Milestone 12: NFSP
 
