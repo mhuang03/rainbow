@@ -114,6 +114,16 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       `nfsp:path=...` samples from the average policy.
 - [ ] Train and evaluate.
 
+## Tooling added along the way
+
+- [x] `VecEnv`: batched Python environment, 11x faster stepping than per-game calls; all
+      trainers use it.
+- [x] `rainbow ladder`: ranks a pool of agents over many random lineups.
+- [x] `ismcts:ms=`: per-move time budget, for compute-matched comparisons.
+- [x] `Game` pickling and `GameState::to_bytes` / `from_bytes`.
+- [x] Auxiliary hidden-hand loss for DMC (`train_dmc.py --aux-weight`).
+- [x] `scripts/evaluate.sh` (standard table) and `scripts/expert_iteration.sh` (automated rounds).
+
 ## Later
 
 - **Larger DMC networks** and longer runs.
