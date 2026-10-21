@@ -195,3 +195,22 @@ def test_vec_env_runs_and_resets():
     assert full.shape == (16, re.FULL_OBS_SIZE)
     with pytest.raises(ValueError):
         env.step(np.zeros(3, dtype=np.int64))
+
+
+def test_vec_env_with_opponents_only_shows_learner_turns():
+    env = re.VecEnv(8, seed=2, players=4, opponents=["cheapest", "economist"], learners=1)
+    rng = np.random.default_rng(1)
+    finished = 0
+    for _ in range(300):
+        obs, masks = env.observe()
+        seats = env.current_players()
+        learners = env.learner_seats()
+        assert learners.sum(axis=1).tolist() == [1] * 8
+        assert all(learners[i, seats[i]] for i in range(8))
+        actions = (rng.random(masks.shape) * masks).argmax(1)
+        done, returns, scores = env.step(actions)
+        finished += int(done.sum())
+        assert np.allclose(returns[done].sum(axis=1), 1.0)
+    assert finished > 0
+    with pytest.raises(ValueError):
+        re.VecEnv(2, opponents=["nonsense"])

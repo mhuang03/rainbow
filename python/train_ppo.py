@@ -71,9 +71,9 @@ def masked_logits(policy: nn.Module, x: torch.Tensor, mask: torch.Tensor) -> tor
 
 
 class Actors:
-    def __init__(self, count: int, rng: np.random.Generator):
+    def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1):
         self.rng = rng
-        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners)
         # per game: (seat, obs, full, mask, action, logp) for every decision so far
         self.history: list[list[tuple]] = [[] for _ in range(count)]
         self.episodes = 0
@@ -193,6 +193,9 @@ def main() -> None:
     parser.add_argument("--eval-every", type=float, default=5, help="minutes between arena checks")
     parser.add_argument("--eval-deals", type=int, default=200)
     parser.add_argument("--arena", type=Path, default=ARENA)
+    parser.add_argument("--opponents", nargs="+", default=None,
+                        help="Rust agent specs for non-learner seats (default: pure self-play)")
+    parser.add_argument("--learners", type=int, default=1, help="learner seats per game with --opponents")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--threads", type=int, default=0, help="torch threads (0: torch default)")
     args = parser.parse_args()
@@ -205,7 +208,7 @@ def main() -> None:
     policy = mlp(re.OBS_SIZE + (re.HIDDEN_SIZE if use_oracle else 0), args.hidden, re.NUM_ACTIONS)
     value = mlp(re.FULL_OBS_SIZE, args.hidden, 1)
     optimizer = torch.optim.Adam(list(policy.parameters()) + list(value.parameters()), lr=args.lr)
-    actors = Actors(args.actors, rng)
+    actors = Actors(args.actors, rng, args.opponents, args.learners)
     rollouts = Rollouts()
 
     start = time.monotonic()

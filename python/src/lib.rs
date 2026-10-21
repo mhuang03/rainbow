@@ -367,41 +367,107 @@ type StepResult<'py> = (
 /// Many games stepped together, for training. Finished games are replaced with new ones
 /// automatically, so every slot always holds a game in progress.
 ///
-/// VecEnv(num_envs, seed=None, players=None): `players` fixes the player count; by default
-/// each new game picks 2 to 6 players and a first leader at random.
-#[pyclass(module = "rainbow_engine")]
+/// VecEnv(num_envs, seed=None, players=None, opponents=None, learners=1): `players` fixes the
+/// player count; by default each new game picks 2 to 6 players and a first leader at random.
+///
+/// With `opponents` (a list of Rust agent specs), each game gives `learners` random seats to the
+/// caller and the rest to agents drawn from the list; the environment plays their turns itself,
+/// so `observe` and `step` only ever see learner decisions. Without it, every seat is a learner.
+#[pyclass(module = "rainbow_engine", unsendable)]
 struct VecEnv {
     games: Vec<GameState>,
     rng: SmallRng,
     players: Option<usize>,
+    opponents: Vec<Box<dyn Agent>>,
+    learners: usize,
+    /// Per game and seat: `None` for a learner, or an index into `opponents`.
+    seats: Vec<[Option<u8>; MAX_PLAYERS]>,
 }
 
 impl VecEnv {
-    fn new_game(&mut self) -> GameState {
+    fn new_game(&mut self) -> (GameState, [Option<u8>; MAX_PLAYERS]) {
         let n = self
             .players
             .unwrap_or_else(|| self.rng.random_range(MIN_PLAYERS..=MAX_PLAYERS));
         let leader = self.rng.random_range(0..n);
-        GameState::new(n, leader, &mut self.rng)
+        let game = GameState::new(n, leader, &mut self.rng);
+        let mut seats = [None; MAX_PLAYERS];
+        if !self.opponents.is_empty() {
+            let mut order: Vec<usize> = (0..n).collect();
+            for i in (1..n).rev() {
+                order.swap(i, self.rng.random_range(0..=i));
+            }
+            for &seat in &order[self.learners.min(n)..] {
+                seats[seat] = Some(self.rng.random_range(0..self.opponents.len()) as u8);
+            }
+        }
+        (game, seats)
+    }
+
+    /// Plays opponents' turns in game `i` until a learner is to move or the game ends.
+    fn advance(&mut self, i: usize) -> PyResult<()> {
+        while !self.games[i].is_over() {
+            let seat = self.games[i].current_player();
+            let Some(k) = self.seats[i][seat] else {
+                return Ok(());
+            };
+            let game = &mut self.games[i];
+            let combo = self.opponents[k as usize].act(&game.observe(seat), &game.legal_actions());
+            game.apply(combo).map_err(|e| {
+                PyValueError::new_err(format!(
+                    "opponent {}: {e}",
+                    self.opponents[k as usize].name()
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Replaces game `i` with a new one and plays opponents up to the first learner turn.
+    fn reset(&mut self, i: usize) -> PyResult<()> {
+        let (game, seats) = self.new_game();
+        self.games[i] = game;
+        self.seats[i] = seats;
+        self.advance(i)
     }
 }
 
 #[pymethods]
 impl VecEnv {
     #[new]
-    #[pyo3(signature = (num_envs, seed=None, players=None))]
-    fn py_new(num_envs: usize, seed: Option<u64>, players: Option<usize>) -> PyResult<Self> {
+    #[pyo3(signature = (num_envs, seed=None, players=None, opponents=None, learners=1))]
+    fn py_new(
+        num_envs: usize,
+        seed: Option<u64>,
+        players: Option<usize>,
+        opponents: Option<Vec<String>>,
+        learners: usize,
+    ) -> PyResult<Self> {
         if players.is_some_and(|n| !(MIN_PLAYERS..=MAX_PLAYERS).contains(&n)) {
             return Err(PyValueError::new_err("players must be 2 to 6"));
         }
+        if learners == 0 {
+            return Err(PyValueError::new_err("need at least one learner seat"));
+        }
+        let mut rng = make_rng(seed);
+        let opponents = opponents
+            .unwrap_or_default()
+            .iter()
+            .map(|spec| agents::create(spec, rng.random()).map_err(PyValueError::new_err))
+            .collect::<PyResult<Vec<_>>>()?;
         let mut env = Self {
             games: Vec::with_capacity(num_envs),
-            rng: make_rng(seed),
+            rng,
             players,
+            opponents,
+            learners,
+            seats: Vec::with_capacity(num_envs),
         };
-        for _ in 0..num_envs {
-            let game = env.new_game();
+        for i in 0..num_envs {
+            let (game, seats) = env.new_game();
             env.games.push(game);
+            env.seats.push(seats);
+            env.advance(i)?;
         }
         Ok(env)
     }
@@ -504,6 +570,7 @@ impl VecEnv {
                 self.games[i]
                     .apply(combo(action)?)
                     .map_err(|e| PyValueError::new_err(format!("game {i}: {e}")))?;
+                self.advance(i)?;
                 if self.games[i].is_over() {
                     done[i] = true;
                     let game = &self.games[i];
@@ -513,11 +580,31 @@ impl VecEnv {
                         r[i * MAX_PLAYERS + seat] = ret;
                         sc[i * MAX_PLAYERS + seat] = pts.into();
                     }
-                    self.games[i] = self.new_game();
+                    self.reset(i)?;
                 }
             }
         }
         Ok((PyArray1::from_vec(py, done), returns, scores))
+    }
+
+    /// Learner seats of each game, as a bool array of shape (num_envs, MAX_PLAYERS).
+    fn learner_seats<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<bool>> {
+        let out = PyArray2::<bool>::zeros(py, [self.games.len(), MAX_PLAYERS], false);
+        {
+            let mut rw = out.readwrite();
+            let slice = rw.as_slice_mut().expect("contiguous");
+            for ((game, seats), row) in self
+                .games
+                .iter()
+                .zip(&self.seats)
+                .zip(slice.chunks_exact_mut(MAX_PLAYERS))
+            {
+                for seat in 0..game.num_players() {
+                    row[seat] = seats[seat].is_none();
+                }
+            }
+        }
+        out
     }
 
     /// A copy of game `i`.

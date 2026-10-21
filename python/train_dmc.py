@@ -83,9 +83,9 @@ class Buffer:
 class Actors:
     """A batch of concurrent self-play games."""
 
-    def __init__(self, count: int, rng: np.random.Generator):
+    def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1):
         self.rng = rng
-        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)))
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners)
         # per game: (seat, input row, hidden cards) for every decision so far
         self.history: list[list[tuple[int, np.ndarray, np.ndarray]]] = [[] for _ in range(count)]
         self.episodes = 0
@@ -143,6 +143,9 @@ def main() -> None:
     parser.add_argument("--arena", type=Path, default=ARENA)
     parser.add_argument("--aux-weight", type=float, default=0.0,
                         help="weight of the auxiliary hidden-hand prediction loss (0 disables)")
+    parser.add_argument("--opponents", nargs="+", default=None,
+                        help="Rust agent specs for non-learner seats (default: pure self-play)")
+    parser.add_argument("--learners", type=int, default=1, help="learner seats per game with --opponents")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--threads", type=int, default=0, help="torch threads (0: torch default)")
     args = parser.parse_args()
@@ -154,7 +157,7 @@ def main() -> None:
     net = DmcNet(args.hidden)
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     buffer = Buffer(args.buffer)
-    actors = Actors(args.actors, rng)
+    actors = Actors(args.actors, rng, args.opponents, args.learners)
 
     start = time.monotonic()
     deadline = start + args.minutes * 60
