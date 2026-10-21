@@ -137,7 +137,10 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Later
 
-- **Larger DMC networks** and longer runs.
+- **Larger DMC networks** and longer runs. A first try (v3: 512-512-256 with the auxiliary
+  hidden-hand loss, 90 minutes but only 546k games under contention) reached 0.94 against three
+  Economists, below v2's 1.11 at a similar game count, at about four times the cost per game.
+  Not worth it at this budget; it needs a run of millions of games to judge.
 - **Hand-prediction as an auxiliary loss** for the DMC and PPO networks.
 
 ## Results
