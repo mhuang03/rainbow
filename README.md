@@ -93,7 +93,9 @@ print(game.scores(), game.returns())
 ```
 
 - `Game.clone()`, `determinize(player, seed)` and `rollout(seed)` support MCTS. `rollout` runs without holding the GIL.
-- `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for vectorised training.
+- `VecEnv(num_envs, seed, players, opponents, learners)` steps many games per call and auto-resets finished ones (about 1M steps/s with random actions). With `opponents` (Rust agent specs), the environment plays the non-learner seats itself, for training against a league.
+- `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for a list of `Game`s.
+- `Game` pickles compactly (starting deal plus history), and `to_bytes` / `from_bytes` expose the same encoding.
 - `full_observation(player)` and `batch_full_observations(games)` add every hidden hand, for training value networks.
 - `history()` lists every play so far.
 - `RustAgent(spec, seed)` plays any agent from the Rust registry, e.g. `RustAgent("ismcts").act(game)`.
@@ -113,7 +115,7 @@ cd python && python train_dmc.py --minutes 30 --out models/dmc.bin
 
 ### Other trainers
 
-All trainers play many games at once through the bindings, check progress in the Rust arena, and export networks the Rust agents load. Pass `--threads` to share cores between runs.
+All trainers play many games at once through `VecEnv`, check progress in the Rust arena, and export networks the Rust agents load. Pass `--threads` to share cores between runs; `train_dmc.py` and `train_ppo.py` also take `--opponents` to train against fixed Rust agents.
 
 | Script | Trains |
 |---|---|
