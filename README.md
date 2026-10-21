@@ -39,9 +39,30 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
   - `Observation::encode` writes a 136-float feature vector, with seats relative to the observer. The layout is documented in `game::encoding`.
   - `Observation::determinize` samples a full `GameState` consistent with what the player knows (the determinization step of ISMCTS).
 - `returns()`: winners split 1.0 equally. `scores()` gives raw points.
-- `agents::Agent` and `game::run_game` play a game between agents. `RandomAgent` is included as a baseline.
+- `agents::Agent` and `game::run_game` play a game between agents.
 
-`cargo run --release -- [num_players] [num_games] [seed]` benchmarks random playouts. It runs about 200k games/s (about 7M moves/s) on one core.
+`cargo run --release -- bench [num_players] [num_games] [seed]` benchmarks random playouts. It runs about 200k games/s (about 7M moves/s) on one core.
+
+## Agents and the arena
+
+| Agent | Description |
+|---|---|
+| `random` | Uniformly random legal move. |
+| `lowest` | Always plays its lowest single. |
+| `biggest` | Always plays its strongest combo. |
+| `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
+| `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
+| `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
+| `ismcts` | Information-set MCTS with max-n backups. The strongest agent so far. |
+| `dmc` | Plays a network trained by Deep Monte Carlo self-play (`dmc:path=model.bin`). |
+
+`rainbow arena` runs a duplicate tournament: every deal is replayed once per seat rotation, on all cores. Agents take options after a colon:
+
+```sh
+cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random cheapest
+```
+
+[ROADMAP.md](ROADMAP.md) tracks planned agents and records tournament results.
 
 ## Python bindings
 
@@ -67,4 +88,17 @@ print(game.scores(), game.returns())
 
 - `Game.clone()`, `determinize(player, seed)` and `rollout(seed)` support MCTS. `rollout` runs without holding the GIL.
 - `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for vectorised training.
+- `RustAgent(spec, seed)` plays any agent from the Rust registry, e.g. `RustAgent("ismcts").act(game)`.
+- `action_features()` returns the per-action feature table used by the DMC network.
 - Type hints are in `python/rainbow_engine.pyi`.
+
+### Training a DMC agent
+
+`python/train_dmc.py` trains a DouZero-style Q(observation, action) network by self-play on CPU with PyTorch, and exports it in a format the Rust `dmc` agent loads:
+
+```sh
+pip install torch numpy
+cargo build --release
+cd python && python train_dmc.py --minutes 30 --out models/dmc.bin
+../target/release/rainbow arena dmc:path=python/models/dmc.bin economist economist economist
+```

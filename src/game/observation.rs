@@ -6,7 +6,7 @@ use crate::constants::{
     CARDS_PER_RANK, DECK_SIZE, MAX_HAND_SIZE, MAX_PILES, MAX_PLAYERS, MAX_PLAYS_PER_TRICK,
     MAX_RANK, MIN_PLAYERS, MIN_RANK, NUM_RANKS,
 };
-use crate::game::combo::TrickType;
+use crate::game::combo::{Combo, TrickType};
 use crate::game::hand::Hand;
 use crate::game::state::{GameState, Play, PlayerState};
 
@@ -232,6 +232,32 @@ pub mod encoding {
         + MAX_HAND_SIZE) as f32;
     /// Upper bound on tricks: every trick consumes at least two cards.
     pub(super) const TRICKS_SCALE: f32 = (DECK_SIZE / 2) as f32;
+
+    /// Features per action written by [`encode_action`]: card count per rank / 10, one-hot
+    /// single/set/run, card count / 10, strength / max strength.
+    pub const ACTION_FEATURES: usize = NUM_RANKS + 3 + 2;
+
+    /// Writes `combo`'s features, for networks that score (observation, action) pairs.
+    ///
+    /// # Panics
+    /// If `out.len() != ACTION_FEATURES`.
+    pub fn encode_action(combo: Combo, out: &mut [f32]) {
+        assert_eq!(
+            out.len(),
+            ACTION_FEATURES,
+            "action buffer has the wrong size"
+        );
+        out.fill(0.0);
+        for (o, rank) in out.iter_mut().zip(MIN_RANK..=MAX_RANK) {
+            *o = f32::from(combo.count_of(rank)) / f32::from(CARDS_PER_RANK);
+        }
+        out[NUM_RANKS + combo.trick_type() as usize] = 1.0;
+        out[NUM_RANKS + 3] = f32::from(combo.num_cards()) / f32::from(CARDS_PER_RANK);
+        out[NUM_RANKS + 4] = f32::from(combo.strength()) / f32::from(MAX_STRENGTH);
+    }
+
+    /// Strength of the strongest combo, ten 6s.
+    const MAX_STRENGTH: u8 = Combo::set(MAX_RANK, CARDS_PER_RANK).strength();
 }
 
 #[cfg(test)]
@@ -273,6 +299,19 @@ mod tests {
         let g = GameState::new(3, 0, &mut SmallRng::seed_from_u64(0));
         let obs = g.observe(0);
         assert_eq!(obs.unknown().len(), 2 * 14 + 15);
+    }
+
+    #[test]
+    fn action_features_are_bounded_and_distinct() {
+        use crate::game::ALL_COMBOS;
+        use encoding::{ACTION_FEATURES, encode_action};
+        let mut seen = std::collections::HashSet::new();
+        for &combo in &ALL_COMBOS {
+            let mut f = [0.0; ACTION_FEATURES];
+            encode_action(combo, &mut f);
+            assert!(f.iter().all(|x| (0.0..=1.0).contains(x)));
+            assert!(seen.insert(f.map(f32::to_bits)));
+        }
     }
 
     #[test]

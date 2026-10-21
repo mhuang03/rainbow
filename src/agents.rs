@@ -3,6 +3,7 @@
 use crate::game::{Combo, Observation};
 
 pub mod baseline;
+pub mod dmc;
 pub mod economist;
 pub mod ismcts;
 pub mod pimc;
@@ -10,6 +11,7 @@ pub mod random;
 pub mod rollout;
 
 pub use baseline::{BiggestAgent, CheapestAgent, LowestAgent};
+pub use dmc::DmcAgent;
 pub use economist::EconomistAgent;
 pub use ismcts::IsmctsAgent;
 pub use pimc::PimcAgent;
@@ -96,7 +98,8 @@ fn parse_rollout(
 ///
 /// Options: `pimc` takes `k` (deals per decision); `ismcts` takes `n` (iterations) and `c`
 /// (exploration). Both take `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
-/// cheapest rollout) and `margin` (score-margin reward weight).
+/// cheapest rollout) and `margin` (score-margin reward weight). `dmc` requires `path`, a trained
+/// network file.
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
@@ -132,6 +135,12 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             };
             Box::new(IsmctsAgent::with_params(params, seed))
         }
+        "dmc" => {
+            let path: String = opts
+                .take("path")?
+                .ok_or("dmc requires path=<network file>")?;
+            Box::new(DmcAgent::new(dmc::Mlp::load_cached(&path)?)?)
+        }
         _ => {
             return Err(format!(
                 "unknown agent {name:?}; known agents: {}",
@@ -149,7 +158,7 @@ mod tests {
 
     #[test]
     fn every_registered_name_builds() {
-        for &name in AGENT_NAMES {
+        for &name in AGENT_NAMES.iter().filter(|&&n| n != "dmc") {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
         }
@@ -158,5 +167,7 @@ mod tests {
         assert!(create("pimc:k=eight", 0).is_err());
         assert!(create("pimc:depth=3", 0).is_err());
         assert!(create("random:k=3", 0).is_err());
+        assert!(create("dmc", 0).is_err());
+        assert!(create("dmc:path=/nonexistent", 0).is_err());
     }
 }

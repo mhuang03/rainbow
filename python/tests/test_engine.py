@@ -108,3 +108,25 @@ def test_action_helpers():
     assert re.action_info(re.NUM_ACTIONS - 1) == ("run", 5, 6)
     kinds = [re.action_info(a)[0] for a in range(re.NUM_ACTIONS)]
     assert (kinds.count("single"), kinds.count("set"), kinds.count("run")) == (6, 54, 15)
+
+
+def test_action_features_table():
+    table = re.action_features()
+    assert table.shape == (re.NUM_ACTIONS, re.ACTION_FEATURES) and table.dtype == np.float32
+    assert len({row.tobytes() for row in table}) == re.NUM_ACTIONS
+    # first features are card counts per rank / 10
+    assert np.allclose(table[6][:6] * 10, [2, 0, 0, 0, 0, 0])  # a pair of 1s
+
+
+@pytest.mark.parametrize("spec", ["random", "cheapest", "economist", "pimc:k=4", "ismcts:n=50"])
+def test_rust_agents_play_legal_moves(spec):
+    agent = re.RustAgent(spec, seed=1)
+    g = re.Game(4, seed=2)
+    while not g.is_over:
+        a = agent.act(g)
+        assert g.is_legal(a)
+        g.step(a)
+    with pytest.raises(ValueError):
+        agent.act(g)
+    with pytest.raises(ValueError):
+        re.RustAgent("nonsense")

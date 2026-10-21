@@ -8,8 +8,9 @@
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
+use rainbow::agents::{self, Agent};
 use rainbow::constants::{MAX_PLAYERS, MIN_PLAYERS};
-use rainbow::game::encoding::OBS_SIZE;
+use rainbow::game::encoding::{self, ACTION_FEATURES, OBS_SIZE};
 use rainbow::{Combo, ComboKind, GameState, NUM_ACTIONS, TrickType};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
@@ -245,6 +246,56 @@ fn batch_observations<'py>(
     (obs, masks)
 }
 
+/// Features of every action, as a float32 array of shape (NUM_ACTIONS, ACTION_FEATURES):
+/// card count per rank / 10, one-hot single/set/run, card count / 10, strength / max strength.
+#[pyfunction]
+fn action_features<'py>(py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+    let table = PyArray2::<f32>::zeros(py, [NUM_ACTIONS, ACTION_FEATURES], false);
+    {
+        let mut rw = table.readwrite();
+        let slice = rw.as_slice_mut().expect("new arrays are contiguous");
+        for (row, combo) in slice
+            .chunks_exact_mut(ACTION_FEATURES)
+            .zip(rainbow::game::ALL_COMBOS)
+        {
+            encoding::encode_action(combo, row);
+        }
+    }
+    table
+}
+
+/// A Rust agent from the registry, e.g. RustAgent("ismcts:n=2000", seed=1).
+#[pyclass(module = "rainbow_engine", unsendable)]
+struct RustAgent {
+    agent: Box<dyn Agent>,
+}
+
+#[pymethods]
+impl RustAgent {
+    #[new]
+    #[pyo3(signature = (spec, seed=0))]
+    fn new(spec: &str, seed: u64) -> PyResult<Self> {
+        Ok(Self {
+            agent: agents::create(spec, seed).map_err(PyValueError::new_err)?,
+        })
+    }
+
+    #[getter]
+    fn name(&self) -> String {
+        self.agent.name().to_owned()
+    }
+
+    /// The action this agent chooses for `game`'s current player.
+    fn act(&mut self, game: &Game) -> PyResult<usize> {
+        let state = &game.state;
+        if state.is_over() {
+            return Err(PyValueError::new_err("the game is over"));
+        }
+        let obs = state.observe(state.current_player());
+        Ok(self.agent.act(&obs, &state.legal_actions()).action_index())
+    }
+}
+
 /// Human-readable form of an action: "4" (single), "3x4" (three 4s) or "2-5" (run).
 #[pyfunction]
 fn action_to_str(action: usize) -> PyResult<String> {
@@ -264,11 +315,14 @@ fn action_info(action: usize) -> PyResult<(&'static str, u8, u8)> {
 #[pymodule]
 fn rainbow_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Game>()?;
+    m.add_class::<RustAgent>()?;
+    m.add_function(wrap_pyfunction!(action_features, m)?)?;
     m.add_function(wrap_pyfunction!(batch_observations, m)?)?;
     m.add_function(wrap_pyfunction!(action_to_str, m)?)?;
     m.add_function(wrap_pyfunction!(action_info, m)?)?;
     m.add("NUM_ACTIONS", NUM_ACTIONS)?;
     m.add("OBS_SIZE", OBS_SIZE)?;
+    m.add("ACTION_FEATURES", ACTION_FEATURES)?;
     m.add("MIN_PLAYERS", MIN_PLAYERS)?;
     m.add("MAX_PLAYERS", MAX_PLAYERS)?;
     Ok(())
