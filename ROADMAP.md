@@ -76,7 +76,7 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       (`ismcts:infer=cheapest` or `infer=<model path>`).
 - [x] Evaluate the DMC opponent model.
 - [x] Hand-prediction network (`train_belief.py`, `ismcts:belief=`) and weighted determinization.
-- [ ] Evaluate belief-weighted deals.
+- [x] Evaluate belief-weighted deals.
 
 ## Milestone 8: Depth-limited minimax over sampled deals
 
@@ -225,6 +225,19 @@ networks and play-history features are the obvious next steps.
 Inference helps when the opponent model fits the opponents: the `cheapest` model captures how
 the Economist takes cheap wins, and gains about 0.25-0.3 (about three standard errors). Against
 ISMCTS opponents it does nothing, because they don't play like `cheapest`.
+
+### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
+
+| Lineup | With belief | Without |
+|---|---|---|
+| ismcts vs ismcts + 2 Economists | 1.33 | 1.08 |
+| 3p: ismcts vs 2 plain ismcts | 1.04 | 0.98 |
+| ismcts + `infer=cheapest` vs `infer=cheapest` + 2 Economists | 1.40 | 1.10 |
+
+The hand-prediction network (trained on games by DMC, Economist, `cheapest` and random agents)
+helps as much as the `cheapest` inference model against Economists, without needing a
+hand-picked opponent model, and the two stack. Against ISMCTS opponents, whose play it never saw,
+the gain is within noise.
 
 ### Minimax with `cheapest` leaves (4p vs 3 Economists, 40-50 deals)
 
