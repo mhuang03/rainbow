@@ -139,7 +139,7 @@ fn selfplay(args: &[String]) -> Result<(), String> {
     let start = Instant::now();
     let total = config.games;
     let report = move |games: u64, records: u64| {
-        if games % 50 == 0 || games == total {
+        if games.is_multiple_of(50) || games == total {
             eprintln!(
                 "{games}/{total} games, {records} records, {:.0}s",
                 start.elapsed().as_secs_f64()
