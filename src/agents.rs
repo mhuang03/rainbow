@@ -173,6 +173,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     };
     let params = ismcts::Params {
         iterations: opts.take("n")?.unwrap_or(d.iterations),
+        time_limit: opts
+            .take::<f64>("ms")?
+            .map(|ms| std::time::Duration::from_secs_f64(ms / 1000.0)),
         exploration: opts.take("c")?.unwrap_or(d.exploration),
         evaluator,
         reward: rollout::Reward {
@@ -194,7 +197,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///
 /// Options:
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
-/// - `ismcts`: `n` (iterations), `c` (exploration), `leaf` (DMC network path for leaf values),
+/// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
+///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `prior` (DMC network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options of [`parse_inference`].

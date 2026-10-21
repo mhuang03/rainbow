@@ -25,6 +25,8 @@ use crate::game::{Combo, GameState, Observation};
 pub struct Params {
     /// Iterations (sampled deals) per decision.
     pub iterations: usize,
+    /// Optional time budget per decision; the search stops at whichever limit comes first.
+    pub time_limit: Option<std::time::Duration>,
     /// UCB exploration constant.
     pub exploration: f32,
     /// Values new leaves: a rollout, or a DMC network.
@@ -45,6 +47,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             iterations: 1000,
+            time_limit: None,
             exploration: 0.7,
             evaluator: Evaluator::Rollout(Rollout::Cheapest { epsilon: 0.3 }),
             reward: Reward::default(),
@@ -266,7 +269,15 @@ impl IsmctsAgent {
         });
         let mut path: Vec<usize> = Vec::new();
 
-        for _ in 0..p.iterations {
+        let start = std::time::Instant::now();
+        for i in 0..p.iterations {
+            if let Some(limit) = p.time_limit
+                && i % 16 == 0
+                && i > 0
+                && start.elapsed() >= limit
+            {
+                break;
+            }
             let mut state = match &pool {
                 Some(pool) => pool.sample(&mut self.rng).clone(),
                 None => match &weights {
@@ -397,6 +408,27 @@ mod tests {
                 state.apply(combo).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn time_limit_stops_the_search_early() {
+        let state = GameState::new(4, 0, &mut SmallRng::seed_from_u64(5));
+        let mut agent = IsmctsAgent::with_params(
+            Params {
+                iterations: 10_000_000,
+                time_limit: Some(std::time::Duration::from_millis(20)),
+                ..Params::default()
+            },
+            2,
+        );
+        let start = std::time::Instant::now();
+        let visits: u32 = agent
+            .search(&state.observe(0))
+            .iter()
+            .map(|m| m.visits)
+            .sum();
+        assert!(start.elapsed() < std::time::Duration::from_secs(2));
+        assert!(visits > 0 && visits < 10_000_000);
     }
 
     #[test]
