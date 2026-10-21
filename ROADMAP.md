@@ -107,7 +107,12 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] Evaluate.
 - [x] Expert iteration tooling: `rainbow selfplay` records search values; `train_exit.py`
       fine-tunes the network on them.
-- [ ] Run expert-iteration rounds and evaluate.
+- [x] Round 1: 1500 guided self-play games (n=200, v2 prior and leaf; 46,557 decisions,
+      436,630 state-move rows), 8 epochs of fine-tuning from v2. Validation error against search
+      values fell from 0.0248 to 0.0117, but the network got worse: head-to-head against v2 it
+      scores 0.99 (2p) and 0.83 (4p), though 1.37 against v2's 1.31 versus three Economists.
+- [ ] Next attempts: blend search values with game returns, more self-play data per round, and
+      one or two epochs (validation error stopped improving after the first).
 
 ## Milestone 12: NFSP
 
@@ -322,6 +327,7 @@ GAE and league opponents.
 | nfsp_v1 (sampling) | dmc_v2 | 0.50 | 0.33 | 0.37 | 0.57 |
 | dmc_league | economist | 1.81 | 2.09 | 1.74 | 1.78 |
 | dmc_league | dmc_v2 | 1.23 | 1.14 | 1.22 | 0.92 |
+| dmc_league | ismcts (1000 iterations) | 0.96 | 1.59 | 1.46 | 1.16 |
 
 DMC's (observation, action) scoring is the most effective learner per unit of compute; DQN beats
 the Economist at 2-3 players but loses to DMC everywhere. Fine-tuning DMC v2 for 45 minutes
