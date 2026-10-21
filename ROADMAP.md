@@ -1,0 +1,99 @@
+# Agent roadmap
+
+The plan for building and evaluating Rainbow agents, in build order. Each milestone ends with the
+agent in the tournament ladder and its results recorded under [Results](#results).
+
+The design draws on research into climbing games (Dou Dizhu, GuanDan, Big 2) and trick-taking
+games (Skat, Bridge); see [References](#references).
+
+## Milestone 0: Evaluation infrastructure
+
+- [x] **Duplicate tournament harness** (`arena`): plays each deal once per seat rotation so every
+      lineup sees the same cards, runs on all cores, and reports mean return with standard error,
+      win share and mean points per agent.
+- [x] **Agent registry and CLI**: `rainbow arena -p 4 -d 1000 economist random random random`.
+- [x] Agent `name()` for reports.
+
+## Milestone 1: Baselines
+
+- [x] `random`: uniformly random legal move (exists).
+- [x] `lowest`: always plays its lowest single, conserving cards to stay in the game.
+- [x] `biggest`: always plays its strongest combo, burning cards for the top pile.
+- [x] `cheapest`: plays the cheapest combo that currently wins the trick, otherwise its lowest
+      single.
+
+## Milestone 2: Hand-written strategy ("Economist")
+
+Scores every legal combo as expected pile value, minus card cost, minus hand-structure damage,
+plus an endgame term. All weights live in a `Params` struct so they can be tuned in the arena.
+
+- [ ] **Expected pile**: exact rank against plays already made; the chance each later player
+      beats the combo, estimated by sampling their hands from the unknown cards.
+- [ ] **Card cost**: cards beyond what's needed to last until the game is expected to end are
+      nearly free; cards below that cost about one trick's pile each.
+- [ ] **Structure damage**: penalty for breaking pairs, sets and runs.
+- [ ] **Endgame**: when running out would end the game, play to end it only if winning.
+- [ ] Beat every baseline in 3-, 4- and 6-player games.
+
+## Milestone 3: Sampled-deal Monte Carlo (PIMC)
+
+- [ ] For each legal move, play it out on K sampled deals (`Observation::determinize`) with a
+      fast rollout policy; pick the move with the best mean result. The same deals are reused for
+      every move to reduce variance.
+- [ ] Shared `Rollout` policies over the full state (random, cheapest).
+- [ ] Objective option: win share or score margin.
+
+## Milestone 4: Information-set MCTS
+
+- [ ] Single-observer ISMCTS with max-n backups (each player maximises its own reward) and
+      availability-count UCB.
+- [ ] Compare rollout policies and reward shapes; tune the exploration constant.
+
+## Milestone 5: Deep Monte Carlo (DouZero-style)
+
+- [ ] Python training loop (PyTorch) with parallel self-play actors using the bindings.
+- [ ] Q(observation, action) network with action features (card counts per rank).
+- [ ] Rust or Python inference agent entered in the ladder.
+
+## Later milestones
+
+- **Play history in `Observation`**, needed for opponent inference.
+- **Inference-weighted determinization**: weight sampled deals by how likely opponents' past
+  plays were under them (Skat-style policy inference); plug into PIMC and ISMCTS.
+- **Depth-limited determinized search** (best-reply / paranoid alpha-beta) with exact endgame
+  solving.
+- **Masked Double DQN** with per-trick point rewards and frozen-opponent pools.
+- **PPO with a perfect-information critic** (PerfectDou) and oracle guiding (Suphx).
+- **Network-guided ISMCTS** trained by expert iteration.
+- **NFSP** as an exploitability check.
+- **Hand-prediction network** for inference and auxiliary losses.
+- Engine: full-information encoder, per-trick rewards, score-margin returns option.
+
+## Results
+
+Ladder results are added here as agents land. "Relative" is win share times the player
+count, so 1.0 is an average player. All runs are duplicate tournaments (`rainbow arena`, seed 0).
+
+### Baselines (5000 deals)
+
+| Lineup | Relative win share |
+|---|---|
+| 2p: cheapest, random | cheapest 1.47, random 0.53 |
+| 3p: cheapest, lowest, biggest | cheapest 2.72, lowest 0.27, biggest 0.01 |
+| 4p: cheapest, lowest, biggest, random | cheapest 2.43, random 1.43, biggest 0.09, lowest 0.05 |
+| 6p: cheapest x2, lowest x2, biggest, random | cheapest 2.01, random 1.50, biggest 0.35, lowest 0.06 |
+
+Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
+both terrible, and are beaten even by random play.
+
+## References
+
+- DouZero (Zha et al., ICML 2021), DouZero+ (2022), PerfectDou (Yang et al., NeurIPS 2022)
+- DanZero (Lu et al., 2022), DanZero+ (Zhao et al., 2023)
+- Big 2 self-play PPO (Charlesworth, 2018)
+- Suphx (Li et al., 2020)
+- Information Set MCTS (Cowling, Powley and Whitehouse, 2012)
+- Understanding PIMC (Long, Sturtevant, Buro and Furtak, AAAI 2010)
+- Policy Based Inference in Trick-Taking Card Games (Rebstock et al., 2019)
+- Best-Reply Search (Schadd and Winands, 2011)
+- NFSP (Heinrich and Silver, 2016), ReBeL (Brown et al., 2020), Student of Games (Schmid et al., 2023)

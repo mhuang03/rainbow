@@ -57,6 +57,10 @@ mod tests {
 
     struct Cheater;
     impl Agent for Cheater {
+        fn name(&self) -> &str {
+            "cheater"
+        }
+
         fn act(&mut self, _: &Observation, _: &[Combo]) -> Combo {
             Combo::set(6, 10)
         }

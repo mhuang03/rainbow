@@ -25,6 +25,10 @@ impl RandomAgent {
 }
 
 impl Agent for RandomAgent {
+    fn name(&self) -> &str {
+        "random"
+    }
+
     fn act(&mut self, _observation: &Observation, legal: &[Combo]) -> Combo {
         legal[self.rng.random_range(0..legal.len())]
     }

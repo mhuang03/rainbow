@@ -9,6 +9,7 @@
 //!   [determinized](Observation::determinize) into a sampled full state.
 
 pub mod agents;
+pub mod arena;
 pub mod constants;
 pub mod game;
 
