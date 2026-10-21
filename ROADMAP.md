@@ -276,6 +276,24 @@ Opponent inference with the DMC network as the opponent model (4p, with plain IS
 Economists): inference 1.26, plain 1.12. Smaller than the `cheapest` model's gain against
 Economists, but positive.
 
+### Learned agents: training curves (relative vs 3 Economists, 4p, 200-deal checks)
+
+All runs used one CPU thread each while sharing 4 cores with several other jobs, so wall-clock
+times overstate what the methods need.
+
+| Minutes | DQN | PPO v1 (Monte Carlo advantages) | NFSP |
+|---|---|---|---|
+| 9 | 0.36 | 0.13 | 0.25 |
+| 18 | 0.60 | 0.15 | 0.27 |
+| 27 | 0.60 | 0.17 | 0.32 |
+| 36 | 0.80 | 0.16 | 0.60 |
+| 45 | 0.96 | 0.17 | - |
+
+DMC reached 1.17 after 10 minutes on an idle machine, so DMC's action-feature Q-network learns
+far faster than DQN's one-output-per-action head here, matching DouZero's finding. PPO v1 learns
+(it beats random play easily) but only made 343 updates in 45 minutes and stays weak; PPO v2 adds
+GAE and league opponents.
+
 ### Playing style (`python/analyze_play.py`, 4p, 300 games, one seat each)
 
 | Agent | Win share | Cards/play | Points/card | Leads a set | Leads a run | Lead size | Wins when last | Cards left at end |
