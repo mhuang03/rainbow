@@ -309,6 +309,25 @@ far faster than DQN's one-output-per-action head here, matching DouZero's findin
 (it beats random play easily) but only made 343 updates in 45 minutes and stays weak; PPO v2 adds
 GAE and league opponents.
 
+### Learned agents: evaluation (`scripts/evaluate.sh`, 200 deals, agent in one seat)
+
+| Agent | Opponent | 2p | 3p | 4p | 6p |
+|---|---|---|---|---|---|
+| dqn_v1 | economist | 1.79 | 1.17 | 0.96 | 1.04 |
+| dqn_v1 | dmc_v2 | 0.86 | 0.57 | 0.51 | 0.76 |
+| ppo_v1 | economist | 1.53 | 0.29 | 0.17 | 0.63 |
+| ppo_v1 | dmc_v2 | 0.56 | 0.18 | 0.23 | 0.49 |
+| ppo_v1 (sampling) | economist | 1.42 | 0.22 | 0.24 | 0.59 |
+| nfsp_v1 (sampling) | economist | 1.16 | 0.79 | 0.63 | 0.73 |
+| nfsp_v1 (sampling) | dmc_v2 | 0.50 | 0.33 | 0.37 | 0.57 |
+| dmc_league | economist | 1.81 | 2.09 | 1.74 | 1.78 |
+| dmc_league | dmc_v2 | 1.23 | 1.14 | 1.22 | 0.92 |
+
+DMC's (observation, action) scoring is the most effective learner per unit of compute; DQN beats
+the Economist at 2-3 players but loses to DMC everywhere. Fine-tuning DMC v2 for 45 minutes
+against a league (two learner seats, the rest drawn from economist, cheapest and frozen v2) beats
+frozen v2 at 2-4 players, so the gain isn't only exploitation of the Economist it trained against.
+
 ### Playing style (`python/analyze_play.py`, 4p, 300 games, one seat each)
 
 | Agent | Win share | Cards/play | Points/card | Leads a set | Leads a run | Lead size | Wins when last | Cards left at end |
