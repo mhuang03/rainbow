@@ -4,12 +4,14 @@ use crate::game::{Combo, Observation};
 
 pub mod baseline;
 pub mod economist;
+pub mod ismcts;
 pub mod pimc;
 pub mod random;
 pub mod rollout;
 
 pub use baseline::{BiggestAgent, CheapestAgent, LowestAgent};
 pub use economist::EconomistAgent;
+pub use ismcts::IsmctsAgent;
 pub use pimc::PimcAgent;
 pub use random::RandomAgent;
 
@@ -92,8 +94,9 @@ fn parse_rollout(
 
 /// Builds an agent from a spec `name[:key=value,...]`, seeding its randomness with `seed`.
 ///
-/// Options: `pimc` takes `k` (deals per decision), `rollout` (`random` or `cheapest`), `eps`
-/// (random-move rate of the cheapest rollout) and `margin` (score-margin reward weight).
+/// Options: `pimc` takes `k` (deals per decision); `ismcts` takes `n` (iterations) and `c`
+/// (exploration). Both take `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
+/// cheapest rollout) and `margin` (score-margin reward weight).
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
@@ -116,6 +119,18 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 },
             };
             Box::new(PimcAgent::with_params(params, seed))
+        }
+        "ismcts" => {
+            let d = ismcts::Params::default();
+            let params = ismcts::Params {
+                iterations: opts.take("n")?.unwrap_or(d.iterations),
+                exploration: opts.take("c")?.unwrap_or(d.exploration),
+                rollout: parse_rollout(&mut opts, d.rollout)?,
+                reward: rollout::Reward {
+                    margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
+                },
+            };
+            Box::new(IsmctsAgent::with_params(params, seed))
         }
         _ => {
             return Err(format!(

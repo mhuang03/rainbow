@@ -50,9 +50,9 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Milestone 4: Information-set MCTS
 
-- [ ] Single-observer ISMCTS with max-n backups (each player maximises its own reward) and
+- [x] Single-observer ISMCTS with max-n backups (each player maximises its own reward) and
       availability-count UCB.
-- [ ] Compare rollout policies and reward shapes; tune the exploration constant.
+- [x] Compare rollout policies and reward shapes; tune the exploration constant.
 
 ## Milestone 5: Deep Monte Carlo (DouZero-style)
 
@@ -118,6 +118,23 @@ opponent plays like `cheapest`: it scores 3.05 against three `cheapest` players 
 against two Economists, and k=128 is no better than k=32. Random rollouts are less biased, and
 then more samples help (k=96 reaches parity with the Economist in 3- and 4-player games). Fixing
 this properly means modelling opponents in the search itself (ISMCTS) or in the rollouts.
+
+### ISMCTS (300 deals; 1000 iterations, c=0.7, cheapest rollouts with eps=0.3)
+
+| Players | vs Economist | vs PIMC |
+|---|---|---|
+| 2 | 1.81 | 1.14 |
+| 3 | 1.47 | 1.35 |
+| 4 | 1.41 | 1.31 |
+| 6 | 1.57 | - |
+
+In a mixed 4-player table it scores ismcts 1.75, economist 0.98, pimc 0.93, cheapest 0.34.
+
+Sweep against three Economists (4p, 400 deals, error about 0.05): random rollouts 1.22,
+cheapest rollouts with eps 0.2 / 0.3 / 0.5 / 0.7 gave 1.37 / 1.45 / 1.29 / 1.32; 3000 iterations
+1.31 (with random rollouts). Unlike PIMC, ISMCTS prefers the sharper `cheapest` rollouts, because
+the tree itself models opponents' near-term choices and the rollout only covers the distant
+future. Exploration between 0.5 and 1.0 and margin weights from 0 to 0.5 made little difference.
 
 Winning the trick cheaply matters most. Hoarding cards (`lowest`) and dumping them (`biggest`) are
 both terrible, and are beaten even by random play.
