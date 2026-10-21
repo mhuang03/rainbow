@@ -26,6 +26,24 @@ struct Layer {
     bias: Vec<f32>,
 }
 
+/// Dot product with eight independent partial sums. Float addition isn't associative, so a plain
+/// `iter().sum()` must add one element at a time; separate lanes let the compiler use SIMD.
+fn dot(a: &[f32], b: &[f32]) -> f32 {
+    const LANES: usize = 8;
+    let split = a.len().min(b.len()) / LANES * LANES;
+    let mut acc = [0.0f32; LANES];
+    for (x, y) in a[..split]
+        .chunks_exact(LANES)
+        .zip(b[..split].chunks_exact(LANES))
+    {
+        for i in 0..LANES {
+            acc[i] += x[i] * y[i];
+        }
+    }
+    let tail: f32 = a[split..].iter().zip(&b[split..]).map(|(x, y)| x * y).sum();
+    acc.iter().sum::<f32>() + tail
+}
+
 impl Layer {
     /// `out = W x + b`, applying ReLU if `relu`.
     fn forward(&self, x: &[f32], out: &mut Vec<f32>, relu: bool) {
@@ -35,7 +53,7 @@ impl Layer {
                 .chunks_exact(self.inputs)
                 .zip(&self.bias)
                 .map(|(row, b)| {
-                    let y = row.iter().zip(x).map(|(w, v)| w * v).sum::<f32>() + b;
+                    let y = dot(row, x) + b;
                     if relu { y.max(0.0) } else { y }
                 }),
         );
@@ -210,14 +228,7 @@ impl DmcAgent {
             .weights
             .chunks_exact(first.inputs)
             .zip(&first.bias)
-            .map(|(row, b)| {
-                row[..OBS_SIZE]
-                    .iter()
-                    .zip(&observation)
-                    .map(|(w, v)| w * v)
-                    .sum::<f32>()
-                    + b
-            })
+            .map(|(row, b)| dot(&row[..OBS_SIZE], &observation) + b)
             .collect();
 
         let mut action = [0.0; ACTION_FEATURES];
@@ -230,11 +241,7 @@ impl DmcAgent {
                 hidden.clear();
                 hidden.extend(first.weights.chunks_exact(first.inputs).zip(&shared).map(
                     |(row, s)| {
-                        let y = s + row[OBS_SIZE..]
-                            .iter()
-                            .zip(&action)
-                            .map(|(w, v)| w * v)
-                            .sum::<f32>();
+                        let y = s + dot(&row[OBS_SIZE..], &action);
                         if self.net.layers.len() > 1 {
                             y.max(0.0)
                         } else {
