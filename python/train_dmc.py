@@ -22,7 +22,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, final_returns_row, mlp
+from rl_common import ARENA, arena_relative, export, final_returns_row, load, mlp
 
 ACTIONS = re.action_features()  # (NUM_ACTIONS, ACTION_FEATURES)
 INPUT_SIZE = re.OBS_SIZE + re.ACTION_FEATURES
@@ -47,6 +47,21 @@ class DmcNet(nn.Module):
     def aux(self, x: torch.Tensor) -> torch.Tensor:
         """Predicted hidden cards (count / 10 per rank, relative seats) from the observation."""
         return self.aux_head(torch.relu(self.obs_layer(x[:, : re.OBS_SIZE])))
+
+    @classmethod
+    def from_sequential(cls, seq: nn.Sequential) -> "DmcNet":
+        """Wraps a loaded plain MLP (see `rl_common.load`), splitting its first layer."""
+        linears = [m for m in seq if isinstance(m, nn.Linear)]
+        net = cls([l.out_features for l in linears[:-1]])
+        with torch.no_grad():
+            first = linears[0]
+            net.obs_layer.weight.copy_(first.weight[:, : re.OBS_SIZE])
+            net.obs_layer.bias.copy_(first.bias)
+            net.act_layer.weight.copy_(first.weight[:, re.OBS_SIZE :])
+            for mine, theirs in zip([m for m in net.rest if isinstance(m, nn.Linear)], linears[1:]):
+                mine.weight.copy_(theirs.weight)
+                mine.bias.copy_(theirs.bias)
+        return net
 
     def to_sequential(self) -> nn.Sequential:
         first = nn.Linear(INPUT_SIZE, self.obs_layer.out_features)
@@ -141,6 +156,7 @@ def main() -> None:
     parser.add_argument("--eval-every", type=float, default=5, help="minutes between arena checks")
     parser.add_argument("--eval-deals", type=int, default=200)
     parser.add_argument("--arena", type=Path, default=ARENA)
+    parser.add_argument("--init", type=Path, default=None, help="continue training this network")
     parser.add_argument("--aux-weight", type=float, default=0.0,
                         help="weight of the auxiliary hidden-hand prediction loss (0 disables)")
     parser.add_argument("--opponents", nargs="+", default=None,
@@ -154,7 +170,7 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    net = DmcNet(args.hidden)
+    net = DmcNet.from_sequential(load(args.init)) if args.init else DmcNet(args.hidden)
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     buffer = Buffer(args.buffer)
     actors = Actors(args.actors, rng, args.opponents, args.learners)
