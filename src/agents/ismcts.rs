@@ -65,6 +65,7 @@ impl Default for Params {
             prior: Some(Prior {
                 source: PriorSource::Counter,
                 temperature: 1.0,
+                counter_weight: 0.0,
                 c_puct: 1.0,
             }),
             belief: None,
@@ -79,6 +80,9 @@ impl Default for Params {
 pub struct Prior {
     pub source: PriorSource,
     pub temperature: f32,
+    /// With a network source, the weight of the `counter` prior blended in (geometrically,
+    /// in log space; the counter scores use temperature 1). 0 uses the network alone.
+    pub counter_weight: f32,
     /// PUCT exploration constant.
     pub c_puct: f32,
 }
@@ -108,10 +112,16 @@ impl Prior {
             PriorSource::Counter => CounterAgent::new().scores(&obs, legal),
         };
         let max = q.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        let exp: Vec<f32> = q
-            .iter()
-            .map(|&v| ((v - max) / self.temperature).exp())
-            .collect();
+        let mut logits: Vec<f32> = q.iter().map(|&v| (v - max) / self.temperature).collect();
+        if self.counter_weight > 0.0 && matches!(self.source, PriorSource::Network(_)) {
+            let c = CounterAgent::new().scores(&obs, legal);
+            let cmax = c.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let w = self.counter_weight;
+            for (l, &v) in logits.iter_mut().zip(&c) {
+                *l = (1.0 - w) * *l + w * (v - cmax);
+            }
+        }
+        let exp: Vec<f32> = logits.iter().map(|&l| l.exp()).collect();
         let sum: f32 = exp.iter().sum();
         exp.into_iter().map(|e| e / sum).collect()
     }
@@ -423,6 +433,7 @@ mod tests {
                 5,
             ))),
             temperature: 1.0,
+            counter_weight: 0.0,
             c_puct: 1.0,
         };
         let mut rng = SmallRng::seed_from_u64(1);
@@ -441,6 +452,7 @@ mod tests {
             prior: Some(Prior {
                 source: PriorSource::Counter,
                 temperature: 2.0,
+                counter_weight: 0.0,
                 c_puct: 1.0,
             }),
             ..Params::default()
@@ -468,6 +480,7 @@ mod tests {
             prior: Some(Prior {
                 source: PriorSource::Network(net),
                 temperature: 0.5,
+                counter_weight: 0.0,
                 c_puct: 1.0,
             }),
             ..Params::default()

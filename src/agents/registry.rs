@@ -170,6 +170,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
         Some(source) if source == "counter" => Some(ismcts::Prior {
             source: ismcts::PriorSource::Counter,
             temperature: opts.take("ptemp")?.unwrap_or(2.0),
+            counter_weight: 0.0,
             c_puct: opts.take("cpuct")?.unwrap_or(1.0),
         }),
         Some(path) => {
@@ -186,6 +187,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
                 temperature: opts
                     .take("ptemp")?
                     .unwrap_or(if policy { 1.0 } else { 0.1 }),
+                counter_weight: opts.take("pmix")?.unwrap_or(0.0),
                 c_puct: opts.take("cpuct")?.unwrap_or(1.0),
             })
         }
@@ -227,7 +229,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   rollout), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
-///   `mix` (with `leaf`: weight of a rollout blended into the network value),
+///   `mix` (with `leaf`: weight of a rollout blended into the network value), `pmix` (with a
+///   network `prior`: weight of the counter prior blended into it),
 ///   `prior` (`counter`, the default, or a DMC or policy network path, for PUCT priors;
 ///   `none` for plain UCB) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
