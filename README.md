@@ -196,10 +196,12 @@ All trainers play many games at once through `VecEnv`, check progress in the Rus
 | `train_nfsp.py` | NFSP best-response and average-policy networks (`nfsp`). |
 | `train_belief.py` | Hand-prediction network for `ismcts:belief=` (supervised, from `Game.full_observation`). |
 | `train_exit.py` | Expert iteration: fine-tunes a DMC network on `rainbow selfplay` search values. |
+| `train_distill.py` | Policy network imitating guided ISMCTS's visit counts from `rainbow selfplay` (`distill`). |
 | `distill_ensemble.py` | Distils a DMC ensemble into one network, regressing every legal move's ensemble value in ensemble self-play. |
 
 `train_dmc.py` also takes `--init` (continue a network), `--widen` (grow it first, function-preserving),
 `--history` (public-history inputs) and, with `--opponents`, `--pfsp P` (draw opponents with weight
 (1 - win rate)^P, favouring those the learner beats least). `scripts/league_round.sh` runs one league
-round with these and a head-to-head check. `train_belief.py --history` trains a belief network on
+round with these and a head-to-head check. `analyze_play.py` compares how agents play (leads,
+trick wins, card economy, endgames). `train_belief.py --history` trains a belief network on
 the public history as well.
