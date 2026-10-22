@@ -49,6 +49,23 @@ pub struct Params {
     /// weights at 3, 4 and 6 players (0.83-0.91 relative), despite the DMC network ending games
     /// with fewer cards left than the Economist.
     pub pressure_scaling: bool,
+    /// What a claimed pile is worth.
+    pub objective: Objective,
+    /// When set, estimate each opponent's willingness to beat from how often they beat the trick
+    /// so far this game, with the default willingness as a prior worth this many observations.
+    pub adaptive_prior: Option<f32>,
+}
+
+/// How the Economist values the pile a combo would claim.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Objective {
+    /// The pile's points.
+    #[default]
+    Points,
+    /// The pile's points minus the average pile the other plays in the trick take: what the
+    /// claim gains relative to the field. Equal piles make every rank worth the same, so cheap
+    /// plays win; a pile that towers over the rest is worth fighting for.
+    Margin,
 }
 
 impl Default for Params {
@@ -64,6 +81,18 @@ impl Default for Params {
             run_potential: 0.6,
             endgame_weight: 50.0,
             pressure_scaling: false,
+            objective: Objective::Points,
+            adaptive_prior: None,
+        }
+    }
+}
+
+impl Params {
+    /// Weights for the margin objective (see [`Objective::Margin`]).
+    pub fn margin() -> Self {
+        Self {
+            objective: Objective::Margin,
+            ..Self::default()
         }
     }
 }
@@ -72,6 +101,7 @@ impl Default for Params {
 #[derive(Debug, Clone)]
 pub struct EconomistAgent {
     params: Params,
+    name: &'static str,
     rng: SmallRng,
 }
 
@@ -83,12 +113,19 @@ impl EconomistAgent {
     pub fn with_params(params: Params, seed: u64) -> Self {
         Self {
             params,
+            name: "economist",
             rng: SmallRng::seed_from_u64(seed),
         }
     }
 
     pub fn params(&self) -> &Params {
         &self.params
+    }
+
+    /// The same agent reporting a different name.
+    #[must_use]
+    pub fn named(self, name: &'static str) -> Self {
+        Self { name, ..self }
     }
 }
 
@@ -182,13 +219,52 @@ impl EconomistAgent {
 
 impl Agent for EconomistAgent {
     fn name(&self) -> &str {
-        "economist"
+        self.name
     }
 
     fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
         if legal.len() == 1 {
             return legal[0];
         }
+        let willingness = self.willingness(obs);
+        self.choose(obs, legal, &willingness)
+    }
+}
+
+impl EconomistAgent {
+    /// Each seat's willingness to beat: the default, or with adaptation the posterior mean of the
+    /// rate at which the seat beat the best play so far in tricks it didn't lead.
+    fn willingness(&mut self, obs: &Observation) -> [f32; MAX_PLAYERS] {
+        let w0 = self.params.beat_willingness;
+        let mut out = [w0; MAX_PLAYERS];
+        let Some(prior) = self.params.adaptive_prior else {
+            return out;
+        };
+        // Replay the public history from any consistent deal to recover trick boundaries.
+        let world = obs.determinize(&mut self.rng);
+        let mut state = obs.start_of(&world);
+        let mut beats = [0u32; MAX_PLAYERS];
+        let mut chances = [0u32; MAX_PLAYERS];
+        for play in obs.history() {
+            let seat = play.seat as usize;
+            if let Some(best) = state.trick().iter().map(|t| t.combo.strength()).max() {
+                chances[seat] += 1;
+                beats[seat] += u32::from(play.combo.strength() > best);
+            }
+            state.apply(play.combo).expect("history replays legally");
+        }
+        for seat in 0..obs.num_players() {
+            out[seat] = (beats[seat] as f32 + prior * w0) / (chances[seat] as f32 + prior);
+        }
+        out
+    }
+
+    fn choose(
+        &mut self,
+        obs: &Observation,
+        legal: &[Combo],
+        willingness: &[f32; MAX_PLAYERS],
+    ) -> Combo {
         let p = self.params;
         let me = obs.observer();
         let n = obs.num_players();
@@ -245,6 +321,7 @@ impl Agent for EconomistAgent {
             .fold(0.0, f32::max);
         let someone_out = (0..n).any(|s| s != me && players[s].hand_size == 0);
         let base_structure = structure(&hand, &p);
+        let pile_total: f32 = piles.iter().map(|&v| f32::from(v)).sum();
 
         let score = |combo: Combo| -> f32 {
             let strength = combo.strength();
@@ -261,7 +338,7 @@ impl Agent for EconomistAgent {
                 let Some(profile) = &profiles[s] else {
                     continue;
                 };
-                let beat = p.beat_willingness * profile.prob_beats(trick_type, strength);
+                let beat = willingness[s] * profile.prob_beats(trick_type, strength);
                 for j in (0..MAX_PLAYS_PER_TRICK).rev() {
                     dist[j + 1] += dist[j] * beat;
                     dist[j] *= 1.0 - beat;
@@ -272,6 +349,20 @@ impl Agent for EconomistAgent {
                 .enumerate()
                 .filter_map(|(j, &pr)| piles.get(ahead + j).map(|&v| pr * f32::from(v)))
                 .sum();
+            let claim_value = match p.objective {
+                Objective::Points => expected_pile,
+                Objective::Margin => {
+                    // the other plays share whatever piles we don't take
+                    let others = (obs.trick_size().max(2) - 1) as f32;
+                    dist.iter()
+                        .enumerate()
+                        .map(|(j, &pr)| {
+                            let mine = piles.get(ahead + j).map_or(0.0, |&v| f32::from(v));
+                            pr * (mine - (pile_total - mine) / others)
+                        })
+                        .sum()
+                }
+            };
 
             // Card cost: extra cards are cheap while we have more than we need.
             let extra = f32::from(combo.num_cards() - 1);
@@ -312,7 +403,7 @@ impl Agent for EconomistAgent {
                 };
             }
 
-            expected_pile - card_cost - damage + endgame
+            claim_value - card_cost - damage + endgame
         };
 
         let mut best = legal[0];

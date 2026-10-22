@@ -13,6 +13,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "biggest",
     "cheapest",
     "economist",
+    "margin",
     "pimc",
     "ismcts",
     "minimax",
@@ -166,7 +167,10 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// Builds an agent from a spec `name[:key=value,...]`, seeding its randomness with `seed`.
 ///
 /// Options:
-/// - `economist`: `pressure` (`true` to make surplus cards free to spend).
+/// - `economist` and `margin`: `pressure` (`true` to make surplus cards free to spend),
+///   `objective` (`points` or `margin`) and `adaptive` (prior weight for per-opponent
+///   willingness estimated from the game so far). `margin` is the Economist with the margin
+///   objective and its own tuned weights.
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
@@ -195,13 +199,30 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         "lowest" => Box::new(LowestAgent),
         "biggest" => Box::new(BiggestAgent),
         "cheapest" => Box::new(CheapestAgent),
-        "economist" => {
-            let d = economist::Params::default();
+        "economist" | "margin" => {
+            let d = if name == "margin" {
+                economist::Params::margin()
+            } else {
+                economist::Params::default()
+            };
+            let objective = match opts.take::<String>("objective")?.as_deref() {
+                None => d.objective,
+                Some("points") => economist::Objective::Points,
+                Some("margin") => economist::Objective::Margin,
+                Some(other) => return Err(format!("unknown objective {other:?}")),
+            };
             let params = economist::Params {
                 pressure_scaling: opts.take("pressure")?.unwrap_or(d.pressure_scaling),
+                objective,
+                adaptive_prior: opts.take("adaptive")?.or(d.adaptive_prior),
                 ..d
             };
-            Box::new(EconomistAgent::with_params(params, seed))
+            let agent = EconomistAgent::with_params(params, seed);
+            Box::new(if name == "margin" {
+                agent.named("margin")
+            } else {
+                agent
+            })
         }
         "pimc" => {
             let d = pimc::Params::default();

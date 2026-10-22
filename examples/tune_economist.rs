@@ -3,7 +3,8 @@
 //! `cheapest`, `random` and default-weight economists, so it can't overfit one opponent.
 //!
 //! Usage: `cargo run --release --example tune_economist [iterations] [deals] [counts] [threads]`,
-//! where `counts` is a comma-separated list of player counts (default `2,3,4,6`).
+//! where `counts` is a comma-separated list of player counts (default `2,3,4,6`), followed by an
+//! optional starting variant (`points` or `margin`).
 
 use rainbow::agents::economist::{EconomistAgent, Params};
 use rainbow::agents::{Agent, CheapestAgent, RandomAgent};
@@ -59,7 +60,7 @@ fn perturb(p: Params, rng: &mut SmallRng, scale: f32) -> Params {
         set_potential: j(p.set_potential, 0.0, 5.0),
         run_potential: j(p.run_potential, 0.0, 5.0),
         endgame_weight: p.endgame_weight,
-        pressure_scaling: p.pressure_scaling,
+        ..p
     }
 }
 
@@ -74,9 +75,14 @@ fn main() {
         .map(|c| c.parse().unwrap())
         .collect();
     let threads: usize = args.next().map_or(0, |a| a.parse().unwrap());
+    let start = match args.next().as_deref() {
+        None | Some("points") => Params::default(),
+        Some("margin") => Params::margin(),
+        Some(other) => panic!("unknown variant {other:?}"),
+    };
     let mut rng = SmallRng::seed_from_u64(7);
 
-    let mut best = Params::default();
+    let mut best = start;
     let mut best_score = evaluate(best, deals, 1, &counts, threads);
     println!("default: {best_score:.3}");
     for i in 0..iterations {
@@ -93,7 +99,7 @@ fn main() {
     // re-check the winner on fresh deals
     println!(
         "held-out: default {:.3}, tuned {:.3}",
-        evaluate(Params::default(), deals * 4, 99, &counts, threads),
+        evaluate(start, deals * 4, 99, &counts, threads),
         evaluate(best, deals * 4, 99, &counts, threads)
     );
     println!("{best:#?}");
