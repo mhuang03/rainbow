@@ -15,9 +15,20 @@
   <h1 class="logo"><span>R</span><span>a</span><span>i</span><span>n</span><span>b</span><span>o</span><span>w</span></h1>
   <div id="room-badge" class="badge hidden"></div>
   <div id="status" class="status" role="status"></div>
-  <button id="sound-btn" class="ghost" aria-pressed="false" title="Sounds for your turn and finished tricks">Sound off</button>
-  <button id="theme-btn" class="ghost" title="Colour theme: follow the system, light or dark">Theme: auto</button>
-  <button id="rules-btn" class="ghost">Rules</button>
+  <button id="howto-btn" class="ghost">How to play</button>
+  <details id="settings" class="menu">
+    <summary class="ghost" aria-label="Settings">Settings</summary>
+    <div class="menu-body">
+      <label class="switch"><input type="checkbox" id="sound-toggle"> Sound</label>
+      <label>Theme
+        <select id="theme-select">
+          <option value="auto">Match system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </div>
+  </details>
 </header>
 
 <main>
@@ -28,35 +39,43 @@
     </label>
     <div class="panels">
       <div class="panel">
-        <h2>Play against agents</h2>
+        <h2>Play against the computer</h2>
         <label>Players
           <select id="solo-players"></select>
         </label>
-        <div id="solo-seats" class="seat-pickers"></div>
+        <label>Opponents
+          <select id="solo-opponent"></select>
+        </label>
+        <details id="solo-custom" class="custom">
+          <summary>Choose each seat</summary>
+          <div id="solo-seats" class="seat-pickers"></div>
+        </details>
         <button id="solo-start" class="primary">Start game</button>
       </div>
       <div class="panel">
-        <h2>Play online</h2>
+        <h2>Play with friends</h2>
         <label>Players
           <select id="online-players"></select>
         </label>
-        <div id="online-seats" class="seat-pickers"></div>
-        <button id="online-create" class="primary">Create room</button>
+        <button id="online-create" class="primary">Create a room</button>
         <div class="divider">or join one</div>
         <div class="join-row">
-          <input id="join-code" maxlength="4" placeholder="CODE" autocapitalize="characters">
+          <input id="join-code" maxlength="4" placeholder="CODE" autocapitalize="characters" aria-label="Room code">
           <button id="join-btn">Join</button>
         </div>
       </div>
     </div>
+    <p class="newcomer">New to Rainbow? <button id="howto-link" class="link">Learn how to play</button></p>
   </section>
 
   <!-- Lobby -->
   <section id="lobby" class="view hidden">
     <div class="panel wide">
       <h2>Room <span id="lobby-code" class="code"></span></h2>
-      <p class="share">Invite others with the code or this link:
-        <input id="share-link" readonly aria-label="Invite link"> <button id="copy-link">Copy</button></p>
+      <div class="share">
+        <input id="share-link" readonly aria-label="Invite link">
+        <button id="copy-link">Copy link</button>
+      </div>
       <ol id="lobby-seats" class="lobby-seats"></ol>
       <p id="lobby-hint" class="hint"></p>
       <div id="lobby-chat-slot"></div>
@@ -73,12 +92,11 @@
       <div id="opponents" class="opponents" aria-label="Other players"></div>
       <div class="middle">
         <div class="piles-area">
-          <div class="label">Point piles</div>
+          <div class="label">Piles</div>
           <div id="piles" class="piles"></div>
-          <p class="caption">The strongest play takes the 1st pile, the next strongest the 2nd, and so on.</p>
         </div>
         <div class="trick-area">
-          <div class="label"><span id="trick-title">Trick</span> <span id="trick-type" class="pill"></span></div>
+          <div class="label"><span id="trick-title">Trick</span> <span id="trick-type" class="pill hidden"></span></div>
           <div id="trick" class="trick"></div>
         </div>
       </div>
@@ -87,26 +105,16 @@
           <span id="me-reserve" class="reserve"></span>
           <span id="turn-hint" class="turn-hint" aria-hidden="true"></span></div>
         <div id="hand" class="hand" aria-label="Your hand"></div>
-        <div class="play-row">
-          <div id="legal" class="legal" aria-label="Legal plays"></div>
-          <div class="play-box">
-            <button id="play-selected" class="primary" disabled>Play</button>
-            <button id="hint-btn" class="hidden" title="Ask the DMC agent for a move (H)">Suggest a move</button>
-            <p id="hint-note" class="hint" aria-live="polite"></p>
-            <p id="legal-help" class="hint keys">Click a play or cards to select, then Play. <kbd>1</kbd>–<kbd>6</kbd> pick cards, <kbd>Enter</kbd> plays, <kbd>Esc</kbd> clears<span class="hint-key">, <kbd>H</kbd> suggests a move</span>. Highlighted plays beat the trick so far.</p>
-          </div>
+        <div class="actions play-actions">
+          <button id="play-selected" class="primary" disabled>Play</button>
+          <button id="hint-btn" class="hidden">Suggest</button>
         </div>
       </div>
     </div>
-    <section class="side" aria-label="Scores and history">
-      <div class="side-box">
-        <h2>Scores</h2>
-        <ol id="scores" class="scores"></ol>
-      </div>
+    <section class="side" aria-label="Game details">
       <div id="unseen-box" class="side-box">
         <h2>Unseen cards</h2>
         <div id="unseen" class="unseen"></div>
-        <p class="caption">Cards still in other hands, reserves or set aside.</p>
       </div>
       <div id="side-chat-slot">
       <div id="chat-box" class="side-box hidden">
@@ -118,8 +126,8 @@
         </form>
       </div>
       </div>
-      <div class="side-box grow">
-        <h2>Trick log</h2>
+      <div id="log-box" class="side-box grow hidden">
+        <h2>Previous tricks</h2>
         <ol id="log" class="log"></ol>
       </div>
     </section>
@@ -138,21 +146,45 @@
   </section>
 </main>
 
-<dialog id="rules" class="rules">
-      <h2>How to play</h2>
-      <p>The deck has ten cards of each rank, 1 to 6. Each trick, everyone plays once (twice in
-      a 2-player game): a <b>single</b>, a <b>set</b> of equal cards, or a <b>run</b> of
-      consecutive ranks. Once a set is played, only singles and sets may follow; once a run is
-      played, only singles and runs.</p>
-      <p>When the trick ends, plays are ranked: more cards beat fewer, then the higher top card,
-      then the earlier play. In that order, players take the point piles in the middle, most
-      valuable first. The played cards then form the next piles. The game ends after a trick
-      in which two players have run out of cards; the most points wins.</p>
-      <p>With two players, each plays twice per trick, and a face-down reserve of 14 cards is
-      picked up when a hand first runs out. Running out a second time ends the game, and the
-      other player scores a point for each card left in their hand.</p>
-      <form method="dialog"><button class="primary">Got it</button></form>
-    </dialog>
+<dialog id="howto" class="howto" aria-labelledby="howto-title">
+  <h2 id="howto-title" tabindex="-1">How to play</h2>
+
+  <h3>The goal</h3>
+  <p>Score the most points by taking the best piles in the middle of the table.</p>
+
+  <h3>Playing a trick</h3>
+  <p>The deck has ten cards each of ranks 1 to 6. In each trick, everyone plays once, in turn:</p>
+  <ul class="examples">
+    <li><span class="ex"><span class="card small r4">4</span></span> <span>a <b>single</b> card,</span></li>
+    <li><span class="ex"><span class="card small r5">5</span><span class="card small r5">5</span><span class="card small r5">5</span></span> <span>a <b>set</b> of equal cards, or</span></li>
+    <li><span class="ex"><span class="card small r2">2</span><span class="card small r3">3</span><span class="card small r4">4</span></span> <span>a <b>run</b> of consecutive ranks.</span></li>
+  </ul>
+  <p>Once someone plays a set, the rest of the trick may only play singles or sets; once
+  someone plays a run, only singles or runs.</p>
+
+  <h3>Taking piles</h3>
+  <p>When everyone has played, the plays are ranked: <b>more cards</b> beat fewer, then the
+  <b>higher top card</b>, then the earlier play. The best play takes the most valuable pile, the
+  next best the next pile, and so on. The cards just played become the next piles.</p>
+
+  <h3>The end</h3>
+  <p>The game ends after a trick in which two players have run out of cards. Most points wins.</p>
+  <p>With two players, each plays twice per trick, and a face-down reserve of 14 cards is
+  picked up when your hand first runs out. Running out again ends the game, and your opponent
+  scores a point for each card left in their hand.</p>
+
+  <h3>Controls</h3>
+  <p>Tap cards to select them, then <b>Play</b>. Against the computer, <b>Suggest</b> picks a
+  move for you to consider.</p>
+  <dl class="keys">
+    <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Select a card of that rank</dd>
+    <dt><kbd>Enter</kbd></dt><dd>Play the selected cards</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Clear the selection</dd>
+    <dt><kbd>H</kbd></dt><dd>Suggest a move</dd>
+  </dl>
+
+  <form method="dialog"><button class="primary">Got it</button></form>
+</dialog>
 <div id="toast" class="toast hidden" role="alert"></div>
 <div id="live" class="sr-only" aria-live="polite"></div>
 <script src="/app.js"></script>

@@ -402,6 +402,38 @@ impl Observation {
         }
     }
 
+    /// For each play in [`Self::history`]: whether it led its trick, and whether it beat every
+    /// play made before it in that trick.
+    pub fn play_flags(&self) -> ArrayVec<(bool, bool), MAX_GAME_PLAYS> {
+        // Trick boundaries depend only on public hand sizes, so replaying the history from any
+        // consistent deal finds them; a fixed seed keeps the result deterministic.
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
+        let mut state = self.start_of(&self.determinize(&mut rng));
+        self.history
+            .iter()
+            .map(|play| {
+                let best = state.trick().iter().map(|t| t.combo.strength()).max();
+                let flags = (best.is_none(), best.is_some_and(|b| play.combo.strength() > b));
+                state.apply(play.combo).expect("history replays legally");
+                flags
+            })
+            .collect()
+    }
+
+    /// Per absolute seat: how many plays it made following someone else's lead, and how many
+    /// of those beat every play before them.
+    pub fn follow_record(&self) -> [(u32, u32); MAX_PLAYERS] {
+        let mut record = [(0, 0); MAX_PLAYERS];
+        for (play, (lead, beat)) in self.history.iter().zip(self.play_flags()) {
+            if !lead {
+                let r = &mut record[usize::from(play.seat)];
+                r.0 += 1;
+                r.1 += u32::from(beat);
+            }
+        }
+        record
+    }
+
     /// Writes the public-history features described in [`encoding::HISTORY`] into `out`: the
     /// most recent plays, and how often each seat beat the trick when following.
     ///
@@ -413,17 +445,11 @@ impl Observation {
         out.fill(0.0);
         let n = self.players.len();
         let rel = |seat: u8| (seat as usize + n - self.observer as usize) % n;
-        // Trick boundaries depend only on public hand sizes, so replaying the history from any
-        // consistent deal finds them; a fixed seed keeps the encoding deterministic.
-        let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
-        let mut state = self.start_of(&self.determinize(&mut rng));
         let mut follows = [0u32; MAX_PLAYERS];
         let mut beats = [0u32; MAX_PLAYERS];
         let recent = self.history.len().saturating_sub(HISTORY_PLAYS);
-        for (i, play) in self.history.iter().enumerate() {
-            let best = state.trick().iter().map(|t| t.combo.strength()).max();
-            let lead = best.is_none();
-            let beat = best.is_some_and(|b| play.combo.strength() > b);
+        let flags = self.play_flags();
+        for (i, (play, &(lead, beat))) in self.history.iter().zip(&flags).enumerate() {
             let seat = rel(play.seat);
             if !lead {
                 follows[seat] += 1;
@@ -441,7 +467,6 @@ impl Observation {
                     *x = f32::from(play.combo.count_of(rank)) / f32::from(CARDS_PER_RANK);
                 }
             }
-            state.apply(play.combo).expect("history replays legally");
         }
         let rates = &mut out[HISTORY_PLAYS * HISTORY_FEATURES..];
         for seat in 0..n {

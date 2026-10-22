@@ -198,9 +198,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `objective` (`points` or `margin`) and `adaptive` (prior weight for per-opponent
 ///   willingness estimated from the game so far). `margin` is the Economist with the margin
 ///   objective and its own tuned weights.
-/// - `counter`: `card` (points each extra card must buy) and `structure` (penalty for breaking
-///   pairs, sets and runs when dumping) and `q` (chance an opponent who could beat a combo
-///   doesn't).
+/// - `counter`: `card` (points each extra card must buy), `structure` (penalty for breaking
+///   pairs, sets and runs), `q` (chance an opponent who could beat a combo doesn't) and
+///   `adaptive` (prior weight for learning each opponent's chance from the game so far).
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
@@ -240,6 +240,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 card_value: opts.take("card")?.unwrap_or(d.card_value),
                 structure_value: opts.take("structure")?.unwrap_or(d.structure_value),
                 hold_chance: opts.take("q")?.unwrap_or(d.hold_chance),
+                adaptive: opts.take("adaptive")?.or(d.adaptive),
             }))
         }
         "economist" | "margin" => {

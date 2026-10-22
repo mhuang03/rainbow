@@ -15,7 +15,7 @@
 use arrayvec::ArrayVec;
 
 use crate::agents::Agent;
-use crate::constants::{MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_RANK};
+use crate::constants::{MAX_PLAYERS, MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_RANK};
 use crate::game::{Combo, Hand, Observation, TrickType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,6 +26,9 @@ pub struct Params {
     pub structure_value: f32,
     /// Assumed chance that a later opponent who could beat a combo doesn't.
     pub hold_chance: f32,
+    /// Learn each opponent's hold chance from the game so far: their rate of beating the trick
+    /// when following, shrunk towards `1 - hold_chance` with this many pseudo-observations.
+    pub adaptive: Option<f32>,
 }
 
 impl Default for Params {
@@ -36,6 +39,7 @@ impl Default for Params {
             card_value: 0.5,
             structure_value: 0.5,
             hold_chance: 0.5,
+            adaptive: None,
         }
     }
 }
@@ -130,6 +134,16 @@ impl Agent for CounterAgent {
             later.push(seat);
         }
 
+        // Each later opponent's chance of not beating a combo they could beat.
+        let mut hold = [p.hold_chance; MAX_PLAYERS];
+        if let Some(weight) = p.adaptive {
+            for (h, (follows, beats)) in hold.iter_mut().zip(obs.follow_record()) {
+                let beat_rate =
+                    (beats as f32 + weight * (1.0 - p.hold_chance)) / (follows as f32 + weight);
+                *h = 1.0 - beat_rate;
+            }
+        }
+
         // Every play takes a pile by its finishing rank, so a combo is worth the pile it
         // expects to finish on: plays already made that it doesn't beat rank ahead of it (ties
         // go to the earlier play), and each later opponent who could beat it does so with
@@ -150,7 +164,7 @@ impl Agent for CounterAgent {
                 let beat = if strength > bound {
                     0.0
                 } else {
-                    1.0 - p.hold_chance
+                    1.0 - hold[s]
                 };
                 dist.push(0.0);
                 for k in (0..dist.len()).rev() {

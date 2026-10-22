@@ -10,7 +10,7 @@ let selection = [];   // indices into game.hand
 let autoStart = false;
 
 const $ = (id) => document.getElementById(id);
-const TRICK_TYPES = { open: "any combo", set: "singles or sets", run: "singles or runs" };
+const TRICK_TYPES = { set: "singles or sets", run: "singles or runs" };
 const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
 
 function el(tag, cls, text) {
@@ -81,10 +81,6 @@ const SOUNDS = {
   chat: () => tones([[990, 0]], 0.08, 0.03),
 };
 
-function renderSoundButton() {
-  $("sound-btn").textContent = soundOn ? "Sound on" : "Sound off";
-  $("sound-btn").setAttribute("aria-pressed", String(soundOn));
-}
 
 function updateTitle() {
   const myTurn = game && !game.over && game.seat !== null && game.current === game.seat;
@@ -162,7 +158,6 @@ function receive(msg) {
       if (l) {
         selectCombo(l);
         renderHand();
-        $("hint-note").textContent = `Suggested: ${cardsText(l.cards)}. Press Play to accept.`;
       }
       return;
     }
@@ -190,7 +185,7 @@ function leave() {
 // ---------- home ----------
 function presetOptions(select, withOpen, value) {
   select.innerHTML = "";
-  if (withOpen) select.append(new Option("Open (a person joins)", "open"));
+  if (withOpen) select.append(new Option("Open for a friend", "open"));
   presets.forEach((p) => {
     const o = new Option(p.label, p.id);
     o.title = p.description;
@@ -199,35 +194,28 @@ function presetOptions(select, withOpen, value) {
   if (value) select.value = value;
 }
 
-function describe(id) {
-  if (id === "open") return "Another person takes this seat.";
-  const p = presets.find((x) => x.id === id);
-  return p ? p.description : "";
-}
-
-function seatPickers(container, count, withOpen, fallback, saved) {
+function seatPickers(container, count, fallback, saved) {
   const old = [...container.querySelectorAll("select")].map((s) => s.value);
   container.innerHTML = "";
   for (let i = 1; i < count; i++) {
-    const row = el("div", "seat-picker");
     const label = el("label", null, `Seat ${i + 1}`);
     const select = el("select");
-    presetOptions(select, withOpen, old[i - 1] || (saved && saved[i - 1]) || fallback);
+    presetOptions(select, false, old[i - 1] || (saved && saved[i - 1]) || fallback);
     if (!select.value) select.value = fallback;
-    const note = el("p", "seat-note", describe(select.value));
-    select.onchange = () => { note.textContent = describe(select.value); saveSetup(); };
+    select.onchange = saveSetup;
     label.append(select);
-    row.append(label, note);
-    container.append(row);
+    container.append(label);
   }
 }
 
 function saveSetup() {
-  const seats = (id) => [...$(id).querySelectorAll("select")].map((s) => s.value);
   try {
     localStorage.setItem("rainbow.setup", JSON.stringify({
-      solo: +$("solo-players").value, soloSeats: seats("solo-seats"),
-      online: +$("online-players").value, onlineSeats: seats("online-seats"),
+      solo: +$("solo-players").value,
+      opponent: $("solo-opponent").value,
+      custom: $("solo-custom").open,
+      soloSeats: [...$("solo-seats").querySelectorAll("select")].map((s) => s.value),
+      online: +$("online-players").value,
     }));
   } catch { /* storage unavailable: nothing to remember */ }
 }
@@ -246,21 +234,34 @@ function setupHome() {
   if (saved.solo) $("solo-players").value = saved.solo;
   if (saved.online) $("online-players").value = saved.online;
   const defaultAgent = presets.some((p) => p.id === "dmc") ? "dmc" : presets[0] && presets[0].id;
+  presetOptions($("solo-opponent"), false, saved.opponent || defaultAgent);
+  if (!$("solo-opponent").value) $("solo-opponent").value = defaultAgent;
+  $("solo-custom").open = !!saved.custom;
   const refresh = () => {
-    seatPickers($("solo-seats"), +$("solo-players").value, false, defaultAgent, saved.soloSeats);
-    seatPickers($("online-seats"), +$("online-players").value, true, "open", saved.onlineSeats);
+    seatPickers($("solo-seats"), +$("solo-players").value, $("solo-opponent").value, saved.soloSeats);
     saveSetup();
   };
   $("solo-players").onchange = refresh;
-  $("online-players").onchange = refresh;
+  $("solo-opponent").onchange = () => {
+    // a new opponent choice applies to every seat
+    $("solo-seats").querySelectorAll("select").forEach((s) => { s.value = $("solo-opponent").value; });
+    saveSetup();
+  };
+  $("solo-custom").ontoggle = saveSetup;
+  $("online-players").onchange = saveSetup;
   refresh();
 
-  const seatsOf = (id) => [...$(id).querySelectorAll("select")].map((s) => s.value);
   $("solo-start").onclick = () => {
     autoStart = true;
-    send({ t: "create", name: playerName(), seats: seatsOf("solo-seats") });
+    const n = +$("solo-players").value;
+    const seats = $("solo-custom").open
+      ? [...$("solo-seats").querySelectorAll("select")].map((s) => s.value)
+      : Array(n - 1).fill($("solo-opponent").value);
+    send({ t: "create", name: playerName(), seats });
   };
-  $("online-create").onclick = () => send({ t: "create", name: playerName(), seats: seatsOf("online-seats") });
+  // online rooms start with every other seat open; the host can fill seats in the lobby
+  $("online-create").onclick = () =>
+    send({ t: "create", name: playerName(), seats: Array(+$("online-players").value - 1).fill("open") });
   const join = () => {
     const code = $("join-code").value.trim().toUpperCase();
     if (code.length !== 4) return toast("Room codes have four letters");
@@ -308,25 +309,18 @@ function renderLobby() {
   $("lobby-start").classList.toggle("hidden", !me.host);
   $("lobby-start").disabled = open > 0;
   $("lobby-hint").textContent = me.host
-    ? open > 0 ? `${open} open seat${open > 1 ? "s" : ""}: wait for players or give the seats to agents.` : "Everyone is here."
+    ? open > 0 ? "Share the link, or let the computer take the open seats." : "Everyone is here."
     : me.seat === null ? "The room is full; you are watching." : "Waiting for the host to start the game.";
 }
 
 // ---------- table ----------
-const KIND_NAMES = { single: "Singles", set: "Sets", run: "Runs" };
 let freshFrom = Infinity; // plays in the current trick from this index on are new: animate them
-let gainFlash = null;     // { at, taken }: points each seat just took, shown briefly on its seat
-const GAIN_MS = 1800;
+let gainFlash = null;     // { at, taken }: points each seat just took, for a brief highlight
+const GAIN_MS = 900;
 
-/** A "+N" that floats up from a seat for a moment after a trick, continuing across re-renders. */
-function gainPop(seat) {
-  if (!gainFlash || !gainFlash.taken[seat]) return null;
-  const elapsed = Date.now() - gainFlash.at;
-  if (elapsed > GAIN_MS) return null;
-  const pop = el("span", "gain-pop", `+${gainFlash.taken[seat]}`);
-  pop.setAttribute("aria-hidden", "true"); // the live region already announces it
-  pop.style.animationDelay = `-${elapsed}ms`;
-  return pop;
+/** Whether a seat's points changed a moment ago (they get a short highlight). */
+function justScored(seat) {
+  return !!gainFlash && gainFlash.taken[seat] > 0 && Date.now() - gainFlash.at < GAIN_MS;
 }
 
 function who(seat) {
@@ -382,7 +376,6 @@ function selectCombo(l) {
 
 function play(action) {
   selection = [];
-  $("hint-note").textContent = "";
   send({ t: "play", action });
 }
 
@@ -398,7 +391,7 @@ function renderOpponents(spectator, base, n) {
     const head = el("div", "who");
     head.append(
       el("span", turn && s.kind === "agent" ? "thinking" : "", seatName(seat)),
-      el("span", "kind" + (s.connected === false ? " offline" : ""), s.kind === "agent" ? "agent" : s.connected === false ? "away" : ""),
+      el("span", "kind offline", s.connected === false ? "away" : ""),
     );
     const backs = el("div", "backs");
     backs.setAttribute("aria-hidden", "true");
@@ -406,11 +399,9 @@ function renderOpponents(spectator, base, n) {
     const meta = el("div", "meta");
     meta.append(
       el("span", null, `${p.hand_size} card${p.hand_size === 1 ? "" : "s"}${p.reserve_size ? ` + ${p.reserve_size} reserve` : ""}`),
-      el("span", "points", `${p.points} pts`),
+      el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`),
     );
     box.append(head, backs, meta);
-    const pop = gainPop(seat);
-    if (pop) box.append(pop);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
       select.setAttribute("aria-label", `Replace ${seatName(seat)} with an agent`);
@@ -442,8 +433,9 @@ function renderMiddle() {
   const plays = current ? game.trick : game.last_trick.plays;
   trick.classList.toggle("past", !current);
   $("trick-title").textContent = current ? `Trick ${game.tricks_played + 1}` : "Last trick";
-  $("trick-type").textContent = current ? `Allowed: ${TRICK_TYPES[game.trick_type]}` : "";
-  $("trick-type").classList.toggle("hidden", !current);
+  const restricted = current && game.trick_type !== "open";
+  $("trick-type").textContent = restricted ? `Only ${TRICK_TYPES[game.trick_type]}` : "";
+  $("trick-type").classList.toggle("hidden", !restricted);
   plays.forEach((pl, i) => {
     const leading = current && i === game.trick_leader;
     const box = el("div", "play" + (leading ? " leading" : "") + (current && i >= freshFrom ? " fresh" : ""));
@@ -477,8 +469,7 @@ function renderHandNow() {
   $("me").classList.toggle("turn", myTurn);
   $("me-name").textContent = seatName(game.seat);
   $("me-points").textContent = `${mine.points} pts`;
-  const pop = gainPop(game.seat);
-  if (pop) $("me-points").append(pop);
+  $("me-points").classList.toggle("bump", justScored(game.seat));
   $("me-reserve").textContent = mine.reserve_size ? `${mine.reserve_size} cards in reserve` : "";
   $("turn-hint").textContent = game.over ? "" : myTurn ? "Your turn" : `Waiting for ${seatName(game.current)}…`;
 
@@ -507,51 +498,16 @@ function renderHandNow() {
   if (!game.hand.length) hand.append(el("span", "hint", "No cards left"));
 
   const match = matchingLegal();
-  const legal = $("legal");
-  legal.innerHTML = "";
-  // mark the plays that beat the trick, unless they all do (or none do)
-  const beating = game.legal.filter((l) => l.beats).length;
-  const markBeats = game.trick.length > 0 && beating > 0 && beating < game.legal.length;
-  for (const kind of ["single", "set", "run"]) {
-    const options = game.legal.filter((l) => l.kind === kind);
-    if (!options.length) continue;
-    const row = el("div", "legal-group");
-    row.append(el("span", "legal-kind", KIND_NAMES[kind]));
-    options.forEach((l) => {
-      const b = el("button", "chip" + (match && match.action === l.action ? " match" : "") + (markBeats && l.beats ? " beats" : ""));
-      b.setAttribute("aria-label", `${l.cards.join(" ")}${markBeats && l.beats ? ", beats the trick" : ""}`);
-      b.title = markBeats && l.beats ? "Beats every play so far" : "";
-      b.dataset.key = `chip-${l.action}`;
-      l.cards.forEach((r) => b.append(card(r, true)));
-      b.onclick = () => { selectCombo(l); renderHand(); };
-      b.ondblclick = () => play(l.action);
-      row.append(b);
-    });
-    legal.append(row);
-  }
   const btn = $("play-selected");
   btn.disabled = !match;
-  btn.textContent = match ? `Play ${cardsText(match.cards)}` : myTurn ? "Select cards" : "Play";
+  btn.textContent = match ? `Play ${cardsText(match.cards)}`
+    : myTurn && selection.length ? "Can't play that"
+    : myTurn ? "Select cards" : "Play";
   btn.onclick = () => match && play(match.action);
-  const hints = room && room.hints && myTurn;
-  $("hint-btn").classList.toggle("hidden", !hints);
-  document.querySelector(".hint-key").classList.toggle("hidden", !(room && room.hints));
-  if (!myTurn) $("hint-note").textContent = "";
-  $("legal-help").classList.toggle("hidden", !myTurn);
+  $("hint-btn").classList.toggle("hidden", !(room && room.hints && myTurn));
 }
 
 function renderSide() {
-  // scores, best first
-  const scores = $("scores");
-  scores.innerHTML = "";
-  [...game.players.keys()]
-    .sort((a, b) => game.players[b].points - game.players[a].points)
-    .forEach((seat) => {
-      const li = el("li", seat === game.seat ? "mine" : "");
-      li.append(el("span", null, who(seat)), el("span", "points", String(game.players[seat].points)));
-      scores.append(li);
-    });
-
   // cards I haven't seen, per rank
   const unseen = $("unseen");
   unseen.innerHTML = "";
@@ -578,7 +534,7 @@ function renderSide() {
     });
     log.append(li);
   });
-  if (!game.log.length) log.append(el("li", "hint", "Finished tricks appear here."));
+  $("log-box").classList.toggle("hidden", !game.log.length);
 }
 
 // Player colours for charts: a validated categorical palette per theme, assigned by seat.
@@ -755,30 +711,32 @@ async function main() {
     toast("Couldn't load the agent list");
   }
   setupHome();
-  $("rules-btn").onclick = () => $("rules").showModal();
+  const howto = () => {
+    $("howto").showModal();
+    $("howto").scrollTop = 0;
+    $("howto-title").focus();
+  };
+  $("howto-btn").onclick = howto;
+  $("howto-link").onclick = howto;
   $("hint-btn").onclick = () => send({ t: "hint" });
-  renderSoundButton();
-  $("sound-btn").onclick = () => {
-    soundOn = !soundOn;
+  $("sound-toggle").checked = soundOn;
+  $("sound-toggle").onchange = () => {
+    soundOn = $("sound-toggle").checked;
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
-    renderSoundButton();
     SOUNDS.turn();
   };
-  const THEMES = ["auto", "light", "dark"];
-  const renderTheme = () => {
-    const t = document.documentElement.dataset.theme || "auto";
-    $("theme-btn").textContent = `Theme: ${t}`;
+  $("theme-select").value = document.documentElement.dataset.theme || "auto";
+  $("theme-select").onchange = () => {
+    const t = $("theme-select").value;
+    if (t === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("rainbow.theme", t); } catch { /* not remembered */ }
+    if (game && game.over) renderChart(); // the chart palette depends on the theme
   };
-  renderTheme();
-  $("theme-btn").onclick = () => {
-    const now = document.documentElement.dataset.theme || "auto";
-    const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
-    if (next === "auto") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("rainbow.theme", next); } catch { /* not remembered */ }
-    renderTheme();
-    if (game && game.over) renderChart(); // chart colours read from tokens
-  };
+  // close the settings menu when clicking elsewhere
+  document.addEventListener("click", (e) => {
+    if (!$("settings").contains(e.target)) $("settings").open = false;
+  });
   $("chat-form").onsubmit = (e) => {
     e.preventDefault();
     const text = $("chat-input").value.trim();

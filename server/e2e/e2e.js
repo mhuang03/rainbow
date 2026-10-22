@@ -17,20 +17,32 @@ async function newPage(browser, viewport = { width: 1200, height: 900 }) {
   return page;
 }
 
-/** Plays legal moves (alternating chip+Play, double-click and keyboard) until the game ends. */
+/** The cards of some legal play when it is this page's turn, or null. */
+async function legalCards(page) {
+  return page.evaluate(() => (game && game.legal.length ? game.legal[Math.floor(Math.random() * game.legal.length)].cards : null));
+}
+
+/** Plays legal moves until the game ends, alternating mouse (cards + Play) and keyboard. */
 async function playUntilOver(page) {
   let moves = 0;
   for (let i = 0; i < 5000; i++) {
     if (await page.locator("#game-over:not(.hidden)").count()) return moves;
-    const chip = page.locator("#legal .chip").first();
-    if (await chip.count()) {
+    const cards = await legalCards(page);
+    if (cards) {
       try {
-        const mode = moves % 3;
-        if (mode === 0) { await chip.click({ timeout: 2000 }); await page.click("#play-selected", { timeout: 2000 }); }
-        else if (mode === 1) await chip.dblclick({ timeout: 2000 });
-        else {
-          for (const r of await chip.locator(".card").allTextContents()) await page.keyboard.press(r);
+        await page.keyboard.press("Escape");
+        if (moves % 2 === 0) {
+          for (const r of cards) await page.keyboard.press(String(r));
           await page.keyboard.press("Enter");
+        } else {
+          const used = new Set();
+          for (const r of cards) {
+            const hand = await page.locator("#hand .card").allTextContents();
+            const j = hand.findIndex((x, k) => x === String(r) && !used.has(k));
+            used.add(j);
+            await page.locator("#hand .card").nth(j).click({ timeout: 2000 });
+          }
+          await page.click("#play-selected", { timeout: 2000 });
         }
         moves++;
       } catch { /* the state changed under us; look again */ }
@@ -40,13 +52,18 @@ async function playUntilOver(page) {
   throw new Error("game did not end");
 }
 
+/** Creates a room; `seats` gives the other seats in order ("open" or an agent preset). */
 async function createOnlineRoom(page, name, players, seats) {
   await page.goto(BASE);
   await page.fill("#name", name);
   await page.selectOption("#online-players", String(players));
-  for (const [i, agent] of seats.entries()) await page.locator("#online-seats select").nth(i).selectOption(agent);
   await page.click("#online-create");
   await page.waitForSelector("#lobby:not(.hidden)");
+  for (const [i, agent] of seats.entries()) {
+    if (agent === "open") continue;
+    await page.selectOption(`#lobby-seats li:nth-child(${i + 2}) select`, agent);
+    await page.waitForFunction(([k, id]) => room.seats[k].preset === id, [i + 1, agent]);
+  }
   return (await page.textContent("#lobby-code")).trim();
 }
 
@@ -70,7 +87,7 @@ async function axeScan(browser, colorScheme) {
   await scan("lobby");
   await p.click("#lobby-leave");
   await p.click("#solo-start");
-  await p.waitForSelector("#legal .chip");
+  await p.waitForFunction(() => game && game.legal.length > 0);
   await scan("table");
 }
 
@@ -80,17 +97,20 @@ const tests = {
     await p.goto(BASE);
     await p.fill("#name", "Solo");
     await p.selectOption("#solo-players", "3");
+    await p.selectOption("#solo-opponent", "economist");
+    await p.click("#solo-custom summary");
     await p.locator("#solo-seats select").nth(1).selectOption("counter");
     await p.click("#solo-start");
-    await p.waitForSelector("#legal .chip");
+    await p.waitForFunction(() => game && game.legal.length > 0);
     await p.keyboard.press("h");
-    await p.waitForFunction(() => document.getElementById("hint-note").textContent.length > 0);
-    assert((await p.locator("#hand .card.sel").count()) > 0, "hint selects cards");
+    await p.waitForFunction(() => document.querySelectorAll("#hand .card.sel").length > 0);
+    assert((await p.textContent("#play-selected")).startsWith("Play "), "hint names the play");
     await playUntilOver(p);
     assert(await p.locator("#chart svg").count(), "score chart shown");
     await p.click("#over-leave");
     await p.reload();
     assert.strictEqual(await p.locator("#solo-seats select").nth(1).inputValue(), "counter");
+    assert.strictEqual(await p.locator("#solo-opponent").inputValue(), "economist");
     assert.deepStrictEqual(p.errors, []);
   },
 
@@ -109,8 +129,11 @@ const tests = {
     // let a few plays happen so the trick isn't empty, then reload
     for (let i = 0; i < 3; i++) {
       for (const page of [a, b]) {
-        const chip = page.locator("#legal .chip").first();
-        if (await chip.count()) await chip.dblclick({ timeout: 2000 }).catch(() => {});
+        const cards = await legalCards(page);
+        if (cards) {
+          for (const r of cards) await page.keyboard.press(String(r));
+          await page.keyboard.press("Enter");
+        }
       }
       await a.waitForTimeout(200);
     }
@@ -138,7 +161,7 @@ const tests = {
     assert.deepStrictEqual(a.errors, []);
   },
 
-  async "keyboard only: start, select a play, keep focus, play it"(browser) {
+  async "keyboard only: start, select a card, keep focus, play it"(browser) {
     const p = await newPage(browser);
     await p.goto(BASE);
     let found = false;
@@ -148,15 +171,15 @@ const tests = {
     }
     assert(found, "Start reachable by Tab");
     await p.keyboard.press("Enter");
-    await p.waitForSelector("#legal .chip");
-    let onChip = false;
-    for (let i = 0; i < 80 && !onChip; i++) {
+    await p.waitForFunction(() => game && game.legal.length > 0);
+    let onCard = false;
+    for (let i = 0; i < 80 && !onCard; i++) {
       await p.keyboard.press("Tab");
-      onChip = await p.evaluate(() => document.activeElement.classList.contains("chip"));
+      onCard = await p.evaluate(() => document.activeElement.matches("#hand .card"));
     }
-    assert(onChip, "a legal play is reachable by Tab");
-    await p.keyboard.press("Enter");
-    assert(await p.evaluate(() => document.activeElement.classList.contains("chip")), "focus kept after selecting");
+    assert(onCard, "a hand card is reachable by Tab");
+    await p.keyboard.press("Enter"); // a single card is always a legal play
+    assert(await p.evaluate(() => document.activeElement.matches("#hand .card.sel")), "focus kept after selecting");
     const before = await p.locator("#hand .card").count();
     let onPlay = false;
     for (let i = 0; i < 80 && !onPlay; i++) {
@@ -177,7 +200,7 @@ const tests = {
     await p.goto(BASE);
     await p.selectOption("#solo-players", "6");
     await p.click("#solo-start");
-    await p.waitForSelector("#legal .chip");
+    await p.waitForFunction(() => game && game.legal.length > 0);
     assert(await p.evaluate(() => document.documentElement.scrollWidth <= 360));
   },
 };
