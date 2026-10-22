@@ -55,9 +55,9 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `margin` | The Economist scoring piles by their *difference* from what the other players take (`economist:objective=margin`). `economist:adaptive=N` also learns each opponent's willingness to contest tricks from the play history. |
 | `counter` | Card counter: bounds each later opponent's strongest possible combo from the unseen cards and scores each combo by the pile it expects to finish on. The strongest hand-written agent. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
-| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from a league network (`models/dmc_league4.bin`) and `belief=models/belief_v1.bin` it is the strongest agent. Without a network it uses `counter` rollouts and a `counter` move prior, which bring it close to the league networks. |
+| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from a league network (`models/dmc_league5.bin`) and `belief=models/belief_v1.bin` it is the strongest agent. Without a network it uses `counter` rollouts and a `counter` move prior, which bring it close to the league networks. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
-| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in four league rounds (`models/dmc_league4.bin`, the strongest agent that doesn't search). |
+| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in five league rounds (`models/dmc_league5.bin`, the strongest agent that doesn't search). |
 | `dmc_hist` | A DMC network that also sees the recent plays and each seat's rate of beating the trick when following (`train_dmc.py --history`). |
 | `dmc:path=a.bin+b.bin` | An ensemble averaging several DMC networks' values. |
 | `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). |

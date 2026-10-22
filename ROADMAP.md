@@ -181,6 +181,13 @@ Continued from round 3 for 60 minutes against economist, counter, dmc_league2 an
 (1.97 against three Economists, 1.83 against three Counters). Against round 3: 1.07 (2p) and
 1.06 (4p) head-to-head. The browser presets now use it.
 
+### League round 5 (`models/dmc_league5.bin`)
+
+Continued from round 4 for 60 minutes against economist, the sampled counter, dmc_league3 and
+dmc_league4 (2.00 against three Economists, 1.69 against three sampled Counters). Against
+round 4: 0.99 (2p) and 1.06 (4p). The gains per round are shrinking; the browser presets use
+it.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
