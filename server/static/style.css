@@ -443,3 +443,14 @@ button.close { padding: 6px; line-height: 0; }
   .hand .card { width: 38px; height: 54px; font-size: 20px; }
   .hand .group { gap: 3px; margin-right: 6px; }
 }
+/* a win: the title sweeps once through the rank colours, then settles */
+#over-title.won {
+  display: inline-block; align-self: flex-start;
+  background: linear-gradient(90deg, var(--text) 0 30%, var(--r1), var(--r2), var(--r3), var(--r4), var(--r5), var(--r6), var(--text) 70% 100%);
+  background-size: 300% 100%; background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: win-sweep 1.4s ease-out 0.2s both;
+}
+@keyframes win-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { #over-title.won { animation: none; background: none; color: var(--text); } }
+:root[data-motion="reduce"] #over-title.won { animation: none; background: none; color: var(--text); }

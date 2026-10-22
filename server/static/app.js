@@ -894,6 +894,7 @@ function renderTable() {
     $("over-title").textContent = winners.includes(game.seat)
       ? winners.length > 1 ? "You tied for the win!" : "You win!"
       : `${winners.map(seatName).join(" and ")} win${winners.length > 1 ? "" : "s"}`;
+    $("over-title").classList.toggle("won", winners.includes(game.seat));
     const standings = $("standings");
     standings.innerHTML = "";
     [...game.players.keys()]
