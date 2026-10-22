@@ -211,7 +211,9 @@ it.
       as well as a DMC network; the kind is told by the output width. With `distill_v3` as the prior
       (DMC leaf, belief, n=200) the search loses to the same search with the DMC prior: 0.93 to
       1.07 (4p, two seats each) and 0.89 to 1.11 (2p). The distilled policy (48% top-move
-      agreement) is still too weak to steer the search.
+      agreement) is still too weak to steer the search. With `distill_v5` (56% agreement, 0.92 against
+      `dmc_league3`) the prior is level in 4p (1.05 and then 0.97 on fresh deals, 100 deals
+      each) and still loses in 2p (0.93), so the DMC prior stays.
 - [x] Mixed leaf evaluation (`leaf=...,mix=lambda`): `(1 - lambda) * DMC value + lambda *
       rollout`, as AlphaGo mixed its value network with rollouts. **Negative:** with lambda 0.25 and
       counter rollouts (eps 0.2), guided ISMCTS (league3 prior and leaf, belief, n=200) is
