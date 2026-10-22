@@ -209,6 +209,11 @@ Continued from round 7 for 90 minutes against economist, counter, dmc_league6 an
 Against round 7: 1.06 (2p) and 1.08 (4p). Since widening, each round has gained about as
 much as round 2 did. The browser presets use it.
 
+### League round 9 (`models/dmc_league9.bin`)
+
+Continued from round 8 for 90 minutes against economist, counter, dmc_league7 and dmc_league8.
+Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
