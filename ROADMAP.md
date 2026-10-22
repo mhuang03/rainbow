@@ -164,6 +164,10 @@ Learned:
       plays with lead and beat flags, and each seat's rate of beating the trick when following;
       `train_dmc.py --history`). Existing networks are unaffected: `DmcAgent` tells a history
       network by its input width.
+      60 minutes of self-play from scratch, as v2: 1.12M games (v2: 2.43M; rebuilding the history
+      features each decision halves throughput), 0.95 against three Economists (v2 at a similar
+      game count: 1.32). Head-to-head against v2: 0.80 (2p), 0.64 (4p); table against Economists
+      1.56 / 1.04 / 0.95 / 0.89. Being continued to v2's game count for a fair comparison.
 
 ## Tooling added along the way
 
