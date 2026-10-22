@@ -383,11 +383,19 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             }
         }
         "hybrid" => {
-            let path: String = opts
-                .take("path")?
-                .ok_or("hybrid requires path=<dmc network file>")?;
+            // the base agent: a DMC network (`path=`), or `base=counter`
+            let base: Box<dyn Agent> = match (
+                opts.take::<String>("path")?,
+                opts.take::<String>("base")?.as_deref(),
+            ) {
+                (Some(path), None) => Box::new(DmcAgent::new(dmc::Mlp::load_cached(&path)?)?),
+                (None, Some("counter")) => {
+                    Box::new(CounterAgent::with_params(counter::Params::sampled()))
+                }
+                _ => return Err("hybrid needs path=<dmc network file> or base=counter".into()),
+            };
             Box::new(HybridAgent::new(
-                DmcAgent::new(dmc::Mlp::load_cached(&path)?)?,
+                base,
                 opts.take("cards")?.unwrap_or(8),
                 opts.take("k")?.unwrap_or(8),
                 seed,

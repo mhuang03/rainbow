@@ -1,4 +1,5 @@
-//! Plays a network until the endgame, then solves the rest of the game exactly.
+//! Plays a base agent (a network, or `counter`) until the endgame, then solves the rest of the
+//! game exactly.
 //!
 //! Once few cards remain in all hands and reserves (a public count), every sampled deal is small
 //! enough to search to the end with max-n, so the agent switches from the network to exact
@@ -6,13 +7,12 @@
 //! where a fixed policy's small misjudgements, like ending the game a trick too early, cost
 //! the most.
 
+use crate::agents::Agent;
 use crate::agents::minimax::{self, MinimaxAgent, Mode};
-use crate::agents::{Agent, DmcAgent};
 use crate::game::{Combo, Observation};
 
-#[derive(Debug, Clone)]
 pub struct HybridAgent {
-    base: DmcAgent,
+    base: Box<dyn Agent>,
     endgame: MinimaxAgent,
     /// Switch to exact search once at most this many cards remain in hands and reserves.
     threshold: usize,
@@ -20,7 +20,7 @@ pub struct HybridAgent {
 
 impl HybridAgent {
     /// `deals` sampled deals are solved per endgame decision.
-    pub fn new(base: DmcAgent, threshold: usize, deals: usize, seed: u64) -> Self {
+    pub fn new(base: Box<dyn Agent>, threshold: usize, deals: usize, seed: u64) -> Self {
         let params = minimax::Params {
             determinizations: deals,
             depth: 2,
@@ -75,7 +75,8 @@ mod tests {
             &[(OBS_SIZE + ACTION_FEATURES, 8), (8, 1)],
             2,
         ));
-        let mut agent = HybridAgent::new(DmcAgent::new(net).unwrap(), 6, 2, 0);
+        let base = Box::new(crate::agents::DmcAgent::new(net).unwrap());
+        let mut agent = HybridAgent::new(base, 6, 2, 0);
         for n in [2, 3, 5] {
             let mut state = GameState::new(n, 0, &mut SmallRng::seed_from_u64(n as u64));
             while !state.is_over() {
