@@ -50,6 +50,10 @@ pub struct Params {
     /// Independent searches run in parallel (root parallelisation), each with an equal share
     /// of the iterations; their root visit counts are summed.
     pub threads: usize,
+    /// Searches up to this multiple of `iterations` while the decision is close: past the
+    /// budget, the search continues until the most-visited root move has 1.5 times the
+    /// visits of the runner-up. 1 turns it off.
+    pub extend: f32,
 }
 
 impl Default for Params {
@@ -74,6 +78,7 @@ impl Default for Params {
             belief: None,
             inference: None,
             threads: 1,
+            extend: 1.0,
         }
     }
 }
@@ -351,6 +356,20 @@ impl IsmctsAgent {
         merged
     }
 
+    /// Whether the most-visited root move leads the runner-up clearly (by half again).
+    fn root_decided(&self) -> bool {
+        let (mut first, mut second) = (0, 0);
+        for &ch in &self.nodes[0].children {
+            let v = self.nodes[ch as usize].visits;
+            if v > first {
+                (first, second) = (v, first);
+            } else if v > second {
+                second = v;
+            }
+        }
+        first as f32 >= 1.5 * second as f32
+    }
+
     /// Runs the search and returns statistics for each of the root's moves.
     pub fn search(&mut self, obs: &Observation) -> Vec<RootMove> {
         let p = self.params.clone();
@@ -373,12 +392,16 @@ impl IsmctsAgent {
         let mut path: Vec<usize> = Vec::new();
 
         let start = std::time::Instant::now();
-        for i in 0..p.iterations {
+        let max_iterations = (p.iterations as f32 * p.extend.max(1.0)) as usize;
+        for i in 0..max_iterations {
             if let Some(limit) = p.time_limit
                 && i % 16 == 0
                 && i > 0
                 && start.elapsed() >= limit
             {
+                break;
+            }
+            if i >= p.iterations && i % 16 == 0 && self.root_decided() {
                 break;
             }
             let mut state = match &pool {
@@ -522,6 +545,22 @@ mod tests {
         assert_eq!(moves.iter().map(|m| m.visits).sum::<u32>(), 80);
         let legal = state.legal_actions();
         assert!(legal.contains(&agent.act(&state.observe(0), &legal)));
+    }
+
+    #[test]
+    fn extended_search_stops_once_decided() {
+        let mut rng = SmallRng::seed_from_u64(6);
+        let state = GameState::new(4, 0, &mut rng);
+        let params = Params {
+            iterations: 64,
+            extend: 4.0,
+            ..Params::default()
+        };
+        let mut agent = IsmctsAgent::with_params(params, 3);
+        let visits: u32 = agent.search(&state.observe(0)).iter().map(|m| m.visits).sum();
+        assert!((64..=256).contains(&visits));
+        // past the budget, the search only stops once the leader is clear (or at the cap)
+        assert!(visits == 64 || visits == 256 || agent.root_decided());
     }
 
     #[test]

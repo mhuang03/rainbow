@@ -211,6 +211,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
         },
         inference: parse_inference(opts)?,
         threads: opts.take("threads")?.unwrap_or(d.threads),
+        extend: opts.take("extend")?.unwrap_or(d.extend),
     };
     Ok(params)
 }
@@ -232,7 +233,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value), `pmix` (with a
 ///   network `prior`: weight of the counter prior blended into it in games of 3+ players),
-///   `threads` (independent searches run in parallel, sharing the iterations),
+///   `threads` (independent searches run in parallel, sharing the iterations), `extend` (search
+///   up to this multiple of `n` while the top two moves are close),
 ///   `prior` (`counter`, the default, or a DMC or policy network path, for PUCT priors;
 ///   `none` for plain UCB) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
