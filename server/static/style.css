@@ -345,6 +345,7 @@ dialog.howto p { color: var(--muted); }
 }
 .menu-body label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); }
 .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+.menu-body label.switch { justify-content: flex-start; gap: 10px; color: var(--text); }
 
 /* Home: optional per-seat choices */
 details.custom summary { cursor: pointer; color: var(--muted); font-size: 14px; }
