@@ -922,13 +922,16 @@ function render() {
   const view = !inRoom ? "home" : room.phase === "lobby" || !game ? "lobby" : "table";
   for (const v of ["home", "lobby", "table"]) $(v).classList.toggle("hidden", v !== view);
   // the lobby shows the code in its heading; the badge is for the table
-  $("room-badge").classList.toggle("hidden", !inRoom || view === "lobby");
+  // a solo game's room code is no use to anyone, so only online tables show it
+  const solo = inRoom && room.hints && room.seats.filter((x) => x.kind === "human").length === 1 && !room.spectators;
+  $("room-badge").classList.toggle("hidden", !inRoom || view === "lobby" || solo);
   if (inRoom) {
     $("room-badge").innerHTML = "";
     $("room-badge").append(el("span", "badge-label", "Room "), el("b", null, room.code));
     $("room-badge").setAttribute("aria-label", `Room ${room.code}`);
     if (room.spectators) $("room-badge").append(document.createTextNode(` · ${room.spectators} watching`));
   }
+  $("leave-btn").classList.toggle("hidden", view !== "table");
   if (view === "lobby") renderLobby();
   if (view === "table") keepingFocus(renderTable);
   // chat only matters with other people around
@@ -1028,6 +1031,12 @@ async function main() {
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;
   $("over-leave").onclick = leave;
+  // leaving a solo game ends it; an online seat can be reclaimed with the room's link
+  $("leave-btn").onclick = () => {
+    const solo = room && room.hints && room.seats.filter((x) => x.kind === "human").length === 1;
+    if (solo && game && !game.over && !confirm("Leave this game? It will end.")) return;
+    leave();
+  };
   // phones get the system share sheet; elsewhere the link is copied
   if (navigator.share) $("copy-link").textContent = "Share link";
   $("copy-link").onclick = () => {

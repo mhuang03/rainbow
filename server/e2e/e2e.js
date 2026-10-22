@@ -232,13 +232,17 @@ const tests = {
     for (const colorScheme of ["light", "dark"]) await axeScan(browser, colorScheme);
   },
 
-  async "phone width: no horizontal scrolling"(browser) {
+  async "phone width: no horizontal scrolling; leave a solo game"(browser) {
     const p = await newPage(browser, { width: 360, height: 780 });
     await p.goto(BASE);
     await p.selectOption("#solo-players", "6");
     await p.click("#solo-start");
     await p.waitForFunction(() => game && game.legal.length > 0);
     assert(await p.evaluate(() => document.documentElement.scrollWidth <= 360));
+    assert(await p.locator("#room-badge.hidden").count(), "a solo game shows no room code");
+    p.once("dialog", (d) => d.accept());
+    await p.click("#leave-btn");
+    await p.waitForSelector("#home:not(.hidden)");
   },
 };
 

@@ -427,3 +427,14 @@ dialog.howto .dialog-head h2 { margin: 0; }
 dialog.howto .dialog-head form { margin: 0; }
 button.close { padding: 6px; line-height: 0; }
 @media (hover: none) and (pointer: coarse) { dialog.howto dl.keys { display: none; } }
+/* narrow screens: How to play becomes an icon, so the header stays on one line */
+.narrow-icon { display: none; }
+@media (max-width: 480px) {
+  .wide-label { display: none; }
+  .narrow-icon { display: block; }
+}
+@media (max-width: 400px) {
+  .opp { padding: 8px; }
+  .opp .who { font-size: 13px; }
+}
+.opp .kind:empty { display: none; }
