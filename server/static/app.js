@@ -852,6 +852,15 @@ function render() {
   updateTitle();
 }
 
+// "?" opens How to play from anywhere (outside text fields), as on many sites.
+document.addEventListener("keydown", (e) => {
+  const tag = document.activeElement.tagName;
+  if (e.key === "?" && tag !== "INPUT" && tag !== "TEXTAREA" && !$("howto").open) {
+    e.preventDefault();
+    $("howto-btn").click();
+  }
+});
+
 // Keyboard: 1-6 add a card of that rank to the selection, Enter plays it, Escape clears it.
 document.addEventListener("keydown", (e) => {
   if (!game || game.seat === null || $("table").classList.contains("hidden")) return;
