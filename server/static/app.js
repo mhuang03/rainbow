@@ -543,12 +543,26 @@ function renderMiddle() {
   // in a finished trick, the play that took the most is the one that won it
   const taken = !current && game.last_trick.taken;
   const top = taken ? Math.max(...plays.map((pl) => taken[pl.seat])) : -1;
+  // While the trick is open, the pile each play would take if it ended now: plays rank by
+  // card count, then top card, then order.
+  const projected = new Map();
+  if (current && plays.length > 1) {
+    const order = plays.map((pl, i) => i).sort((a, b) =>
+      plays[b].cards.length - plays[a].cards.length
+      || Math.max(...plays[b].cards) - Math.max(...plays[a].cards)
+      || a - b);
+    order.forEach((i, rank) => { if (rank < game.piles.length) projected.set(i, game.piles[rank]); });
+  }
   plays.forEach((pl, i) => {
     const lastOfSeat = !plays.slice(i + 1).some((q) => q.seat === pl.seat);
     const leading = current ? i === game.trick_leader : lastOfSeat && taken[pl.seat] === top;
     const box = el("div", "play" + (leading ? " leading" : "") + (current && i >= freshFrom ? " fresh" : ""));
     const by = el("div", "by", who(pl.seat));
-    if (current && leading && plays.length > 1) by.append(el("span", "lead-tag", "leading"));
+    if (projected.has(i)) {
+      const tag = el("span", "lead-tag", `→ ${projected.get(i)}`);
+      tag.title = "The pile this play would take if the trick ended now";
+      by.append(tag);
+    }
     if (!current && lastOfSeat) by.append(el("span", "gain", `+${game.last_trick.taken[pl.seat]}`));
     const row = cardRow(pl.cards, true);
     box.append(by, row);
