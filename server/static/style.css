@@ -221,12 +221,15 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 
 @media (max-width: 700px) {
   main { padding: 12px; }
-  .middle { grid-template-columns: 1fr; }
+  .middle { grid-template-columns: minmax(0, 1fr); }
   .card { width: 32px; height: 46px; font-size: 17px; }
   /* up to three opponents share a row, so the table stays near the top */
   .opponents { gap: 8px; }
   .opp { min-width: 0; flex: 1 1 96px; max-width: 180px; padding: 8px 10px; gap: 4px; }
   .opp .who { font-size: 14px; }
+  /* six piles fit on one row */
+  .piles { gap: 6px; flex-wrap: nowrap; }
+  .pile { flex: 0 1 52px; min-width: 0; height: 58px; }
   .opp .who > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 

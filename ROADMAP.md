@@ -309,7 +309,11 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
       `belief_v2` 1.03 (4p 2+2, 100 deals) and 1.04 (2p, 150 deals). The browser's Guided
       ISMCTS uses it. More data and capacity keep paying off for the belief network.
 - [x] Beliefs without a network: `pimc:belief=belief_v2` against plain `pimc` 0.97 (4p 2+2,
-      300 deals). Belief-weighted deals only help a search that already evaluates well.
+      300 deals); network-free `ismcts:belief=belief_v2` against `ismcts` 1.01 (4p 2+2, 200
+      deals). Belief-weighted deals only help a search that already evaluates well.
+- [x] `hybrid:base=counter`: Counter with the exact endgame solver. Against plain `counter`
+      1.07 (4p 2+2, 600 deals) and 1.21 (2p, 600 deals): the endgame is where counting alone
+      leaves the most on the table, especially with two players.
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /
