@@ -228,7 +228,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `counter`: `card` (points each extra card must buy), `structure` (penalty for breaking
 ///   pairs, sets and runs), `q` (chance an opponent who could beat a combo doesn't) and
 ///   `adaptive` (prior weight for learning each opponent's chance from the game so far) and
-///   `samples` (deals sampled to judge whether opponents can beat a combo; 0 uses a bound).
+///   `samples` (deals sampled to judge whether opponents can beat a combo; 0 uses a bound) and
+///   `belief` (a belief network weighting those deals).
 /// - `pimc`: `k` (deals per decision), `leaf` (DMC network path valuing each move instead of a
 ///   rollout), `belief` (hand-prediction network for likelier deals), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
@@ -284,13 +285,16 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         "cheapest" => Box::new(CheapestAgent),
         "counter" => {
             let d = counter::Params::sampled();
-            Box::new(CounterAgent::with_params(counter::Params {
-                card_value: opts.take("card")?.unwrap_or(d.card_value),
-                structure_value: opts.take("structure")?.unwrap_or(d.structure_value),
-                hold_chance: opts.take("q")?.unwrap_or(d.hold_chance),
-                adaptive: opts.take("adaptive")?.or(d.adaptive),
-                samples: opts.take("samples")?.unwrap_or(d.samples),
-            }))
+            Box::new(
+                CounterAgent::with_params(counter::Params {
+                    card_value: opts.take("card")?.unwrap_or(d.card_value),
+                    structure_value: opts.take("structure")?.unwrap_or(d.structure_value),
+                    hold_chance: opts.take("q")?.unwrap_or(d.hold_chance),
+                    adaptive: opts.take("adaptive")?.or(d.adaptive),
+                    samples: opts.take("samples")?.unwrap_or(d.samples),
+                })
+                .with_belief(belief_option(&mut opts)?),
+            )
         }
         "economist" | "margin" => {
             let d = if name == "margin" {

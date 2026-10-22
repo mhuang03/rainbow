@@ -15,8 +15,10 @@
 use arrayvec::ArrayVec;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use std::sync::Arc;
 
 use crate::agents::Agent;
+use crate::agents::belief::Belief;
 use crate::constants::{MAX_PLAYERS, MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_RANK};
 use crate::game::{Combo, Hand, Observation, TrickType};
 
@@ -66,9 +68,11 @@ impl Default for Params {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct CounterAgent {
     params: Params,
+    /// With sampling: weights the sampled deals by a hand-prediction network.
+    belief: Option<Arc<Belief>>,
 }
 
 impl CounterAgent {
@@ -77,7 +81,16 @@ impl CounterAgent {
     }
 
     pub fn with_params(params: Params) -> Self {
-        Self { params }
+        Self {
+            params,
+            belief: None,
+        }
+    }
+
+    /// Samples deals weighted by `belief`'s predicted hands (when `samples` > 0).
+    pub fn with_belief(mut self, belief: Option<Arc<Belief>>) -> Self {
+        self.belief = belief;
+        self
     }
 }
 
@@ -173,8 +186,12 @@ impl CounterAgent {
                     h.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ u64::from(c)
                 });
             let mut rng = SmallRng::seed_from_u64(seed);
+            let weights = self.belief.as_ref().map(|b| b.weights(obs));
             for _ in 0..p.samples {
-                let world = obs.determinize(&mut rng);
+                let world = match &weights {
+                    Some(w) => obs.determinize_weighted(w, &mut rng),
+                    None => obs.determinize(&mut rng),
+                };
                 let mut best = [[0u8; 3]; MAX_PLAYERS];
                 for &s in later.iter().filter(|&&s| s != me) {
                     let h = world.hand(s);
