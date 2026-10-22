@@ -84,7 +84,7 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       (`minimax:mode=paranoid|maxn,depth=3,k=16`).
 - [x] Pluggable leaf evaluation: deterministic `cheapest` playouts or a DMC network.
 - [x] Best-reply search mode (`minimax:mode=brs`, BRS+).
-- [ ] Evaluate DMC leaves and BRS.
+- [x] Evaluate DMC leaves and BRS.
 
 ## Milestone 9: Masked Double DQN
 
@@ -294,12 +294,18 @@ the gain is within noise.
 
 | BRS, depth 3, k=8 (50 deals) | 0.10 |
 | paranoid, depth 3, k=8 (same deals) | 0.13 |
+| **BRS, depth 2, k=4, DMC v2 leaf values** (20 deals, about +/-0.2) | **1.25** |
 
 Badly beaten. Even depth 1 (sampled deals plus a deterministic `cheapest` playout) loses, so the
 leaf evaluation is the problem, not the search rule: it is the same biased opponent model that
 sank PIMC with `cheapest` rollouts, compounded by determinized search assuming everyone sees all
 cards. Paranoid is worse still because with three colluding opponents almost every move looks
 lost.
+
+With DMC leaf values instead of `cheapest` playouts, BRS jumps from 0.10 to 1.25 against
+three Economists, confirming that leaf evaluation, not the search rule, was the problem. It is
+slow, though (network values for every seat at every leaf), so guided ISMCTS remains the better
+use of search time.
 
 ### DMC v2 (`models/dmc_v2.bin`, 400 deals)
 
