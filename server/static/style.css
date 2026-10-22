@@ -173,7 +173,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .pile b { font-size: 22px; color: var(--accent); }
 .pile small { color: var(--felt-muted); font-size: 11px; }
 .trick { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
-.trick.past { opacity: 0.6; }
+.trick.past .cards { opacity: 0.7; }
 .play { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .play .by { font-size: 12px; color: var(--felt-text); }
 .play .by .gain { color: var(--accent); font-weight: 600; }
@@ -372,3 +372,8 @@ button.link { background: none; border: none; padding: 0; color: var(--accent-te
 /* a disabled Play button that explains why stays readable */
 button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-color: var(--border); color: var(--muted); font-weight: 500; }
 @media (max-width: 480px) { .badge-label { display: none; } }
+
+/* The game-over panel arrives quietly */
+.overlay:not(.hidden) .panel { animation: settle 200ms ease-out; }
+@keyframes settle { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .overlay:not(.hidden) .panel { animation: none; } }

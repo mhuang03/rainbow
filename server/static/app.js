@@ -446,12 +446,15 @@ function renderMiddle() {
   const restricted = current && game.trick_type !== "open";
   $("trick-type").textContent = restricted ? `Only ${TRICK_TYPES[game.trick_type]}` : "";
   $("trick-type").classList.toggle("hidden", !restricted);
+  // in a finished trick, the play that took the most is the one that won it
+  const taken = !current && game.last_trick.taken;
+  const top = taken ? Math.max(...plays.map((pl) => taken[pl.seat])) : -1;
   plays.forEach((pl, i) => {
-    const leading = current && i === game.trick_leader;
+    const lastOfSeat = !plays.slice(i + 1).some((q) => q.seat === pl.seat);
+    const leading = current ? i === game.trick_leader : lastOfSeat && taken[pl.seat] === top;
     const box = el("div", "play" + (leading ? " leading" : "") + (current && i >= freshFrom ? " fresh" : ""));
     const by = el("div", "by", who(pl.seat));
-    if (leading && plays.length > 1) by.append(el("span", "lead-tag", "leading"));
-    const lastOfSeat = !plays.slice(i + 1).some((q) => q.seat === pl.seat);
+    if (current && leading && plays.length > 1) by.append(el("span", "lead-tag", "leading"));
     if (!current && lastOfSeat) by.append(el("span", "gain", `+${game.last_trick.taken[pl.seat]}`));
     box.append(by, cardRow(pl.cards, true));
     trick.append(box);
@@ -667,6 +670,8 @@ function renderTable() {
       });
     renderChart();
     $("next-game").classList.toggle("hidden", !me.host);
+    // against the computer there's no room to leave, just a setup to change
+    $("over-leave").textContent = room.hints ? "Change opponents" : "Leave room";
     $("over-hint").textContent = me.host ? "" : "Waiting for the host to start the next game.";
     // move focus into the dialog once, when the game ends
     if (!$("game-over").contains(document.activeElement)) (me.host ? $("next-game") : $("over-title")).focus();
