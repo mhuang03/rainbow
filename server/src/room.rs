@@ -29,6 +29,8 @@ pub static PACE: OnceLock<f32> = OnceLock::new();
 fn paced(delay: Duration) -> Duration {
     delay.mul_f32(*PACE.get().unwrap_or(&1.0))
 }
+/// The share of the agent delay and trick pause kept in a solo game set to fast play.
+const FAST: f32 = 0.35;
 /// How long an away player's turn waits before the computer plays it for them, while others
 /// are at the table; they take their seat back when they return.
 const AWAY_GRACE: Duration = Duration::from_secs(30);
@@ -81,6 +83,12 @@ pub enum Command {
     /// help anyone against other people.
     Hint {
         conn: u64,
+    },
+    /// Fast play: shorter pauses before agents' moves and after tricks. Only in solo games,
+    /// where nobody else needs time to follow.
+    Speed {
+        conn: u64,
+        fast: bool,
     },
     /// A chat message to everyone in the room.
     Chat {
@@ -137,6 +145,8 @@ pub struct Room {
     last_chat: HashMap<u64, Instant>,
     /// When the last person disconnected, while nobody is connected.
     empty_since: Option<Instant>,
+    /// Fast play (solo games only).
+    fast: bool,
 }
 
 /// The cards of a combo, lowest first.
@@ -170,6 +180,7 @@ impl Room {
             rooms,
             last_chat: HashMap::new(),
             empty_since: Some(Instant::now()),
+            fast: false,
         };
         room.seats = seats
             .into_iter()
@@ -252,6 +263,11 @@ impl Room {
             }
             Command::Play { conn, action } => self.human_move(conn, action),
             Command::Hint { conn } => self.hint(conn),
+            Command::Speed { conn, fast } => {
+                if self.seat_of(conn).is_some() && self.hints_allowed() {
+                    self.fast = fast;
+                }
+            }
             Command::Chat { conn, text } => self.chat(conn, &text),
             Command::SetSeat { conn, seat, agent } => {
                 if !self.is_host(conn) {
@@ -535,6 +551,7 @@ impl Room {
     }
 
     fn apply(&mut self, combo: Combo) {
+        let fast = self.fast && self.hints_allowed();
         let Some(game) = &mut self.game else { return };
         let seat = game.state.current_player();
         let before: Vec<u8> = game.state.scores().to_vec();
@@ -563,7 +580,7 @@ impl Room {
             game.last_trick = Some(summary);
             delay = TRICK_PAUSE;
         }
-        game.agent_at = Instant::now() + paced(delay);
+        game.agent_at = Instant::now() + paced(if fast { delay.mul_f32(FAST) } else { delay });
         self.broadcast();
     }
 

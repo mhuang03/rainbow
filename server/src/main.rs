@@ -60,6 +60,9 @@ enum ClientMsg {
         action: usize,
     },
     Hint,
+    Speed {
+        fast: bool,
+    },
     Chat {
         text: String,
     },
@@ -243,6 +246,10 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
         ClientMsg::Leave => return leave(room, conn),
         ClientMsg::Start => Command::Start { conn: conn.id },
         ClientMsg::Hint => Command::Hint { conn: conn.id },
+        ClientMsg::Speed { fast } => Command::Speed {
+            conn: conn.id,
+            fast,
+        },
         ClientMsg::Chat { text } => Command::Chat {
             conn: conn.id,
             text,

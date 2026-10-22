@@ -124,7 +124,7 @@ Open http://localhost:8080 and enter your name.
   host. Rooms have a chat.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
-explains the rules and controls; *Settings* has sound, reduced motion and a light or dark
+explains the rules and controls; *Settings* has sound, fast computer moves (solo games), reduced motion and a light or dark
 theme.
 
 To play with people on other machines, the port must be reachable from them, for example on a

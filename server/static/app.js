@@ -133,6 +133,7 @@ function receive(msg) {
       me.token = msg.token || null;
       me.host = msg.host;
       if (me.token) localStorage.setItem(`rainbow.token.${me.code}`, me.token);
+      if (fastPlay()) send({ t: "speed", fast: true }); // solo games only; the server checks
       history.replaceState(null, "", `/?room=${me.code}`);
       break;
     case "room":
@@ -498,6 +499,11 @@ function syncThemeColor() {
     if (document.documentElement.dataset.theme) m.setAttribute("content", bg);
     else m.setAttribute("content", m.media.includes("dark") ? "#12161f" : "#f4f1ea");
   });
+}
+
+/** Whether the player wants the computer to move quickly (solo games). */
+function fastPlay() {
+  try { return localStorage.getItem("rainbow.fast") === "on"; } catch { return false; }
 }
 
 /** A server message as a sentence: capitalised, with a full stop. */
@@ -1011,6 +1017,12 @@ async function main() {
     soundOn = $("sound-toggle").checked;
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
     SOUNDS.turn();
+  };
+  $("fast-toggle").checked = fastPlay();
+  $("fast-toggle").onchange = () => {
+    const fast = $("fast-toggle").checked;
+    try { localStorage.setItem("rainbow.fast", fast ? "on" : "off"); } catch { /* not remembered */ }
+    if (me.code) send({ t: "speed", fast });
   };
   $("motion-toggle").checked = document.documentElement.dataset.motion === "reduce";
   $("motion-toggle").onchange = () => {
