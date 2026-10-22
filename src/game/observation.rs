@@ -225,6 +225,22 @@ impl Observation {
         weights: &DealWeights,
         rng: &mut R,
     ) -> GameState {
+        self.determinize_weighted_with_ratio(weights, rng).0
+    }
+
+    /// [`Self::determinize_weighted`], also returning the log importance ratio of the uniform
+    /// deal over the weighted one for the sampled cards.
+    ///
+    /// Shuffling the unknown cards and dealing them in order is the same as sending each card, in
+    /// random order, to a container with probability proportional to its remaining room. The
+    /// weighted dealer sends it with probability proportional to its weight instead, so the
+    /// ratio is the product over cards of `(room / total room) / (weight / total weight)`. Weighting a
+    /// belief-proposed deal by this ratio times a likelihood gives the correct posterior weight.
+    pub fn determinize_weighted_with_ratio<R: Rng + ?Sized>(
+        &self,
+        weights: &DealWeights,
+        rng: &mut R,
+    ) -> (GameState, f32) {
         const FLOOR: f32 = 1e-3;
         let n = self.players.len();
         let observer = self.observer as usize;
@@ -253,6 +269,8 @@ impl Observation {
 
         let mut hands = [Hand::EMPTY; MAX_PLAYERS];
         let mut reserves = [Hand::EMPTY; MAX_PLAYERS];
+        let mut log_ratio = 0.0f64;
+        let mut room_left = pool.len();
         for &rank in &pool {
             let r = (rank - MIN_RANK) as usize;
             let w = |c: usize| {
@@ -276,7 +294,11 @@ impl Observation {
                 }
                 x -= wc;
             }
+            let uniform = room[chosen] as f64 / room_left as f64;
+            let weighted = f64::from(w(chosen)) / f64::from(total);
+            log_ratio += (uniform / weighted).ln();
             room[chosen] -= 1;
+            room_left -= 1;
             if let Some(&(seat, reserve)) = owner.get(chosen) {
                 if reserve {
                     reserves[seat].add_card(rank);
@@ -285,7 +307,7 @@ impl Observation {
                 }
             }
         }
-        self.world(&hands, &reserves)
+        (self.world(&hands, &reserves), log_ratio as f32)
     }
 
     /// The full state with the given hidden hands and reserves (the observer's hand is known).
@@ -487,6 +509,32 @@ mod tests {
             assert_eq!(p.hand_size as usize, g.hand(seat).len());
             assert_eq!(p.points, g.points(seat));
         }
+    }
+
+    #[test]
+    fn importance_ratio_corrects_a_biased_deal() {
+        let g = GameState::new(4, 0, &mut SmallRng::seed_from_u64(3));
+        let obs = g.observe(0);
+        let mut rng = SmallRng::seed_from_u64(5);
+        // A biased dealer over-supplies 1s to seat 2; weighting each deal by its importance ratio
+        // must recover the uniform deal's average.
+        let mut weights = DealWeights::default();
+        weights.hands[2] = [3.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let (mut weighted_sum, mut weight_total, mut uniform_sum) = (0.0f64, 0.0f64, 0.0f64);
+        let trials = 4000;
+        for _ in 0..trials {
+            let (d, log_ratio) = obs.determinize_weighted_with_ratio(&weights, &mut rng);
+            let w = f64::from(log_ratio).exp();
+            weighted_sum += w * f64::from(d.hand(2).count(1));
+            weight_total += w;
+            uniform_sum += f64::from(obs.determinize(&mut rng).hand(2).count(1));
+        }
+        let corrected = weighted_sum / weight_total;
+        let uniform = uniform_sum / f64::from(trials);
+        assert!(
+            (corrected - uniform).abs() < 0.25,
+            "{corrected} vs {uniform}"
+        );
     }
 
     #[test]

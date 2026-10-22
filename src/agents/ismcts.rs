@@ -40,9 +40,9 @@ pub struct Params {
     /// sampling uniformly.
     ///
     /// Inference re-weights candidates by the likelihood of the history. With `belief` also set,
-    /// candidates are drawn from the belief network, which has already conditioned on that
-    /// history, so the evidence counts twice. That hurt with a DMC opponent model (1.08-1.18
-    /// against 1.50 for belief alone); with uniform candidates inference helped (+0.20).
+    /// candidates come from the belief network, which has already conditioned on that history;
+    /// each is weighted by the importance ratio of the uniform deal over the belief proposal so
+    /// the evidence isn't counted twice.
     pub inference: Option<Inference>,
 }
 

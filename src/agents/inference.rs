@@ -128,27 +128,34 @@ impl Inference {
         total
     }
 
-    /// Samples candidate deals for `obs` (uniformly, or biased by `prior` weights) and weights
-    /// them by likelihood.
+    /// Samples candidate deals for `obs` (uniformly, or proposed by `prior` weights) and weights
+    /// them by likelihood, times the importance ratio of a weighted proposal.
     pub fn sample_pool<R: Rng + ?Sized>(
         &self,
         obs: &Observation,
         prior: Option<&DealWeights>,
         rng: &mut R,
     ) -> WorldPool {
-        let worlds: Vec<GameState> = (0..self.candidates.max(1))
+        // With a weighted proposal, each candidate also carries the importance ratio of the
+        // uniform prior over the proposal, so evidence the proposal already used isn't counted
+        // twice.
+        let (worlds, ratios): (Vec<GameState>, Vec<f32>) = (0..self.candidates.max(1))
             .map(|_| match prior {
-                Some(w) => obs.determinize_weighted(w, rng),
-                None => obs.determinize(rng),
+                Some(w) => obs.determinize_weighted_with_ratio(w, rng),
+                None => (obs.determinize(rng), 0.0),
             })
+            .unzip();
+        let logs: Vec<f32> = worlds
+            .iter()
+            .zip(&ratios)
+            .map(|(w, &ratio)| self.power * self.log_likelihood(obs, w) + ratio)
             .collect();
-        let logs: Vec<f32> = worlds.iter().map(|w| self.log_likelihood(obs, w)).collect();
         let max = logs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut total = 0.0;
         let cumulative = logs
             .iter()
             .map(|&l| {
-                total += (self.power * (l - max)).exp();
+                total += (l - max).exp();
                 total
             })
             .collect();
