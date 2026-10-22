@@ -228,6 +228,9 @@ it.
       | 189k | 48% | 1.06 | 0.57 |
       | 287k (`models/distill_v4.bin`) | 51% | 1.21 | 0.68 |
 
+- [x] Ensemble leaves (`leaf=a.bin+b.bin`, averaging the networks' values): guided ISMCTS
+      with a round 3 + round 4 leaf is level with the round 4 leaf alone (1.00 vs 1.00, 4p, two
+      seats each, 80 deals) at about twice the leaf cost. Not used by default.
 - [x] `pimc:leaf=...`: PIMC valuing each move with a DMC network instead of a rollout. Weak
       (about 0.6 against three Economists, 10 deals) and slow: without a tree, opponents
       between the move and the network's turn are modelled by the deterministic `cheapest`
