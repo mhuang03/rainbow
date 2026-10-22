@@ -90,3 +90,14 @@ def test_gymnasium_env():
     strict.reset(seed=2)
     with pytest.raises(ValueError):
         strict.step(int(np.flatnonzero(~strict.action_masks())[0]))
+
+
+def test_widening_preserves_the_function():
+    from rl_common import mlp, widen
+
+    torch.manual_seed(0)
+    net = mlp(10, [6, 5], 2)
+    wide = widen(net, [16, 9], noise=0.0)
+    x = torch.randn(32, 10)
+    assert torch.allclose(net(x), wide(x), atol=1e-5)
+    assert [m.out_features for m in wide if isinstance(m, torch.nn.Linear)] == [16, 9, 2]

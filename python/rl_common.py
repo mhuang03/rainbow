@@ -56,6 +56,41 @@ def load(path: Path) -> nn.Sequential:
     return nn.Sequential(*layers)
 
 
+def widen(net: nn.Sequential, hidden: list[int], noise: float = 1e-3, seed: int = 0) -> nn.Sequential:
+    """Net2WiderNet (Chen et al., 2016): a wider ReLU MLP computing the same function.
+
+    Each hidden layer grows to the given width by copying randomly chosen units; the next layer's
+    weights from a unit and its copies are divided among them, so outputs are unchanged. A little
+    noise on the copies' incoming weights lets them diverge during training."""
+    rng = np.random.default_rng(seed)
+    linears = [m for m in net if isinstance(m, nn.Linear)]
+    if len(hidden) != len(linears) - 1:
+        raise ValueError(f"need {len(linears) - 1} hidden widths, got {len(hidden)}")
+    weights = [l.weight.detach().clone() for l in linears]
+    biases = [l.bias.detach().clone() for l in linears]
+    for i, width in enumerate(hidden):
+        old = weights[i].shape[0]
+        if width < old:
+            raise ValueError(f"layer {i}: can't narrow {old} units to {width}")
+        g = np.concatenate([np.arange(old), rng.integers(0, old, width - old)])
+        counts = torch.from_numpy(np.bincount(g, minlength=old)[g]).float()
+        idx = torch.from_numpy(g)
+        weights[i] = weights[i][idx].clone()
+        biases[i] = biases[i][idx].clone()
+        weights[i][old:] += noise * torch.randn_like(weights[i][old:])
+        weights[i + 1] = weights[i + 1][:, idx] / counts
+    layers: list[nn.Module] = []
+    for i, (w, b) in enumerate(zip(weights, biases)):
+        layer = nn.Linear(w.shape[1], w.shape[0])
+        with torch.no_grad():
+            layer.weight.copy_(w)
+            layer.bias.copy_(b)
+        layers.append(layer)
+        if i < len(weights) - 1:
+            layers.append(nn.ReLU())
+    return nn.Sequential(*layers)
+
+
 def mlp(inputs: int, hidden: list[int], outputs: int) -> nn.Sequential:
     layers: list[nn.Module] = []
     size = inputs

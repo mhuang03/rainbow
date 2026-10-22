@@ -22,7 +22,7 @@ import torch
 from torch import nn
 
 import rainbow_engine as re
-from rl_common import ARENA, arena_relative, export, final_returns_row, load, mlp
+from rl_common import ARENA, arena_relative, export, final_returns_row, load, mlp, widen
 
 ACTIONS = re.action_features()  # (NUM_ACTIONS, ACTION_FEATURES)
 
@@ -160,6 +160,8 @@ def main() -> None:
     parser.add_argument("--eval-deals", type=int, default=200)
     parser.add_argument("--arena", type=Path, default=ARENA)
     parser.add_argument("--init", type=Path, default=None, help="continue training this network")
+    parser.add_argument("--widen", type=int, nargs="+", default=None,
+                        help="with --init: grow the hidden layers to these widths first (Net2Net)")
     parser.add_argument("--aux-weight", type=float, default=0.0,
                         help="weight of the auxiliary hidden-hand prediction loss (0 disables)")
     parser.add_argument("--opponents", nargs="+", default=None,
@@ -176,7 +178,11 @@ def main() -> None:
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
     obs_size = re.HIST_OBS_SIZE if args.history else re.OBS_SIZE
-    net = DmcNet.from_sequential(load(args.init)) if args.init else DmcNet(args.hidden, obs_size)
+    if args.init:
+        init = load(args.init)
+        net = DmcNet.from_sequential(widen(init, args.widen, seed=args.seed) if args.widen else init)
+    else:
+        net = DmcNet(args.hidden, obs_size)
     if net.obs_size != obs_size:
         parser.error("--init network's inputs don't match --history")
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
