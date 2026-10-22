@@ -42,7 +42,8 @@ pub struct Params {
     /// Inference re-weights candidates by the likelihood of the history. With `belief` also set,
     /// candidates come from the belief network, which has already conditioned on that history;
     /// each is weighted by the importance ratio of the uniform deal over the belief proposal so
-    /// the evidence isn't counted twice.
+    /// the evidence isn't counted twice. In testing the combination still did worse than belief
+    /// alone (the ratios vary widely, so a few deals take most of the weight); prefer one.
     pub inference: Option<Inference>,
 }
 

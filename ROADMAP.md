@@ -318,9 +318,11 @@ deals). The search then draws all 200 iterations from only 100 candidates and th
 what inference adds. A softer setting (400 candidates, `ipower=0.3`) still lost (1.08 against
 1.51). The cause is double counting: belief-proposed deals already condition on the history, and
 inference then weights them by the same history's likelihood. Without belief, inference does help
-guided search: 1.38 against 1.18 (with two raw dmc_league networks, 60 deals). A correct
-combination needs importance weights likelihood x prior / proposal probability, where the
-proposal probability comes from the weighted dealer; left as future work.
+guided search: 1.38 against 1.18 (with two raw dmc_league networks, 60 deals). Inference now applies
+that correction (likelihood x the uniform deal's importance ratio over the belief proposal), but
+the combination still loses: 1.10 against 1.36 for belief alone (60 deals). Belief proposals are
+strongly shaped, so the importance ratios vary widely and a few deals take most of the weight,
+narrowing what the search explores. Use belief or inference, not both; belief alone is best.
 
 ### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
 
