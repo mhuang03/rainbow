@@ -259,7 +259,7 @@ button.card.r3 { color: #3b2a00; }
 .side-box { background: var(--panel); border-radius: var(--radius); padding: 12px 14px; }
 .side-box.grow { flex: 1; min-height: 120px; overflow: auto; }
 .side h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
-.unseen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
+.unseen { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px 10px; }
 .unseen-cell { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .log-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
