@@ -141,9 +141,10 @@ function receive(msg) {
       }
       break;
     case "state": {
-      const oldHand = game && game.hand ? game.hand.join() : "";
-      announceChanges(game && game.tricks_played <= msg.tricks_played ? game : null, msg);
-      game = msg;
+      const old = game;
+      const oldHand = old && old.hand ? old.hand.join() : "";
+      game = msg; // set first: announcements name seats relative to this state
+      announceChanges(old && old.tricks_played <= msg.tricks_played ? old : null, msg);
       if (!game.hand || game.hand.join() !== oldHand) selection = [];
       break;
     }
