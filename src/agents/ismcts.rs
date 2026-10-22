@@ -58,10 +58,11 @@ pub struct Params {
     /// plays made since the last search still holds valid statistics, and the next search
     /// continues from it instead of starting empty.
     pub reuse: bool,
-    /// With a prior: choose the root move by Gumbel sequential halving (Danihelka et al.
-    /// 2022) over this many candidates, instead of by visit count. The candidates are sampled
-    /// from the prior with Gumbel noise, and the iterations go in rounds to the surviving
-    /// half, ranked by noise + prior logit + scaled value. 0 turns it off.
+    /// With a prior: choose the root move by sequential halving (as in Gumbel MuZero,
+    /// Danihelka et al. 2022) over this many candidates, instead of by visit count. The
+    /// candidates are sampled from the prior with Gumbel noise, and the iterations go in rounds
+    /// to the surviving half, ranked by prior logit + scaled value (without the noise, which
+    /// in play only adds randomness). 0 turns it off.
     pub gumbel: usize,
 }
 
@@ -453,17 +454,23 @@ impl IsmctsAgent {
                 self.nodes[id].available = 0;
             }
         }
-        // candidates: the top m moves by Gumbel noise + log prior
-        let mut cands: Vec<(Combo, f32)> = legal
+        // candidates: the top m moves by Gumbel noise + log prior; afterwards each keeps only
+        // its log prior, as the noise serves exploration in training, not strength in play
+        let mut noisy: Vec<(f32, (Combo, f32))> = legal
             .iter()
             .zip(&probs)
             .map(|(&combo, &prob)| {
                 let u: f32 = self.rng.random_range(1e-6..1.0);
-                (combo, -(-u.ln()).ln() + prob.max(1e-8).ln())
+                let logit = prob.max(1e-8).ln();
+                (logit - (-u.ln()).ln(), (combo, logit))
             })
             .collect();
-        cands.sort_by(|a, b| b.1.total_cmp(&a.1));
-        cands.truncate(p.gumbel.min(legal.len()));
+        noisy.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut cands: Vec<(Combo, f32)> = noisy
+            .into_iter()
+            .take(p.gumbel.min(legal.len()))
+            .map(|(_, c)| c)
+            .collect();
         let rounds = (cands.len() as f32).log2().ceil().max(1.0) as usize;
         let mut left = p.iterations;
         for round in 0..rounds {
@@ -477,7 +484,7 @@ impl IsmctsAgent {
                 }
             }
             left = left.saturating_sub(per_move * cands.len());
-            // rank by noise + log prior + value, scaled by the visits as in the paper (c_visit 50)
+            // rank by log prior + value, scaled by the visits as in the paper (c_visit 50)
             let max_visits = cands
                 .iter()
                 .map(|&(c, _)| self.nodes[self.child_for(root, c).expect("child")].visits)
