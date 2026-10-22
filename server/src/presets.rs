@@ -26,8 +26,8 @@ impl Preset {
 /// The presets whose agents can be built: network agents need their model files in `models`.
 pub fn available(models: &Path) -> Vec<Preset> {
     let m = |file: &str| models.join(file).display().to_string();
-    let league = m("dmc_league5.bin");
-    let ensemble = format!("{}+{}+{league}", m("dmc_league3.bin"), m("dmc_league4.bin"));
+    let league = m("dmc_league6.bin");
+    let ensemble = format!("{}+{}+{league}", m("dmc_league4.bin"), m("dmc_league5.bin"));
     let belief = m("belief_v1.bin");
     // Grouped by difficulty and ordered by strength (the 4-player ladder in ROADMAP.md).
     let list = [

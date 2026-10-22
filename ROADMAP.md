@@ -188,6 +188,14 @@ dmc_league4 (2.00 against three Economists, 1.69 against three sampled Counters)
 round 4: 0.99 (2p) and 1.06 (4p). The gains per round are shrinking; the browser presets use
 it.
 
+### League round 6, widened (`models/dmc_league6.bin`)
+
+Round 5 widened from 256-256-128 to 512-512-256 with Net2WiderNet (`train_dmc.py --widen`,
+function-preserving, so training starts at round 5's strength), then 90 minutes of league
+training against economist, counter, dmc_league4 and dmc_league5. Against round 5: **1.07
+(2p)** and 1.02 (4p), where unwidened round 5 had stalled at 0.99 / 1.06 against round 4. The
+extra capacity restarts progress; the browser presets use it.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
