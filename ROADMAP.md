@@ -100,7 +100,10 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       guiding (`--oracle-fraction`).
 - [x] `ppo:path=...` Rust agent.
 - [x] Train and evaluate (v1 Monte Carlo advantages; v2 GAE and league opponents).
-- [ ] Oracle guiding run.
+- [x] Oracle guiding run (v3: v2's setup plus `--oracle-fraction 0.5`): 0.43 at 10 minutes, 0.55
+      at 20, 0.45 at 30 when the oracle inputs reached zero, then 0.76 at 40 against v2's 0.62.
+      The run was cut short at 40 minutes by a container restart; the 40-minute checkpoint
+      suggests oracle guiding helps once the policy readjusts.
 
 ## Milestone 11: Network-guided ISMCTS
 
@@ -141,6 +144,8 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
   hidden-hand loss, 90 minutes but only 546k games under contention) reached 0.94 against three
   Economists, below v2's 1.11 at a similar game count, at about four times the cost per game.
   Not worth it at this budget; it needs a run of millions of games to judge.
+  The auxiliary loss alone (v2's size, `--aux-weight 1`) reached 1.05 at 552k games against v2's
+  1.11 at 588k: no measurable benefit at this budget.
 - **Hand-prediction as an auxiliary loss** for the DMC and PPO networks.
 
 ## Results
