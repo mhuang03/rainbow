@@ -197,6 +197,10 @@ const tests = {
   async "keyboard only: start, select a card, keep focus, play it"(browser) {
     const p = await newPage(browser);
     await p.goto(BASE);
+    await p.click("#settings summary");
+    await p.keyboard.press("Escape");
+    assert(await p.evaluate(() => !$("settings").open && document.activeElement.matches("#settings summary")),
+      "Escape closes the settings menu and returns focus to it");
     let found = false;
     for (let i = 0; i < 25 && !found; i++) {
       await p.keyboard.press("Tab");

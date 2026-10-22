@@ -954,6 +954,13 @@ async function main() {
   document.addEventListener("click", (e) => {
     if (!$("settings").contains(e.target)) $("settings").open = false;
   });
+  // and on Escape, returning focus to its button (before Escape clears the card selection)
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !$("settings").open) return;
+    $("settings").open = false;
+    $("settings").querySelector("summary").focus();
+    e.stopImmediatePropagation();
+  }, true);
   $("chat-form").onsubmit = (e) => {
     e.preventDefault();
     const text = $("chat-input").value.trim();
