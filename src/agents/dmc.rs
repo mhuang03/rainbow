@@ -391,8 +391,13 @@ pub struct EnsembleAgent {
     counter_blend: Option<f32>,
 }
 
-/// Adds `weight` times the `counter` agent's score of each legal combo to `values`.
+/// Adds `weight` times the `counter` agent's score of each legal combo to `values`, in games of
+/// 3+ players: with two, where each plays twice a trick, the blend hurts (0.88 at weight 0.03
+/// against DMC alone).
 fn add_counter_scores(values: &mut [f32], weight: f32, obs: &Observation, legal: &[Combo]) {
+    if obs.num_players() < 3 {
+        return;
+    }
     let scores = crate::agents::counter::CounterAgent::with_params(
         crate::agents::counter::Params::sampled(),
     )
