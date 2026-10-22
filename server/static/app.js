@@ -683,22 +683,25 @@ function renderHandNow() {
   $("first-tip").classList.toggle("hidden", !myTurn || tipSeen());
 }
 
+let showAllTricks = false;
+
 function renderSide() {
   // cards I haven't seen, per rank
   const unseen = $("unseen");
   unseen.innerHTML = "";
   $("unseen-box").classList.toggle("hidden", !game.unseen);
   (game.unseen || []).forEach((count, i) => {
-    const cell = el("div", "unseen-cell");
+    const cell = el("div", "unseen-cell" + (count === 0 ? " gone" : ""));
     cell.append(card(i + 1, true), el("span", null, `×${count}`));
     cell.setAttribute("aria-label", `${count} unseen ${i + 1}s`);
     unseen.append(cell);
   });
 
-  // trick log, newest first
+  // trick log, newest first; the latest few unless the player asks for all
   const log = $("log");
   log.innerHTML = "";
-  game.log.slice().reverse().forEach((t, k) => {
+  const shown = showAllTricks ? game.log.length : Math.min(3, game.log.length);
+  game.log.slice().reverse().slice(0, shown).forEach((t, k) => {
     const li = el("li");
     li.append(el("div", "log-title", `Trick ${game.log.length - k}`));
     t.plays.forEach((pl, i) => {
@@ -711,6 +714,13 @@ function renderSide() {
     log.append(li);
   });
   $("log-box").classList.toggle("hidden", !game.log.length);
+  if (game.log.length > 3) {
+    const more = el("button", "link", showAllTricks ? "Show fewer" : `Show all ${game.log.length} tricks`);
+    more.onclick = () => { showAllTricks = !showAllTricks; renderSide(); };
+    const li = el("li");
+    li.append(more);
+    log.append(li);
+  }
 }
 
 // Player colours for charts: a validated categorical palette per theme, assigned by seat.

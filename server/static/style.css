@@ -407,3 +407,5 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
   animation: none !important;
   transition: none !important;
 }
+.unseen-cell.gone { opacity: 0.35; }
+.log .link { font-size: 13px; }

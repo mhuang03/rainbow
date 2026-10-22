@@ -303,7 +303,13 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 - [x] `models/belief_v2.bin`: the hand-prediction network retrained on 12,000 games by today's
       agents (league rounds 5-6, counter, economist) with a bigger network (512-512). In guided
       ISMCTS (round 6 prior and leaf, n=200) it beats `belief_v1` 1.06 (4p, 100 deals) and 1.03
-      (2p, 150 deals). The browser's Guided ISMCTS uses it.
+      (2p, 150 deals).
+- [x] `models/belief_v3.bin`: retrained on 30,000 games (league rounds 7-8, counter, economist)
+      with a 768-768 network. In guided ISMCTS (round 8 prior and leaf, n=200) it beats
+      `belief_v2` 1.03 (4p 2+2, 100 deals) and 1.04 (2p, 150 deals). The browser's Guided
+      ISMCTS uses it. More data and capacity keep paying off for the belief network.
+- [x] Beliefs without a network: `pimc:belief=belief_v2` against plain `pimc` 0.97 (4p 2+2,
+      300 deals). Belief-weighted deals only help a search that already evaluates well.
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /

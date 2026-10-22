@@ -28,7 +28,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let m = |file: &str| models.join(file).display().to_string();
     let league = m("dmc_league9.bin");
     let ensemble = format!("{}+{}+{league}", m("dmc_league7.bin"), m("dmc_league8.bin"));
-    let belief = m("belief_v2.bin");
+    let belief = m("belief_v3.bin");
     // Grouped by difficulty and ordered by strength (the 4-player ladder in ROADMAP.md).
     let list = [
         (
