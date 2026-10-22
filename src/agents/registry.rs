@@ -1,9 +1,9 @@
 //! Builds agents from spec strings such as `ismcts:n=200,prior=models/dmc_v2.bin`.
 
 use crate::agents::{
-    Agent, BiggestAgent, CheapestAgent, DmcAgent, DqnAgent, EconomistAgent, IsmctsAgent,
-    LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, dmc, economist, inference, ismcts,
-    minimax, pimc, rollout, value,
+    Agent, BiggestAgent, CheapestAgent, CounterAgent, DmcAgent, DqnAgent, EconomistAgent,
+    IsmctsAgent, LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, counter, dmc,
+    economist, inference, ismcts, minimax, pimc, rollout, value,
 };
 
 /// Names accepted by [`create`].
@@ -14,6 +14,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "cheapest",
     "economist",
     "margin",
+    "counter",
     "pimc",
     "ismcts",
     "minimax",
@@ -171,6 +172,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `objective` (`points` or `margin`) and `adaptive` (prior weight for per-opponent
 ///   willingness estimated from the game so far). `margin` is the Economist with the margin
 ///   objective and its own tuned weights.
+/// - `counter`: `card` (points each extra card must buy) and `structure` (penalty for breaking
+///   pairs, sets and runs when dumping) and `q` (chance an opponent who could beat a combo
+///   doesn't).
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
@@ -199,6 +203,14 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         "lowest" => Box::new(LowestAgent),
         "biggest" => Box::new(BiggestAgent),
         "cheapest" => Box::new(CheapestAgent),
+        "counter" => {
+            let d = counter::Params::default();
+            Box::new(CounterAgent::with_params(counter::Params {
+                card_value: opts.take("card")?.unwrap_or(d.card_value),
+                structure_value: opts.take("structure")?.unwrap_or(d.structure_value),
+                hold_chance: opts.take("q")?.unwrap_or(d.hold_chance),
+            }))
+        }
         "economist" | "margin" => {
             let d = if name == "margin" {
                 economist::Params::margin()

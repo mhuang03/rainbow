@@ -5,6 +5,7 @@ use crate::game::{Combo, Observation};
 
 pub mod baseline;
 pub mod belief;
+pub mod counter;
 pub mod dmc;
 pub mod dqn;
 pub mod economist;
@@ -18,6 +19,7 @@ pub mod rollout;
 pub mod value;
 
 pub use baseline::{BiggestAgent, CheapestAgent, LowestAgent};
+pub use counter::CounterAgent;
 pub use dmc::DmcAgent;
 pub use dqn::DqnAgent;
 pub use economist::EconomistAgent;
