@@ -143,9 +143,9 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .opp .who { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
 .opp .kind { font-weight: 400; font-size: 12px; color: var(--muted); }
 .opp .meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; }
-.backs { display: flex; height: 26px; }
+.count { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .back {
-  width: 16px; height: 24px; border-radius: 3px; margin-right: -8px;
+  width: 12px; height: 17px; border-radius: 2px;
   background: repeating-linear-gradient(45deg, var(--back-1), var(--back-1) 3px, var(--back-2) 3px, var(--back-2) 6px);
   border: 1px solid var(--back-edge);
 }

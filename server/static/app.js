@@ -393,15 +393,15 @@ function renderOpponents(spectator, base, n) {
       el("span", turn && s.kind === "agent" ? "thinking" : "", seatName(seat)),
       el("span", "kind offline", s.connected === false ? "away" : ""),
     );
-    const backs = el("div", "backs");
-    backs.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < p.hand_size; i++) backs.append(el("div", "back"));
     const meta = el("div", "meta");
-    meta.append(
-      el("span", null, `${p.hand_size} card${p.hand_size === 1 ? "" : "s"}${p.reserve_size ? ` + ${p.reserve_size} reserve` : ""}`),
-      el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`),
-    );
-    box.append(head, backs, meta);
+    const count = el("span", "count");
+    const back = el("span", "back");
+    back.setAttribute("aria-hidden", "true");
+    count.append(back, document.createTextNode(
+      `${p.hand_size}${p.reserve_size ? ` + ${p.reserve_size}` : ""}`));
+    count.setAttribute("aria-label", `${p.hand_size} cards${p.reserve_size ? `, ${p.reserve_size} in reserve` : ""}`);
+    meta.append(count, el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`));
+    box.append(head, meta);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
       select.setAttribute("aria-label", `Replace ${seatName(seat)} with an agent`);
