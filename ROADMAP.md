@@ -214,6 +214,11 @@ Continued from round 3 for 60 minutes against economist, counter, dmc_league2 an
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
       0.57 against `dmc_league3`.
 
+- [x] `pimc:leaf=...`: PIMC valuing each move with a DMC network instead of a rollout. Weak
+      (about 0.6 against three Economists, 10 deals) and slow: without a tree, opponents
+      between the move and the network's turn are modelled by the deterministic `cheapest`
+      advance. Using `counter` for that advance instead doesn't help guided ISMCTS either
+      (1.35 vs 1.33 against three `dmc_league4`, 100 deals), so the advance stays `cheapest`.
 - [x] Guided ISMCTS settings (league3 prior and leaf, belief, n=200), each variant
       head-to-head against cpuct 1 / ptemp 0.1 (4p, two seats each, 80 deals): cpuct 0.5:
       0.95, cpuct 2: 0.90, ptemp 0.05: 1.02, ptemp 0.2: 0.97, cpuct 2 + ptemp 0.2: 0.94. The
