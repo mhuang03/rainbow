@@ -171,7 +171,9 @@ Continued from `dmc_league` against a pool of economist, cheapest, dmc_v2 and dm
 60 planned minutes; a container restart cut the run short, and its last checkpoint is shipped).
 1.95 against three Economists. Against round 1: 0.98 / 1.14 / 1.14 / 0.98 at 2 / 3 / 4 / 6 players
 (4p head-to-head 1.10); against 1000-iteration ISMCTS: 1.01 / 1.68 / 1.62 / 1.14. A second league
-round gives a modest further gain at 3-4 players.
+round gives a modest further gain at 3-4 players. Under search the gain disappears: guided ISMCTS (n=200, belief) with the
+round-2 network against the same search with round 1 scores 1.74 to 1.71 (4p, with two
+Economists, 120 deals) and 1.02 to 0.98 (2p head-to-head).
 
 ### Earlier ladder
 
