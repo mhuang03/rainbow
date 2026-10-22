@@ -319,6 +319,14 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
       with counter-weighted rollouts, and the solver's uniform deals throw that information away.
 - [ ] `hybrid:belief=`, `minimax:belief=`: the endgame solver samples deals weighted by a belief
       network. Testing against the uniform solver.
+- [ ] `hybrid:path=a+b+c`: the endgame solver on top of the league ensemble. Testing against the
+      ensemble alone and against `hybrid` on one network.
+- [ ] `ismcts:extend=F`: past the budget, keep searching (up to F times it) while the top two
+      root moves are within a factor 1.5 in visits. Testing on guided ISMCTS.
+- [ ] `ismcts:reuse=true`: keep the tree between decisions. Plays are public, so the subtree
+      under the plays since the last search is still valid. Testing on guided ISMCTS.
+- [ ] `ismcts:gumbel=m`: Gumbel sequential halving at the root (Danihelka et al. 2022), which
+      improves on PUCT at small budgets. Testing network-free (n=50) and guided (n=200).
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /
