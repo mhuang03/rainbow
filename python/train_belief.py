@@ -24,7 +24,8 @@ from rl_common import export, mlp, new_game
 DEFAULT_AGENTS = ["dmc:path=../models/dmc_v2.bin"] * 3 + ["economist", "cheapest", "random"]
 
 
-def generate(games: int, specs: list[str], rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+def generate(games: int, specs: list[str], rng: np.random.Generator,
+             history: bool = False) -> tuple[np.ndarray, np.ndarray]:
     agents = [re.RustAgent(s, seed=int(rng.integers(1 << 62))) for s in specs]
     xs, ys = [], []
     start = time.monotonic()
@@ -34,7 +35,7 @@ def generate(games: int, specs: list[str], rng: np.random.Generator) -> tuple[np
         while not game.is_over:
             for seat in range(game.num_players):
                 full = game.full_observation(seat)
-                xs.append(full[: re.OBS_SIZE])
+                xs.append(game.history_observation(seat) if history else full[: re.OBS_SIZE])
                 ys.append(full[re.OBS_SIZE :])
             game.step(seats[game.current_player].act(game))
         if (g + 1) % 500 == 0:
@@ -53,19 +54,21 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=1024)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--history", action="store_true",
+                        help="also read the public-history features (who played what, in order)")
     args = parser.parse_args()
     if args.threads:
         torch.set_num_threads(args.threads)
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
 
-    x, y = generate(args.games, args.agents, rng)
+    x, y = generate(args.games, args.agents, rng, args.history)
     perm = rng.permutation(len(x))
     split = len(x) // 10
     val, train = perm[:split], perm[split:]
     xt, yt = torch.from_numpy(x), torch.from_numpy(y)
 
-    net = mlp(re.OBS_SIZE, args.hidden, re.HIDDEN_SIZE)
+    net = mlp(re.HIST_OBS_SIZE if args.history else re.OBS_SIZE, args.hidden, re.HIDDEN_SIZE)
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
 
     def val_loss() -> float:

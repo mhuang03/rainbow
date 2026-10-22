@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::agents::dmc::Mlp;
 use crate::constants::{CARDS_PER_RANK, NUM_RANKS};
-use crate::game::encoding::{HIDDEN_SIZE, OBS_SIZE};
+use crate::game::encoding::{HIDDEN_SIZE, HIST_OBS_SIZE, OBS_SIZE};
 use crate::game::{DealWeights, Observation};
 
 #[derive(Debug, Clone)]
@@ -15,12 +15,15 @@ pub struct Belief {
 }
 
 impl Belief {
+    /// The network reads an observation, or one with the public-history features appended
+    /// (`train_belief.py --history`), told apart by its input width.
+    ///
     /// # Errors
     /// If the network doesn't map an observation to the hidden-information layout.
     pub fn new(net: Arc<Mlp>) -> Result<Self, String> {
-        if net.inputs() != OBS_SIZE || net.outputs() != HIDDEN_SIZE {
+        if ![OBS_SIZE, HIST_OBS_SIZE].contains(&net.inputs()) || net.outputs() != HIDDEN_SIZE {
             return Err(format!(
-                "belief network must map {OBS_SIZE} inputs to {HIDDEN_SIZE} outputs, got {} -> {}",
+                "belief network must map {OBS_SIZE} (or {HIST_OBS_SIZE}) inputs to {HIDDEN_SIZE} outputs, got {} -> {}",
                 net.inputs(),
                 net.outputs()
             ));
@@ -32,7 +35,13 @@ impl Belief {
     /// network predicts count / 10 per rank for each relative seat's hand then reserve; the
     /// set-aside cards get whatever unknown cards the predictions leave over.
     pub fn weights(&self, obs: &Observation) -> DealWeights {
-        let out = self.net.forward(&obs.encoded());
+        let out = if self.net.inputs() == HIST_OBS_SIZE {
+            let mut x = [0.0; HIST_OBS_SIZE];
+            obs.encode_with_history(&mut x);
+            self.net.forward(&x)
+        } else {
+            self.net.forward(&obs.encoded())
+        };
         let n = obs.num_players();
         let scale = f32::from(CARDS_PER_RANK);
         let mut w = DealWeights::default();
