@@ -9,6 +9,8 @@ use serde::Serialize;
 pub struct Preset {
     pub id: String,
     pub label: String,
+    /// Difficulty group shown in menus: Beginner, Casual, Strong or Expert.
+    pub level: String,
     pub description: String,
     /// An `agents::create` spec.
     #[serde(skip)]
@@ -27,66 +29,77 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let league = m("dmc_league5.bin");
     let ensemble = format!("{}+{}+{league}", m("dmc_league3.bin"), m("dmc_league4.bin"));
     let belief = m("belief_v1.bin");
+    // Grouped by difficulty and ordered by strength (the 4-player ladder in ROADMAP.md).
     let list = [
         (
             "random",
             "Random",
+            "Beginner",
             "Plays a random legal move.",
             "random".to_string(),
         ),
         (
             "cheapest",
             "Cheapest",
+            "Beginner",
             "Wins tricks as cheaply as it can, otherwise dumps its lowest card.",
             "cheapest".into(),
         ),
         (
             "economist",
             "Economist",
+            "Casual",
             "Hand-written strategy weighing piles against the cards they cost.",
             "economist".into(),
         ),
         (
             "counter",
             "Counter",
-            "Counts cards to bound what opponents can still play.",
+            "Casual",
+            "Counts cards to judge what opponents can still play.",
             "counter".into(),
         ),
         (
             "dmc",
             "DMC",
-            "Neural network trained by self-play and league play. Fast and strong.",
+            "Strong",
+            "Neural network trained by self-play and league play. Fast.",
             format!("dmc:path={league}"),
-        ),
-        (
-            "ensemble",
-            "DMC ensemble",
-            "Three league networks voting together.",
-            format!("dmc:path={ensemble}"),
-        ),
-        (
-            "hybrid",
-            "Hybrid",
-            "DMC that solves the endgame exactly by search.",
-            format!("hybrid:path={league}"),
         ),
         (
             "ismcts",
             "ISMCTS",
-            "Monte Carlo tree search over possible deals.",
+            "Strong",
+            "Tree search over possible deals, guided by card counting.",
             "ismcts".into(),
+        ),
+        (
+            "hybrid",
+            "Hybrid",
+            "Expert",
+            "DMC that solves the endgame exactly by search.",
+            format!("hybrid:path={league}"),
+        ),
+        (
+            "ensemble",
+            "DMC ensemble",
+            "Expert",
+            "Three league networks voting together.",
+            format!("dmc:path={ensemble}"),
         ),
         (
             "guided",
             "Guided ISMCTS",
-            "Tree search guided by the DMC network. The strongest agent; thinks for a moment.",
+            "Expert",
+            "Tree search guided by the DMC network. The strongest; thinks for a moment.",
             format!("ismcts:n=200,prior={league},leaf={league},belief={belief}"),
         ),
     ];
     list.into_iter()
-        .map(|(id, label, description, spec)| Preset {
+        .map(|(id, label, level, description, spec)| Preset {
             id: id.into(),
             label: label.into(),
+            level: level.into(),
             description: description.into(),
             spec,
         })

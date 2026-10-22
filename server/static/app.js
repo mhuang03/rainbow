@@ -186,10 +186,18 @@ function leave() {
 function presetOptions(select, withOpen, value) {
   select.innerHTML = "";
   if (withOpen) select.append(new Option("Open for a friend", "open"));
+  // grouped by difficulty, easiest first (the server sends them in that order)
+  const groups = new Map();
   presets.forEach((p) => {
+    if (!groups.has(p.level)) {
+      const g = document.createElement("optgroup");
+      g.label = p.level;
+      groups.set(p.level, g);
+      select.append(g);
+    }
     const o = new Option(p.label, p.id);
     o.title = p.description;
-    select.append(o);
+    groups.get(p.level).append(o);
   });
   if (value) select.value = value;
 }
