@@ -25,7 +25,10 @@ DEFAULT_AGENTS = ["dmc:path=../models/dmc_v2.bin"] * 3 + ["economist", "cheapest
 
 
 def generate(games: int, specs: list[str], rng: np.random.Generator,
-             history: bool = False) -> tuple[np.ndarray, np.ndarray]:
+             history: bool = False, keep: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+    """Observation and hidden-card rows from `games` games. `keep` < 1 keeps that random
+    fraction of the (position, seat) pairs: neighbouring positions are nearly alike, and all of
+    them from tens of thousands of games don't fit in memory."""
     agents = [re.RustAgent(s, seed=int(rng.integers(1 << 62))) for s in specs]
     xs, ys = [], []
     start = time.monotonic()
@@ -34,6 +37,8 @@ def generate(games: int, specs: list[str], rng: np.random.Generator,
         seats = [agents[int(rng.integers(len(agents)))] for _ in range(game.num_players)]
         while not game.is_over:
             for seat in range(game.num_players):
+                if keep < 1.0 and rng.random() >= keep:
+                    continue
                 full = game.full_observation(seat)
                 xs.append(game.history_observation(seat) if history else full[: re.OBS_SIZE])
                 ys.append(full[re.OBS_SIZE :])
@@ -54,6 +59,8 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=1024)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--keep", type=float, default=1.0,
+                        help="fraction of (position, seat) samples kept, to bound memory")
     parser.add_argument("--history", action="store_true",
                         help="also read the public-history features (who played what, in order)")
     args = parser.parse_args()
@@ -62,7 +69,7 @@ def main() -> None:
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
 
-    x, y = generate(args.games, args.agents, rng, args.history)
+    x, y = generate(args.games, args.agents, rng, args.history, args.keep)
     perm = rng.permutation(len(x))
     split = len(x) // 10
     val, train = perm[:split], perm[split:]
