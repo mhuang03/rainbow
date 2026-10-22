@@ -919,7 +919,6 @@ async function main() {
     $("howto-title").focus();
   };
   $("howto-btn").onclick = howto;
-  $("howto-link").onclick = howto;
   $("hint-btn").onclick = askHint;
   $("first-tip-close").onclick = markTipSeen;
   $("sound-toggle").checked = soundOn;
