@@ -53,15 +53,15 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
 | `margin` | The Economist scoring piles by their *difference* from what the other players take (`economist:objective=margin`). `economist:adaptive=N` also learns each opponent's willingness to contest tricks from the play history. |
-| `counter` | Card counter: bounds each later opponent's strongest possible combo from the unseen cards and scores each combo by the pile it expects to finish on. The strongest hand-written agent. |
-| `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
+| `counter` | Card counter: samples deals of the unseen cards to judge which later opponents can beat each combo, and scores each combo by the pile it expects to finish on. The strongest hand-written agent; its fast variant drives search rollouts and priors. |
+| `pimc` | Samples deals consistent with what it knows (optionally weighted by a belief network) and finishes every move on each with `counter` rollouts, or values it with a network (`leaf=`). |
 | `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from a league network (`models/dmc_league8.bin`) and `belief=models/belief_v2.bin` it is the strongest agent. Without a network it uses `counter` rollouts and a `counter` move prior, which bring it close to the league networks. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
-| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in eight league rounds (widened in round 6) (`models/dmc_league8.bin`, the strongest agent that doesn't search). |
+| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in eight league rounds, widened to 512-512-256 in round 6 (`models/dmc_league8.bin`, the strongest agent that doesn't search). `temp=` samples its moves for weaker, more human opponents. |
 | `dmc_hist` | A DMC network that also sees the recent plays and each seat's rate of beating the trick when following (`train_dmc.py --history`). |
 | `dmc:path=a.bin+b.bin` | An ensemble averaging several DMC networks' values. |
 | `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). |
-| `distill` | A policy network trained to imitate guided ISMCTS's visit counts (`train_distill.py`). |
+| `distill` | A policy network trained to imitate guided ISMCTS's visit counts (`train_distill.py`, `models/distill_v5.bin`). |
 | `dqn` | A masked Double DQN network. |
 | `ppo` | A PPO policy trained with a full-information critic. |
 | `nfsp` | An NFSP average policy (played by sampling). |
