@@ -29,7 +29,9 @@ RECORD = re.OBS_SIZE + 2 * re.NUM_ACTIONS + 1
 def training_rows(paths: list[Path], temperature: float) -> tuple[np.ndarray, np.ndarray]:
     """(observations, target policies). Visit counts are raised to 1 / temperature and normalized,
     so temperatures below 1 sharpen the target towards the most-visited move."""
-    records = np.concatenate([np.fromfile(p, "<f4").reshape(-1, RECORD) for p in paths])
+    # a file still being written may end mid-record
+    records = np.concatenate([(r := np.fromfile(p, "<f4"))[: len(r) // RECORD * RECORD].reshape(-1, RECORD)
+                              for p in paths])
     obs = records[:, : re.OBS_SIZE]
     visits = records[:, re.OBS_SIZE + re.NUM_ACTIONS : RECORD - 1].astype(np.float64)
     # forced moves teach nothing
