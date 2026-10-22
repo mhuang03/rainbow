@@ -71,6 +71,11 @@ pub enum Command {
         conn: u64,
         action: usize,
     },
+    /// Asks for a suggested move. Only offered when no other person is seated, so hints can't
+    /// help anyone against other people.
+    Hint {
+        conn: u64,
+    },
     /// Host only: sets a seat to an agent preset, or opens it for a person (`None`). A seat
     /// held by a connected person can't be changed.
     SetSeat {
@@ -229,6 +234,7 @@ impl Room {
                 self.start();
             }
             Command::Play { conn, action } => self.human_move(conn, action),
+            Command::Hint { conn } => self.hint(conn),
             Command::SetSeat { conn, seat, agent } => {
                 if !self.is_host(conn) {
                     return self.reply(conn, "only the host can change seats");
@@ -389,6 +395,39 @@ impl Room {
         self.apply(combo);
     }
 
+    /// Whether hints are allowed: no other person is seated.
+    fn hints_allowed(&self) -> bool {
+        self.seats
+            .iter()
+            .filter(|s| matches!(s, Seat::Human { .. }))
+            .count()
+            <= 1
+    }
+
+    fn hint(&mut self, conn: u64) {
+        if !self.hints_allowed() {
+            return self.reply(conn, "hints are only available in games against agents");
+        }
+        let (Some(seat), Some(game)) = (self.seat_of(conn), &self.game) else {
+            return self.reply(conn, "the game hasn't started");
+        };
+        if game.state.is_over() || game.state.current_player() != seat {
+            return self.reply(conn, "it isn't your turn");
+        }
+        // The strongest fast agent available gives the hint.
+        let Some(mut adviser) = ["dmc", "counter"]
+            .iter()
+            .find_map(|id| self.presets.iter().find(|p| p.id == *id))
+            .and_then(|p| p.create(self.rng.random()))
+        else {
+            return self.reply(conn, "no agent is available to give hints");
+        };
+        let combo = adviser.act(&game.state.observe(seat), &game.state.legal_actions());
+        if let Some((_, c)) = self.connections().find(|(_, c)| c.id == conn) {
+            c.send(&json!({ "t": "hint", "action": combo.action_index(), "cards": cards(combo) }));
+        }
+    }
+
     fn human_move(&mut self, conn: u64, action: usize) {
         let Some(seat) = self.seat_of(conn) else {
             return self.reply(conn, "you aren't seated in this room");
@@ -492,6 +531,7 @@ impl Room {
             "seats": seats,
             "phase": phase,
             "games_played": self.games_played,
+            "hints": self.hints_allowed(),
             "spectators": self.spectators.len(),
         })
     }

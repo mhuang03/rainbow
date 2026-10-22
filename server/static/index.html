@@ -84,7 +84,9 @@
           <div id="legal" class="legal" aria-label="Legal plays"></div>
           <div class="play-box">
             <button id="play-selected" class="primary" disabled>Play</button>
-            <p id="legal-help" class="hint keys">Click a play or cards to select, then Play. <kbd>1</kbd>–<kbd>6</kbd> pick cards, <kbd>Enter</kbd> plays, <kbd>Esc</kbd> clears. Highlighted plays beat the trick so far.</p>
+            <button id="hint-btn" class="hidden" title="Ask the DMC agent for a move (H)">Suggest a move</button>
+            <p id="hint-note" class="hint" aria-live="polite"></p>
+            <p id="legal-help" class="hint keys">Click a play or cards to select, then Play. <kbd>1</kbd>–<kbd>6</kbd> pick cards, <kbd>Enter</kbd> plays, <kbd>Esc</kbd> clears<span class="hint-key">, <kbd>H</kbd> suggests a move</span>. Highlighted plays beat the trick so far.</p>
           </div>
         </div>
       </div>
@@ -108,6 +110,7 @@
       <div class="panel">
         <h2 id="over-title" tabindex="-1">Game over</h2>
         <ol id="standings" class="standings"></ol>
+        <div id="chart" class="chart-box"></div>
         <div class="actions">
           <button id="next-game" class="primary">Play again</button>
           <button id="over-leave">Leave room</button>

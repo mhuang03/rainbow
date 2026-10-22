@@ -176,7 +176,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .legal { display: flex; flex: 1; }
 
 
-.overlay { position: absolute; inset: 0; background: rgba(10, 12, 18, 0.72); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); }
+.overlay { position: absolute; inset: 0; z-index: 5; background: rgba(10, 12, 18, 0.72); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); }
 .overlay .panel { min-width: 320px; }
 .standings { margin: 0; padding-left: 22px; }
 .standings li { padding: 3px 0; }
@@ -275,3 +275,27 @@ dialog.rules p { color: var(--muted); }
   .play-box { width: 100%; position: sticky; bottom: 0; z-index: 2; background: var(--panel); padding: 8px 0; }
   .keys { display: none; }
 }
+
+/* Seat pickers with visible descriptions */
+.seat-picker { display: flex; flex-direction: column; gap: 2px; }
+.seat-note { margin: 0 0 4px; color: var(--muted); font-size: 12px; text-align: right; }
+#hint-note:empty { display: none; }
+#hint-note { margin: 0; }
+
+/* End-of-game chart */
+.overlay .panel { max-width: 560px; width: calc(100% - 32px); }
+.chart-box { position: relative; }
+.chart { width: 100%; height: auto; display: block; touch-action: none; }
+.chart .grid { stroke: #2c3446; stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 11px; }
+.chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .end { stroke: var(--panel); stroke-width: 2; }
+.chart .end-label { fill: var(--text); font-size: 11px; }
+.chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.chart-tip { position: absolute; top: 22px; background: var(--panel-2); border: 1px solid #3a4357; border-radius: 8px; padding: 6px 10px; font-size: 12px; pointer-events: none; min-width: 130px; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.tip-title { color: var(--muted); margin-bottom: 4px; }
+.tip-row { display: flex; align-items: center; gap: 6px; }
+.tip-row b { margin-left: auto; font-variant-numeric: tabular-nums; }

@@ -398,7 +398,10 @@ mod tests {
     fn policy_network_prior_is_a_distribution_over_legal_moves() {
         use crate::game::encoding::OBS_SIZE;
         let prior = Prior {
-            net: Arc::new(crate::agents::dmc::test_mlp(&[(OBS_SIZE, 8), (8, NUM_ACTIONS)], 5)),
+            net: Arc::new(crate::agents::dmc::test_mlp(
+                &[(OBS_SIZE, 8), (8, NUM_ACTIONS)],
+                5,
+            )),
             temperature: 1.0,
             c_puct: 1.0,
         };

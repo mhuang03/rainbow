@@ -59,6 +59,7 @@ enum ClientMsg {
     Play {
         action: usize,
     },
+    Hint,
     Seat {
         seat: usize,
         agent: Option<String>,
@@ -232,6 +233,7 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
         }
         ClientMsg::Leave => return leave(room, conn),
         ClientMsg::Start => Command::Start { conn: conn.id },
+        ClientMsg::Hint => Command::Hint { conn: conn.id },
         ClientMsg::Play { action } => Command::Play {
             conn: conn.id,
             action,

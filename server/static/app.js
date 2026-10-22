@@ -96,6 +96,15 @@ function receive(msg) {
       if (!game.hand || game.hand.join() !== oldHand) selection = [];
       break;
     }
+    case "hint": {
+      const l = game && game.legal.find((x) => x.action === msg.action);
+      if (l) {
+        selectCombo(l);
+        renderHand();
+        $("hint-note").textContent = `Suggested: ${cardsText(l.cards)}. Press Play to accept.`;
+      }
+      return;
+    }
     case "error":
       toast(msg.msg);
       if (msg.msg === "no room with that code" || msg.msg === "the room has closed") leave();
@@ -128,16 +137,41 @@ function presetOptions(select, withOpen, value) {
   if (value) select.value = value;
 }
 
-function seatPickers(container, count, withOpen, fallback) {
+function describe(id) {
+  if (id === "open") return "Another person takes this seat.";
+  const p = presets.find((x) => x.id === id);
+  return p ? p.description : "";
+}
+
+function seatPickers(container, count, withOpen, fallback, saved) {
   const old = [...container.querySelectorAll("select")].map((s) => s.value);
   container.innerHTML = "";
   for (let i = 1; i < count; i++) {
+    const row = el("div", "seat-picker");
     const label = el("label", null, `Seat ${i + 1}`);
     const select = el("select");
-    presetOptions(select, withOpen, old[i - 1] || fallback);
+    presetOptions(select, withOpen, old[i - 1] || (saved && saved[i - 1]) || fallback);
+    if (!select.value) select.value = fallback;
+    const note = el("p", "seat-note", describe(select.value));
+    select.onchange = () => { note.textContent = describe(select.value); saveSetup(); };
     label.append(select);
-    container.append(label);
+    row.append(label, note);
+    container.append(row);
   }
+}
+
+function saveSetup() {
+  const seats = (id) => [...$(id).querySelectorAll("select")].map((s) => s.value);
+  try {
+    localStorage.setItem("rainbow.setup", JSON.stringify({
+      solo: +$("solo-players").value, soloSeats: seats("solo-seats"),
+      online: +$("online-players").value, onlineSeats: seats("online-seats"),
+    }));
+  } catch { /* storage unavailable: nothing to remember */ }
+}
+
+function loadSetup() {
+  try { return JSON.parse(localStorage.getItem("rainbow.setup")) || {}; } catch { return {}; }
 }
 
 function setupHome() {
@@ -146,10 +180,14 @@ function setupHome() {
     for (let n = 2; n <= 6; n++) s.append(new Option(`${n} players`, n));
     s.value = 4;
   }
+  const saved = loadSetup();
+  if (saved.solo) $("solo-players").value = saved.solo;
+  if (saved.online) $("online-players").value = saved.online;
   const defaultAgent = presets.some((p) => p.id === "dmc") ? "dmc" : presets[0] && presets[0].id;
   const refresh = () => {
-    seatPickers($("solo-seats"), +$("solo-players").value, false, defaultAgent);
-    seatPickers($("online-seats"), +$("online-players").value, true, "open");
+    seatPickers($("solo-seats"), +$("solo-players").value, false, defaultAgent, saved.soloSeats);
+    seatPickers($("online-seats"), +$("online-players").value, true, "open", saved.onlineSeats);
+    saveSetup();
   };
   $("solo-players").onchange = refresh;
   $("online-players").onchange = refresh;
@@ -264,6 +302,7 @@ function selectCombo(l) {
 
 function play(action) {
   selection = [];
+  $("hint-note").textContent = "";
   send({ t: "play", action });
 }
 
@@ -410,6 +449,10 @@ function renderHandNow() {
   btn.disabled = !match;
   btn.textContent = match ? `Play ${cardsText(match.cards)}` : myTurn ? "Select cards" : "Play";
   btn.onclick = () => match && play(match.action);
+  const hints = room && room.hints && myTurn;
+  $("hint-btn").classList.toggle("hidden", !hints);
+  document.querySelector(".hint-key").classList.toggle("hidden", !(room && room.hints));
+  if (!myTurn) $("hint-note").textContent = "";
   $("legal-help").classList.toggle("hidden", !myTurn);
 }
 
@@ -454,6 +497,89 @@ function renderSide() {
   if (!game.log.length) log.append(el("li", "hint", "Finished tricks appear here."));
 }
 
+// Player colours for charts: a validated categorical palette (dark mode), assigned by seat.
+const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"];
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svg(tag, attrs) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+
+/** Cumulative points per seat after each trick, as a line chart with a hover crosshair. */
+function renderChart() {
+  const box = $("chart");
+  box.innerHTML = "";
+  const n = game.players.length;
+  const series = [...Array(n).keys()].map((seat) => {
+    let total = 0;
+    return [0, ...game.log.map((t) => (total += t.taken[seat]))];
+  });
+  // end-of-game bonus points (2 players) aren't in the trick log
+  series.forEach((pts, seat) => { pts[pts.length - 1] = Math.max(pts[pts.length - 1], game.players[seat].points); });
+  const W = 440, H = 190, L = 34, R = 78, T = 10, B = 24;
+  const tricks = game.log.length;
+  const maxY = Math.max(10, ...series.flat());
+  const x = (i) => L + (i / Math.max(1, tricks)) * (W - L - R);
+  const y = (v) => T + (1 - v / maxY) * (H - T - B);
+  const chart = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img",
+    "aria-label": "Points over the game: " + series.map((p, s) => `${who(s)} ${p[p.length - 1]}`).join(", ") });
+  // recessive grid: a few horizontal lines
+  const step = maxY > 60 ? 20 : 10;
+  for (let v = 0; v <= maxY; v += step) {
+    chart.append(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }));
+    const t = svg("text", { x: L - 6, y: y(v) + 4, class: "tick", "text-anchor": "end" });
+    t.textContent = v;
+    chart.append(t);
+  }
+  const xl = svg("text", { x: (L + W - R) / 2, y: H - 4, class: "tick", "text-anchor": "middle" });
+  xl.textContent = "Trick";
+  chart.append(xl);
+  // lines, with direct labels at the end (nudged apart so they don't collide)
+  const ends = series.map((p, seat) => ({ seat, y: y(p[p.length - 1]), v: p[p.length - 1] })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 13);
+  series.forEach((pts, seat) => {
+    chart.append(svg("polyline", { points: pts.map((v, i) => `${x(i)},${y(v)}`).join(" "), class: "series", stroke: SERIES[seat] }));
+  });
+  ends.forEach(({ seat, y: ly, v }) => {
+    chart.append(svg("circle", { cx: x(tricks), cy: y(v), r: 4, fill: SERIES[seat], class: "end" }));
+    const t = svg("text", { x: x(tricks) + 8, y: ly + 4, class: "end-label" });
+    t.textContent = `${who(seat)} ${v}`;
+    chart.append(t);
+  });
+  // hover: crosshair at the nearest trick, values in a tooltip
+  const cross = svg("line", { y1: T, y2: H - B, class: "cross", visibility: "hidden" });
+  chart.append(cross);
+  const tip = el("div", "chart-tip hidden");
+  chart.addEventListener("pointermove", (e) => {
+    const r = chart.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(tricks, Math.round(((px - L) / (W - L - R)) * tricks)));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = "";
+    tip.append(el("div", "tip-title", i === 0 ? "Start" : `After trick ${i}`));
+    [...series.keys()].sort((a, b) => series[b][i] - series[a][i]).forEach((seat) => {
+      const row = el("div", "tip-row");
+      const dot = el("span", "dot"); dot.style.background = SERIES[seat];
+      row.append(dot, el("span", null, who(seat)), el("b", null, String(series[seat][i])));
+      tip.append(row);
+    });
+    tip.classList.remove("hidden");
+    tip.style.left = `${Math.min(r.width - 150, (x(i) / W) * r.width + 12)}px`;
+  });
+  chart.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); tip.classList.add("hidden"); });
+  // legend, always present for two or more series
+  const legend = el("div", "legend");
+  series.forEach((_, seat) => {
+    const item = el("span", "legend-item");
+    const dot = el("span", "dot"); dot.style.background = SERIES[seat];
+    item.append(dot, document.createTextNode(who(seat)));
+    legend.append(item);
+  });
+  box.append(legend, chart, tip);
+}
+
 function renderTable() {
   const n = game.players.length;
   const spectator = game.seat === null;
@@ -480,6 +606,7 @@ function renderTable() {
         li.append(el("span", null, who(seat)), el("span", "points", `${game.players[seat].points} pts`));
         standings.append(li);
       });
+    renderChart();
     $("next-game").classList.toggle("hidden", !me.host);
     $("over-hint").textContent = me.host ? "" : "Waiting for the host to start the next game.";
     // move focus into the dialog once, when the game ends
@@ -510,6 +637,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && tag !== "BUTTON") {
     const match = matchingLegal();
     if (match) { e.preventDefault(); play(match.action); }
+  } else if (e.key === "h" || e.key === "H") {
+    if (room && room.hints && game.current === game.seat) send({ t: "hint" });
   } else if (e.key === "Escape") {
     selection = [];
     renderHand();
@@ -529,6 +658,7 @@ async function main() {
   }
   setupHome();
   $("rules-btn").onclick = () => $("rules").showModal();
+  $("hint-btn").onclick = () => send({ t: "hint" });
   $("lobby-start").onclick = () => send({ t: "start" });
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;
