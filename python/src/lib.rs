@@ -389,6 +389,11 @@ type StepResult<'py> = (
 /// With `opponents` (a list of Rust agent specs), each game gives `learners` random seats to the
 /// caller and the rest to agents drawn from the list; the environment plays their turns itself,
 /// so `observe` and `step` only ever see learner decisions. Without it, every seat is a learner.
+///
+/// `pfsp=p` samples opponents by prioritized fictitious self-play (as in AlphaStar): each
+/// opponent is drawn with weight (1 - w)^p, where w is the learners' running rate of finishing
+/// ahead of it, so the opponents the learners beat least are played most. By default
+/// opponents are drawn uniformly.
 #[pyclass(module = "rainbow_engine", unsendable)]
 struct VecEnv {
     games: Vec<GameState>,
@@ -398,6 +403,9 @@ struct VecEnv {
     learners: usize,
     /// Per game and seat: `None` for a learner, or an index into `opponents`.
     seats: Vec<[Option<u8>; MAX_PLAYERS]>,
+    pfsp: Option<f32>,
+    /// Per opponent: learner results against it (1 ahead, 0.5 level, 0 behind) and their count.
+    results: Vec<(f64, f64)>,
 }
 
 impl VecEnv {
@@ -414,10 +422,58 @@ impl VecEnv {
                 order.swap(i, self.rng.random_range(0..=i));
             }
             for &seat in &order[self.learners.min(n)..] {
-                seats[seat] = Some(self.rng.random_range(0..self.opponents.len()) as u8);
+                seats[seat] = Some(self.pick_opponent());
             }
         }
         (game, seats)
+    }
+
+    /// An opponent index: uniform, or weighted by PFSP.
+    fn pick_opponent(&mut self) -> u8 {
+        let Some(p) = self.pfsp else {
+            return self.rng.random_range(0..self.opponents.len()) as u8;
+        };
+        let weights: Vec<f64> = self
+            .win_rates()
+            .iter()
+            .map(|w| (1.0 - w).powf(p.into()).max(1e-3))
+            .collect();
+        let mut x = self.rng.random_range(0.0..weights.iter().sum::<f64>());
+        for (k, w) in weights.iter().enumerate() {
+            if x < *w {
+                return k as u8;
+            }
+            x -= w;
+        }
+        (weights.len() - 1) as u8
+    }
+
+    /// The learners' rate of finishing ahead of each opponent (level counts half), starting
+    /// from one level game.
+    fn win_rates(&self) -> Vec<f64> {
+        self.results
+            .iter()
+            .map(|&(wins, games)| (wins + 0.5) / (games + 1.0))
+            .collect()
+    }
+
+    /// Records a finished game `i`: each learner against each opponent seat.
+    fn record(&mut self, i: usize) {
+        let scores = self.games[i].scores();
+        let seats = &self.seats[i][..scores.len()];
+        for (l, _) in seats.iter().enumerate().filter(|(_, s)| s.is_none()) {
+            for (o, &k) in seats.iter().enumerate() {
+                if let Some(k) = k {
+                    let r = &mut self.results[k as usize];
+                    r.0 += match scores[l].cmp(&scores[o]) {
+                        std::cmp::Ordering::Greater => 1.0,
+                        std::cmp::Ordering::Equal => 0.5,
+                        std::cmp::Ordering::Less => 0.0,
+                    };
+                    r.1 += 1.0;
+                }
+            }
+        }
     }
 
     /// Plays opponents' turns in game `i` until a learner is to move or the game ends.
@@ -451,13 +507,14 @@ impl VecEnv {
 #[pymethods]
 impl VecEnv {
     #[new]
-    #[pyo3(signature = (num_envs, seed=None, players=None, opponents=None, learners=1))]
+    #[pyo3(signature = (num_envs, seed=None, players=None, opponents=None, learners=1, pfsp=None))]
     fn py_new(
         num_envs: usize,
         seed: Option<u64>,
         players: Option<usize>,
         opponents: Option<Vec<String>>,
         learners: usize,
+        pfsp: Option<f32>,
     ) -> PyResult<Self> {
         if players.is_some_and(|n| !(MIN_PLAYERS..=MAX_PLAYERS).contains(&n)) {
             return Err(PyValueError::new_err("players must be 2 to 6"));
@@ -471,6 +528,7 @@ impl VecEnv {
             .iter()
             .map(|spec| agents::create(spec, rng.random()).map_err(PyValueError::new_err))
             .collect::<PyResult<Vec<_>>>()?;
+        let results = vec![(0.0, 0.0); opponents.len()];
         let mut env = Self {
             games: Vec::with_capacity(num_envs),
             rng,
@@ -478,6 +536,8 @@ impl VecEnv {
             opponents,
             learners,
             seats: Vec::with_capacity(num_envs),
+            pfsp,
+            results,
         };
         for i in 0..num_envs {
             let (game, seats) = env.new_game();
@@ -608,11 +668,18 @@ impl VecEnv {
                         r[i * MAX_PLAYERS + seat] = ret;
                         sc[i * MAX_PLAYERS + seat] = pts.into();
                     }
+                    self.record(i);
                     self.reset(i)?;
                 }
             }
         }
         Ok((PyArray1::from_vec(py, done), returns, scores))
+    }
+
+    /// The learners' rate of finishing ahead of each opponent so far (level counts half), in
+    /// the order of `opponents`.
+    fn opponent_win_rates(&self) -> Vec<f64> {
+        self.win_rates()
     }
 
     /// Learner seats of each game, as a bool array of shape (num_envs, MAX_PLAYERS).

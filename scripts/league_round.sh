@@ -8,6 +8,7 @@
 #
 # With no opponents given, the pool is economist, counter and the starting network itself.
 # Set WIDEN="1024 1024 512" to grow the network first (Net2Net, function-preserving).
+# Set PFSP=2 to draw opponents favouring the ones the learner beats least (default: uniformly).
 # Needs the Python environment with torch and the rainbow_engine module (see README).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -27,9 +28,11 @@ done
 from_python() { case $1 in /*) echo "$1" ;; *) echo "../$1" ;; esac; }
 widen=()
 if [ -n "${WIDEN:-}" ]; then read -ra sizes <<< "$WIDEN"; widen=(--widen "${sizes[@]}"); fi
+pfsp=()
+if [ -n "${PFSP:-}" ]; then pfsp=(--pfsp "$PFSP"); fi
 
 cargo build --release -q
-(cd python && python train_dmc.py --init "$(from_python "$init")" "${widen[@]}" --minutes "$minutes" \
+(cd python && python train_dmc.py --init "$(from_python "$init")" "${widen[@]}" "${pfsp[@]}" --minutes "$minutes" \
     --lr 1e-4 --epsilon 0.05 0.02 --opponents "${python_opponents[@]}" --learners 2 \
     --eval-every 15 --out "$(from_python "$out")")
 

@@ -214,3 +214,15 @@ def test_vec_env_with_opponents_only_shows_learner_turns():
     assert finished > 0
     with pytest.raises(ValueError):
         re.VecEnv(2, opponents=["nonsense"])
+
+
+def test_vec_env_pfsp_tracks_results_against_each_opponent():
+    # a random learner rarely finishes ahead of the Economist, so PFSP should favour it
+    env = re.VecEnv(16, seed=3, players=3, opponents=["random", "economist"], learners=1, pfsp=2.0)
+    rng = np.random.default_rng(2)
+    assert env.opponent_win_rates() == [0.5, 0.5]
+    for _ in range(600):
+        _, masks = env.observe()
+        env.step((rng.random(masks.shape) * masks).argmax(1))
+    against_random, against_economist = env.opponent_win_rates()
+    assert against_economist < against_random

@@ -100,10 +100,11 @@ class Actors:
     """A batch of concurrent self-play games."""
 
     def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1,
-                 history: bool = False):
+                 history: bool = False, pfsp: float | None = None):
         self.rng = rng
         self.with_history = history
-        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners)
+        self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners,
+                             pfsp=pfsp)
         # per game: (seat, input row, hidden cards) for every decision so far
         self.history: list[list[tuple[int, np.ndarray, np.ndarray]]] = [[] for _ in range(count)]
         self.episodes = 0
@@ -167,6 +168,9 @@ def main() -> None:
     parser.add_argument("--opponents", nargs="+", default=None,
                         help="Rust agent specs for non-learner seats (default: pure self-play)")
     parser.add_argument("--learners", type=int, default=1, help="learner seats per game with --opponents")
+    parser.add_argument("--pfsp", type=float, default=None,
+                        help="with --opponents: draw opponents with weight (1 - win rate)^P, favouring the "
+                             "ones the learner beats least (default: uniformly)")
     parser.add_argument("--history", action="store_true",
                         help="also feed the public-history features (plays as dmc_hist)")
     parser.add_argument("--seed", type=int, default=0)
@@ -187,7 +191,7 @@ def main() -> None:
         parser.error("--init network's inputs don't match --history")
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     buffer = Buffer(args.buffer, obs_size)
-    actors = Actors(args.actors, rng, args.opponents, args.learners, args.history)
+    actors = Actors(args.actors, rng, args.opponents, args.learners, args.history, args.pfsp)
 
     start = time.monotonic()
     deadline = start + args.minutes * 60
@@ -222,6 +226,10 @@ def main() -> None:
                 f"updates {updates:>7}  loss {loss:.4f}  eps {epsilon:.3f}  vs 3x economist {rel}",
                 flush=True,
             )
+            if args.opponents:
+                rates = "  ".join(f"{o.split('/')[-1]} {w:.2f}"
+                                  for o, w in zip(args.opponents, actors.env.opponent_win_rates()))
+                print(f"           learner ahead of: {rates}", flush=True)
 
     export(net.to_sequential(), args.out)
     print(f"saved {args.out}")
