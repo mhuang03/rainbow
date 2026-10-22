@@ -9,9 +9,11 @@ use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
 
 use crate::agents::Agent;
+use crate::agents::belief::Belief;
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
 use crate::game::{Combo, Observation};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Params {
@@ -20,6 +22,8 @@ pub struct Params {
     /// How a deal is valued after each move: a rollout, or a DMC network.
     pub leaf: Evaluator,
     pub reward: Reward,
+    /// Hand-prediction network to sample likelier deals.
+    pub belief: Option<Arc<Belief>>,
 }
 
 impl Default for Params {
@@ -32,6 +36,7 @@ impl Default for Params {
             determinizations: 64,
             leaf: Evaluator::Rollout(Rollout::Counter { epsilon: 0.1 }),
             reward: Reward::default(),
+            belief: None,
         }
     }
 }
@@ -59,8 +64,12 @@ impl PimcAgent {
         let p = &self.params;
         let me = obs.observer();
         let mut totals = vec![0.0f32; legal.len()];
+        let weights = p.belief.as_ref().map(|b| b.weights(obs));
         for _ in 0..p.determinizations {
-            let deal = obs.determinize(&mut self.rng);
+            let deal = match &weights {
+                Some(w) => obs.determinize_weighted(w, &mut self.rng),
+                None => obs.determinize(&mut self.rng),
+            };
             let rollout_seed: u64 = self.rng.random();
             for (total, &combo) in totals.iter_mut().zip(legal) {
                 let mut state = deal.clone();

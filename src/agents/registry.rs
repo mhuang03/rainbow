@@ -226,7 +226,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `adaptive` (prior weight for learning each opponent's chance from the game so far) and
 ///   `samples` (deals sampled to judge whether opponents can beat a combo; 0 uses a bound).
 /// - `pimc`: `k` (deals per decision), `leaf` (DMC network path valuing each move instead of a
-///   rollout), plus the rollout options.
+///   rollout), `belief` (hand-prediction network for likelier deals), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value), `pmix` (with a
@@ -311,6 +311,12 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 },
                 reward: rollout::Reward {
                     margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
+                },
+                belief: match opts.take::<String>("belief")? {
+                    None => None,
+                    Some(path) => Some(std::sync::Arc::new(belief::Belief::new(
+                        dmc::Mlp::load_cached(&path)?,
+                    )?)),
                 },
             };
             Box::new(PimcAgent::with_params(params, seed))
