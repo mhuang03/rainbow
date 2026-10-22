@@ -214,6 +214,13 @@ much as round 2 did. The browser presets use it.
 Continued from round 8 for 90 minutes against economist, counter, dmc_league7 and dmc_league8.
 Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 
+### League round 10 (not kept)
+
+Round 9 continued for 90 minutes against economist, counter and rounds 8-9, but with the
+machine shared with search experiments it played only 115,000 games (a round usually plays about
+500,000). Against round 9: 1.04 (2p) but 0.96 (4p, one seat against three), so the browser
+stays on round 9. League rounds need the cores to themselves.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
