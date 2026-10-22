@@ -53,6 +53,8 @@ impl Default for Params {
     /// Tuned against three Economists in 4-player games. `counter` rollouts with 20% random
     /// moves score 1.97 there, against 1.41 for mostly-`cheapest` rollouts (1.59 against 1.41
     /// at an equal 20 ms per move).
+    /// The `counter` prior (temperature 1) raises that to 2.17, and wins head-to-head against
+    /// the same search without a prior 1.25 to 0.75 (4p).
     fn default() -> Self {
         Self {
             iterations: 1000,
@@ -60,7 +62,11 @@ impl Default for Params {
             exploration: 0.7,
             evaluator: Evaluator::Rollout(Rollout::Counter { epsilon: 0.2 }),
             reward: Reward::default(),
-            prior: None,
+            prior: Some(Prior {
+                source: PriorSource::Counter,
+                temperature: 1.0,
+                c_puct: 1.0,
+            }),
             belief: None,
             inference: None,
         }

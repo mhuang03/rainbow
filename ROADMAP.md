@@ -211,6 +211,9 @@ Learned:
 - [x] `prior=counter`: PUCT priors from a softmax over `counter`'s move scores (in points), no
       network needed. Plain ISMCTS (1000 iterations, counter rollouts) against three
       Economists: 1.97 without a prior; 2.17 / 2.08 / 2.04 with `ptemp` 1 / 2 / 4.
+      Head-to-head (4p, two seats each, ptemp 2) it beats the same search without a prior 1.25
+      to 0.75. Now the ISMCTS default when no network prior is given (`prior=none` turns it
+      off).
 - [x] `counter:samples=k`: estimate whether each later opponent can beat a combo from k sampled
       deals instead of the worst-case bound. Needs a higher card cost to compensate (q 0, card
       1.5: 1.10, level with the bound version); sweep continuing.

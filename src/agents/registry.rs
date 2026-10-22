@@ -150,7 +150,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
         },
     };
     let prior = match opts.take::<String>("prior")? {
-        None => None,
+        None => d.prior,
+        Some(source) if source == "none" => None,
         Some(source) if source == "counter" => Some(ismcts::Prior {
             source: ismcts::PriorSource::Counter,
             temperature: opts.take("ptemp")?.unwrap_or(2.0),
@@ -211,7 +212,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value),
-///   `prior` (`counter`, or a DMC or policy network path, for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
+///   `prior` (`counter`, the default, or a DMC or policy network path, for PUCT priors;
+///   `none` for plain UCB) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options below.
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards
