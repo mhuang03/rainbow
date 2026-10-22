@@ -384,3 +384,4 @@ button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-
 dialog.howto .example { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
 dialog.howto .ex-row { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 10px; }
 dialog.howto .ex-pile b { color: var(--accent-text); }
+.record { margin: -4px 0 0; color: var(--muted); font-size: 13px; text-align: right; }

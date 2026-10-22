@@ -143,6 +143,10 @@ function receive(msg) {
       break;
     case "state": {
       const old = game;
+      if (msg.over && old && !old.over) {
+        game = msg;
+        recordResult();
+      }
       const oldHand = old && old.hand ? old.hand.join() : "";
       game = msg; // set first: announcements name seats relative to this state
       announceChanges(old && old.tricks_played <= msg.tricks_played ? old : null, msg);
@@ -178,6 +182,7 @@ function leave() {
   game = null;
   $("chat-log").innerHTML = "";
   history.replaceState(null, "", "/");
+  renderRecord();
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: "leave" }));
   render();
 }
@@ -228,6 +233,35 @@ function saveSetup() {
   } catch { /* storage unavailable: nothing to remember */ }
 }
 
+// ---------- personal record against the computer (kept on this device) ----------
+function loadRecord() {
+  try { return JSON.parse(localStorage.getItem("rainbow.record")) || {}; } catch { return {}; }
+}
+
+/** Records a finished solo game against a single kind of opponent. */
+function recordResult() {
+  if (!room || !room.hints || game.seat === null) return;
+  const opponents = room.seats.filter((s, i) => i !== game.seat).map((s) => s.preset);
+  if (!opponents.length || opponents.some((p) => p !== opponents[0])) return;
+  const record = loadRecord();
+  const r = record[opponents[0]] || { games: 0, wins: 0 };
+  r.games += 1;
+  if ((game.winners || []).includes(game.seat)) r.wins += 1;
+  record[opponents[0]] = r;
+  try { localStorage.setItem("rainbow.record", JSON.stringify(record)); } catch { /* not kept */ }
+}
+
+function renderRecord() {
+  const id = $("solo-opponent").value;
+  const r = loadRecord()[id];
+  const p = presets.find((x) => x.id === id);
+  $("solo-record").classList.toggle("hidden", !r || !p);
+  if (r && p) {
+    $("solo-record").textContent =
+      `Your record against ${p.label}: ${r.wins} win${r.wins === 1 ? "" : "s"} in ${r.games} game${r.games === 1 ? "" : "s"}`;
+  }
+}
+
 function loadSetup() {
   try { return JSON.parse(localStorage.getItem("rainbow.setup")) || {}; } catch { return {}; }
 }
@@ -250,12 +284,14 @@ function setupHome() {
     saveSetup();
   };
   $("solo-players").onchange = refresh;
+  $("solo-opponent").addEventListener("change", renderRecord);
   $("solo-opponent").onchange = () => {
     // a new opponent choice applies to every seat
     $("solo-seats").querySelectorAll("select").forEach((s) => { s.value = $("solo-opponent").value; });
     saveSetup();
   };
   $("solo-custom").ontoggle = saveSetup;
+  renderRecord();
   $("online-players").onchange = saveSetup;
   refresh();
 

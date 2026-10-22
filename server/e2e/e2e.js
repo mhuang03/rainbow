@@ -128,6 +128,8 @@ const tests = {
     await p.reload();
     assert.strictEqual(await p.locator("#solo-seats select").nth(1).inputValue(), "counter");
     assert.strictEqual(await p.locator("#solo-opponent").inputValue(), "economist");
+    // mixed opponents aren't recorded; a game against one kind is
+    assert(await p.locator("#solo-record.hidden").count(), "no record for economist yet");
     assert.deepStrictEqual(p.errors, []);
   },
 
