@@ -77,8 +77,8 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "dmc",
             "DMC",
             "Strong",
-            "Neural network trained by self-play and league play. Fast.",
-            format!("dmc:path={league}"),
+            "Neural network trained by self-play and league play, with card counting to break near-ties. Fast.",
+            format!("dmc:path={league},counter=0.04"),
         ),
         (
             "ismcts",

@@ -326,6 +326,14 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
       beats `hybrid` on round 9 alone 1.10 (4p 2+2, 800 deals) but is level with the ensemble
       itself, 1.00: the ensemble already plays the endgame about as well. The browser drops its
       Hybrid preset, which the DMC ensemble outplays.
+- [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
+      network's predicted returns, so card counting breaks the network's near-ties. Against
+      round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
+      1.02 / 1.01 / 1.08 / 1.07 / 0.98 / 0.87. At w = 0.04: 1.10 (3p), 1.04 (5p), but 0.93 (6p),
+      and with two players it hurts (0.88 at 0.03), so it applies with 3-5 players only.
+      Against three Economists 2.14, where round 9 alone scores 1.99. On the three-network
+      ensemble it's level (1.00 4p, 0.98 3p): averaging networks already smooths the same
+      near-ties. The browser's DMC (Strong) uses w = 0.04.
 - [x] `counter:belief=`: Counter's sampled deals weighted by `belief_v3`. Slightly worse than
       uniform deals: 0.97 (4p 2+2, 600 deals) and 0.99 (2p, 300 deals). Counter's costs were
       tuned with uniform deals, and its question (can anyone beat this?) needs the extremes of
