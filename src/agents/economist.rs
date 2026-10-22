@@ -88,9 +88,16 @@ impl Default for Params {
 }
 
 impl Params {
-    /// Weights for the margin objective (see [`Objective::Margin`]).
+    /// Weights for the margin objective (see [`Objective::Margin`]), tuned by
+    /// `examples/tune_economist.rs` (40 iterations, 200 deals at 2/3/4/6 players).
     pub fn margin() -> Self {
         Self {
+            beat_willingness: 0.81,
+            burn_rate: 1.16,
+            scarce_card_cost: 0.35,
+            spare_card_cost: 1.75,
+            set_potential: 0.51,
+            run_potential: 0.83,
             objective: Objective::Margin,
             ..Self::default()
         }

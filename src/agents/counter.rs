@@ -5,23 +5,24 @@
 //! set or the longest run they could hold, within their hand size and the trick type. A combo
 //! beating the trick so far and every later opponent's bound is a sure winner.
 //!
-//! What a win is worth is the *difference* between the top pile and the pile the agent would get
-//! anyway by dumping a single. Each combo beating the trick so far is credited with that gap,
-//! times its chance of holding: 1 for every later opponent who provably can't beat it, and `q`
-//! for every one who might (`q`). The agent plays the best such combo if its expected gap pays for its
-//! extra cards; otherwise it dumps the single that hurts its hand's structure least.
+//! Every play in a trick takes a pile by its finishing rank, so what matters is the *difference*
+//! between piles, not their size. Each legal combo is scored by the pile it expects to finish
+//! on: the plays already made that it doesn't beat finish ahead of it, and each later opponent
+//! who could beat it (by the bound) is assumed to do so with probability `1 - q`. From that
+//! expected pile it subtracts a cost per card beyond the first and the damage to the hand's
+//! structure (pairs, sets and run links broken), and plays the best.
 
 use arrayvec::ArrayVec;
 
 use crate::agents::Agent;
 use crate::constants::{MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_RANK};
-use crate::game::{Combo, ComboKind, Hand, Observation, TrickType};
+use crate::game::{Combo, Hand, Observation, TrickType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Params {
     /// Points each card beyond the first must buy for a sure win to be worth it.
     pub card_value: f32,
-    /// Penalty, in points, for breaking a pair or set or a run link when dumping.
+    /// Penalty, in points, for each pair, set or run link the play breaks.
     pub structure_value: f32,
     /// Assumed chance that a later opponent who could beat a combo doesn't.
     pub hold_chance: f32,
@@ -128,60 +129,51 @@ impl Agent for CounterAgent {
             later.push(seat);
         }
 
-        let best_so_far = trick.iter().map(|t| t.combo.strength()).max().unwrap_or(0);
-        let top = piles.first().map_or(0.0, |&v| f32::from(v));
-        // Dumping a single lands us at or near the bottom; the bottom pile (or nothing) is the
-        // fallback a sure win is measured against.
-        let fallback = if piles.len() > trick.len() + later.len() {
-            piles.last().map_or(0.0, |&v| f32::from(v))
-        } else {
-            0.0
-        };
-
-        // Chance a combo that beats the trick so far still wins it.
-        let holds = |combo: Combo| {
-            let strength = combo.strength();
-            let trick_type = obs.trick_type().after(combo);
-            later
-                .iter()
-                .filter(|&&s| s != me)
-                .map(|&s| {
-                    let bound =
-                        strongest_possible(&unknown, players[s].hand_size.into(), trick_type);
-                    if strength > bound { 1.0 } else { p.hold_chance }
-                })
-                .product::<f32>()
-        };
-        let best_win = legal
-            .iter()
-            .copied()
-            .filter(|c| c.strength() > best_so_far)
-            .map(|c| {
-                let gain = holds(c) * (top - fallback);
-                (c, gain - p.card_value * f32::from(c.num_cards() - 1))
-            })
-            .filter(|&(_, value)| value > 0.0)
-            .max_by(|a, b| a.1.total_cmp(&b.1));
-        if let Some((combo, _)) = best_win {
-            return combo;
-        }
-
-        // Dump: the single costing the least structure, lowest rank first.
+        // Every play takes a pile by its finishing rank, so a combo is worth the pile it
+        // expects to finish on: plays already made that it doesn't beat rank ahead of it (ties
+        // go to the earlier play), and each later opponent who could beat it does so with
+        // probability 1 - q.
         let base = structure(&hand);
+        let score = |combo: Combo| {
+            let strength = combo.strength();
+            let ahead = trick
+                .iter()
+                .filter(|t| t.combo.strength() >= strength)
+                .count();
+            let trick_type = obs.trick_type().after(combo);
+            // dist[k]: probability that k later opponents beat this combo
+            let mut dist: ArrayVec<f32, { MAX_PLAYS_PER_TRICK + 1 }> = ArrayVec::new();
+            dist.push(1.0);
+            for &s in later.iter().filter(|&&s| s != me) {
+                let bound = strongest_possible(&unknown, players[s].hand_size.into(), trick_type);
+                let beat = if strength > bound {
+                    0.0
+                } else {
+                    1.0 - p.hold_chance
+                };
+                dist.push(0.0);
+                for k in (0..dist.len()).rev() {
+                    let stay = dist[k] * (1.0 - beat);
+                    let moved = if k > 0 { dist[k - 1] * beat } else { 0.0 };
+                    dist[k] = stay + moved;
+                }
+            }
+            let pile: f32 = dist
+                .iter()
+                .enumerate()
+                .map(|(k, &pr)| pr * piles.get(ahead + k).map_or(0.0, |&v| f32::from(v)))
+                .sum();
+            let mut after = hand;
+            after.remove_combo(combo);
+            pile - p.card_value * f32::from(combo.num_cards() - 1)
+                - p.structure_value * base.saturating_sub(structure(&after)) as f32
+                - f32::from(combo.high_rank()) * 0.01
+        };
         legal
             .iter()
             .copied()
-            .filter(|c| matches!(c.kind(), ComboKind::Single { .. }))
-            .min_by(|a, b| {
-                let cost = |c: &Combo| {
-                    let mut after = hand;
-                    after.remove_combo(*c);
-                    p.structure_value * (base - structure(&after)) as f32
-                        + f32::from(c.high_rank()) * 0.1
-                };
-                cost(a).total_cmp(&cost(b))
-            })
-            .expect("a legal move list always contains a single")
+            .max_by(|&a, &b| score(a).total_cmp(&score(b)))
+            .expect("legal moves are never empty")
     }
 }
 

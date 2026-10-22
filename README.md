@@ -52,10 +52,16 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `biggest` | Always plays its strongest combo. |
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
+| `margin` | The Economist scoring piles by their *difference* from what the other players take (`economist:objective=margin`). `economist:adaptive=N` also learns each opponent's willingness to contest tricks from the play history. |
+| `counter` | Card counter: bounds each later opponent's strongest possible combo from the unseen cards, and plays to win only when the pile gap pays for the cards spent. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
 | `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from `models/dmc_league.bin` and `belief=models/belief_v1.bin` it is the strongest agent. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
 | `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned against a league (`models/dmc_league.bin`, the strongest agent that doesn't search). |
+| `dmc_hist` | A DMC network that also sees the recent plays and each seat's rate of beating the trick when following (`train_dmc.py --history`). |
+| `dmc:path=a.bin+b.bin` | An ensemble averaging several DMC networks' values. |
+| `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). |
+| `distill` | A policy network trained to imitate guided ISMCTS's visit counts (`train_distill.py`). |
 | `dqn` | A masked Double DQN network. |
 | `ppo` | A PPO policy trained with a full-information critic. |
 | `nfsp` | An NFSP average policy (played by sampling). |
