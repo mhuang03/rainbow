@@ -102,8 +102,9 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 - [x] Train and evaluate (v1 Monte Carlo advantages; v2 GAE and league opponents).
 - [x] Oracle guiding run (v3: v2's setup plus `--oracle-fraction 0.5`): 0.43 at 10 minutes, 0.55
       at 20, 0.45 at 30 when the oracle inputs reached zero, then 0.76 at 40 against v2's 0.62.
-      The run was cut short at 40 minutes by a container restart; the 40-minute checkpoint
-      suggests oracle guiding helps once the policy readjusts.
+      That run was cut short by a container restart. A full rerun reached 0.39 / 0.50 / 0.63 /
+      0.62 / 0.74 / 0.87 at 10-60 minutes against v2's 0.51 / 0.56 / 0.58 / 0.62 / 0.65 / 0.89:
+      no measurable benefit from oracle guiding at this budget.
 
 ## Milestone 11: Network-guided ISMCTS
 
