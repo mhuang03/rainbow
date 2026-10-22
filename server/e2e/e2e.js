@@ -102,6 +102,11 @@ const tests = {
     await p.locator("#solo-seats select").nth(1).selectOption("counter");
     await p.click("#solo-start");
     await p.waitForFunction(() => game && game.legal.length > 0);
+    // double-tap selects every card of a rank
+    const rank = await p.evaluate(() => game.hand[0]);
+    await p.locator("#hand .card").first().dblclick();
+    assert.strictEqual(await p.locator("#hand .card.sel").count(), await p.evaluate((r) => game.hand.filter((x) => x === r).length, rank));
+    await p.keyboard.press("Escape");
     await p.keyboard.press("h");
     await p.waitForFunction(() => document.querySelectorAll("#hand .card.sel").length > 0);
     assert((await p.textContent("#play-selected")).startsWith("Play "), "hint names the play");

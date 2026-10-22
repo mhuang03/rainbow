@@ -508,6 +508,11 @@ function renderHandNow() {
       selection = selected ? selection.filter((j) => j !== i) : [...selection, i];
       renderHand();
     };
+    // double-tap: every card of this rank, the quick way to pick a set
+    c.ondblclick = () => {
+      selection = game.hand.flatMap((r, j) => (r === rank ? [j] : []));
+      renderHand();
+    };
     group.append(c);
   });
   if (!game.hand.length) hand.append(el("span", "hint", "No cards left"));
