@@ -133,12 +133,21 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     let d = ismcts::Params::default();
     let rollout = match d.evaluator {
         value::Evaluator::Rollout(r) => r,
-        value::Evaluator::Dmc(_) => unreachable!("default evaluator is a rollout"),
+        value::Evaluator::Dmc(_) | value::Evaluator::Mixed { .. } => {
+            unreachable!("default evaluator is a rollout")
+        }
     };
     let rollout = parse_rollout(opts, rollout)?;
     let evaluator = match opts.take::<String>("leaf")? {
         None => value::Evaluator::Rollout(rollout),
-        Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+        Some(path) => match opts.take::<f32>("mix")? {
+            None => value::Evaluator::Dmc(load_dmc(&path)?),
+            Some(lambda) => value::Evaluator::Mixed {
+                net: load_dmc(&path)?,
+                rollout,
+                lambda,
+            },
+        },
     };
     let prior = match opts.take::<String>("prior")? {
         None => None,
@@ -195,6 +204,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
+///   `mix` (with `leaf`: weight of a rollout blended into the network value),
 ///   `prior` (DMC or policy network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options below.
