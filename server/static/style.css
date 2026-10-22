@@ -454,3 +454,6 @@ button.close { padding: 6px; line-height: 0; }
 @keyframes win-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { #over-title.won { animation: none; background: none; color: var(--text); } }
 :root[data-motion="reduce"] #over-title.won { animation: none; background: none; color: var(--text); }
+@media (forced-colors: active), (prefers-contrast: more) {
+  #over-title.won { animation: none; background: none; color: var(--text); }
+}
