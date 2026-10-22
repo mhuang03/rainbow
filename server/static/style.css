@@ -438,3 +438,8 @@ button.close { padding: 6px; line-height: 0; }
   .opp .who { font-size: 13px; }
 }
 .opp .kind:empty { display: none; }
+/* phones: hand cards are the most-tapped targets, so they stay larger than the rest */
+@media (max-width: 700px) {
+  .hand .card { width: 38px; height: 54px; font-size: 20px; }
+  .hand .group { gap: 3px; margin-right: 6px; }
+}
