@@ -1,6 +1,6 @@
 //! Perfect-information Monte Carlo (PIMC): sample full deals consistent with the observation,
-//! try every legal move on each, finish the game with a fast rollout policy, and play the move
-//! with the best mean reward.
+//! try every legal move on each, value the result (by finishing the game with a fast rollout
+//! policy, or with a DMC network), and play the move with the best mean value.
 //!
 //! Every move is evaluated on the same sampled deals with the same rollout seeds (common random
 //! numbers), so differences between moves are not drowned out by the luck of the sample.
@@ -10,13 +10,15 @@ use rand::{RngExt, SeedableRng};
 
 use crate::agents::Agent;
 use crate::agents::rollout::{Reward, Rollout};
+use crate::agents::value::Evaluator;
 use crate::game::{Combo, Observation};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Params {
-    /// Deals sampled per decision. Each legal move gets one playout per deal.
+    /// Deals sampled per decision. Each legal move gets one evaluation per deal.
     pub determinizations: usize,
-    pub rollout: Rollout,
+    /// How a deal is valued after each move: a rollout, or a DMC network.
+    pub leaf: Evaluator,
     pub reward: Reward,
 }
 
@@ -28,7 +30,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             determinizations: 64,
-            rollout: Rollout::Counter { epsilon: 0.1 },
+            leaf: Evaluator::Rollout(Rollout::Counter { epsilon: 0.1 }),
             reward: Reward::default(),
         }
     }
@@ -54,7 +56,7 @@ impl PimcAgent {
 
     /// Mean reward of each legal move, in the order of `legal`.
     pub fn evaluate(&mut self, obs: &Observation, legal: &[Combo]) -> Vec<f32> {
-        let p = self.params;
+        let p = &self.params;
         let me = obs.observer();
         let mut totals = vec![0.0f32; legal.len()];
         for _ in 0..p.determinizations {
@@ -63,9 +65,8 @@ impl PimcAgent {
             for (total, &combo) in totals.iter_mut().zip(legal) {
                 let mut state = deal.clone();
                 state.apply(combo).expect("legal in every consistent deal");
-                p.rollout
-                    .play_out(&mut state, &mut SmallRng::seed_from_u64(rollout_seed));
-                *total += p.reward.of(&state, me);
+                let mut rng = SmallRng::seed_from_u64(rollout_seed);
+                *total += p.leaf.value(&state, me, p.reward, &mut rng);
             }
         }
         let k = p.determinizations.max(1) as f32;

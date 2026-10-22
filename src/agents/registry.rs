@@ -208,7 +208,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   pairs, sets and runs), `q` (chance an opponent who could beat a combo doesn't) and
 ///   `adaptive` (prior weight for learning each opponent's chance from the game so far) and
 ///   `samples` (deals sampled to judge whether opponents can beat a combo; 0 uses a bound).
-/// - `pimc`: `k` (deals per decision), plus the rollout options.
+/// - `pimc`: `k` (deals per decision), `leaf` (DMC network path valuing each move instead of a
+///   rollout), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value),
@@ -279,9 +280,17 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         }
         "pimc" => {
             let d = pimc::Params::default();
+            let rollout = match d.leaf {
+                value::Evaluator::Rollout(r) => r,
+                _ => unreachable!("the default PIMC leaf is a rollout"),
+            };
+            let rollout = parse_rollout(&mut opts, rollout)?;
             let params = pimc::Params {
                 determinizations: opts.take("k")?.unwrap_or(d.determinizations),
-                rollout: parse_rollout(&mut opts, d.rollout)?,
+                leaf: match opts.take::<String>("leaf")? {
+                    None => value::Evaluator::Rollout(rollout),
+                    Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+                },
                 reward: rollout::Reward {
                     margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
                 },
