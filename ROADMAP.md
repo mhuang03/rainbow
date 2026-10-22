@@ -292,6 +292,9 @@ the gain is within noise.
 | max-n, depth 2, k=8 | 0.30 |
 | max-n, depth 1, k=8 | 0.20 |
 
+| BRS, depth 3, k=8 (50 deals) | 0.10 |
+| paranoid, depth 3, k=8 (same deals) | 0.13 |
+
 Badly beaten. Even depth 1 (sampled deals plus a deterministic `cheapest` playout) loses, so the
 leaf evaluation is the problem, not the search rule: it is the same biased opponent model that
 sank PIMC with `cheapest` rollouts, compounded by determinized search assuming everyone sees all
