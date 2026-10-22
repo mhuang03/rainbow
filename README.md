@@ -120,7 +120,8 @@ Open http://localhost:8080 and enter your name.
   to a join screen. In the lobby the host
   can give open seats to the computer, and during a game can hand an absent player's seat to
   it. A player who reloads or loses their connection gets their seat back; anyone joining a
-  full room watches. Rooms have a chat.
+  full room watches. While the host is away, the next player present acts as host. Rooms have a
+  chat.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
 explains the rules and controls; *Settings* has sound, reduced motion and a light or dark
