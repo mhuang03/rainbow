@@ -32,6 +32,9 @@ fn paced(delay: Duration) -> Duration {
 /// A room with nobody connected closes after this long.
 const ABANDONED_AFTER: Duration = Duration::from_secs(15 * 60);
 pub const MAX_NAME_LEN: usize = 20;
+const MAX_CHAT_LEN: usize = 200;
+/// Minimum time between one connection's chat messages.
+const CHAT_INTERVAL: Duration = Duration::from_millis(700);
 
 /// A connection's outgoing message channel.
 #[derive(Debug, Clone)]
@@ -75,6 +78,11 @@ pub enum Command {
     /// help anyone against other people.
     Hint {
         conn: u64,
+    },
+    /// A chat message to everyone in the room.
+    Chat {
+        conn: u64,
+        text: String,
     },
     /// Host only: sets a seat to an agent preset, or opens it for a person (`None`). A seat
     /// held by a connected person can't be changed.
@@ -120,6 +128,8 @@ pub struct Room {
     rng: SmallRng,
     presets: Arc<Vec<Preset>>,
     rooms: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<Command>>>>,
+    /// When each connection last chatted, for rate limiting.
+    last_chat: HashMap<u64, Instant>,
     /// When the last person disconnected, while nobody is connected.
     empty_since: Option<Instant>,
 }
@@ -153,6 +163,7 @@ impl Room {
             rng: SmallRng::from_rng(&mut rand::rng()),
             presets,
             rooms,
+            last_chat: HashMap::new(),
             empty_since: Some(Instant::now()),
         };
         room.seats = seats
@@ -208,6 +219,7 @@ impl Room {
                     }
                 }
                 self.spectators.retain(|c| c.id != conn);
+                self.last_chat.remove(&conn);
                 // A seat left before the first game opens up again.
                 if self.game.is_none() && self.games_played == 0 {
                     for seat in &mut self.seats {
@@ -235,6 +247,7 @@ impl Room {
             }
             Command::Play { conn, action } => self.human_move(conn, action),
             Command::Hint { conn } => self.hint(conn),
+            Command::Chat { conn, text } => self.chat(conn, &text),
             Command::SetSeat { conn, seat, agent } => {
                 if !self.is_host(conn) {
                     return self.reply(conn, "only the host can change seats");
@@ -393,6 +406,30 @@ impl Room {
         let legal = game.state.legal_actions();
         let combo = agent.act(&game.state.observe(seat), &legal);
         self.apply(combo);
+    }
+
+    fn chat(&mut self, conn: u64, text: &str) {
+        let text: String = text.trim().chars().take(MAX_CHAT_LEN).collect();
+        if text.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        if self
+            .last_chat
+            .get(&conn)
+            .is_some_and(|t| now.duration_since(*t) < CHAT_INTERVAL)
+        {
+            return self.reply(conn, "you're sending messages too quickly");
+        }
+        self.last_chat.insert(conn, now);
+        let from = match self.seat_of(conn).map(|i| &self.seats[i]) {
+            Some(Seat::Human { name, .. }) => name.clone(),
+            _ => "Spectator".into(),
+        };
+        let msg = json!({ "t": "chat", "from": from, "seat": self.seat_of(conn), "text": text });
+        for (_, c) in self.connections() {
+            c.send(&msg);
+        }
     }
 
     /// Whether hints are allowed: no other person is seated.

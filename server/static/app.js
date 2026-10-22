@@ -32,7 +32,7 @@ function cardRow(ranks, small) {
 
 function toast(msg) {
   const t = $("toast");
-  t.textContent = msg;
+  t.textContent = msg.charAt(0).toUpperCase() + msg.slice(1);
   t.classList.remove("hidden");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.add("hidden"), 3500);
@@ -49,6 +49,57 @@ function seatName(seat) {
   if (!s) return `Seat ${seat + 1}`;
   if (s.kind === "open") return "Open seat";
   return s.name;
+}
+
+// ---------- sound and tab title ----------
+let soundOn = false;
+try { soundOn = localStorage.getItem("rainbow.sound") === "on"; } catch { /* default off */ }
+let audio = null;
+
+/** A short sine tone sequence: [frequency, start offset] pairs, gently enveloped. */
+function tones(notes, length = 0.12, volume = 0.06) {
+  if (!soundOn) return;
+  try {
+    audio = audio || new AudioContext();
+    const now = audio.currentTime;
+    for (const [freq, at] of notes) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + at);
+      gain.gain.linearRampToValueAtTime(volume, now + at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + length);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(now + at);
+      osc.stop(now + at + length + 0.02);
+    }
+  } catch { /* audio unavailable */ }
+}
+const SOUNDS = {
+  turn: () => tones([[660, 0], [880, 0.1]]),
+  trick: () => tones([[523, 0], [659, 0.07], [784, 0.14]], 0.18, 0.04),
+  chat: () => tones([[990, 0]], 0.08, 0.03),
+};
+
+function renderSoundButton() {
+  $("sound-btn").textContent = soundOn ? "Sound on" : "Sound off";
+  $("sound-btn").setAttribute("aria-pressed", String(soundOn));
+}
+
+function updateTitle() {
+  const myTurn = game && !game.over && game.seat !== null && game.current === game.seat;
+  document.title = myTurn && document.hidden ? "● Your turn · Rainbow" : "Rainbow";
+}
+document.addEventListener("visibilitychange", updateTitle);
+
+// ---------- chat ----------
+function addChat(msg) {
+  const log = $("chat-log");
+  const li = el("li");
+  li.append(el("b", null, msg.seat === me.seat && msg.seat !== null ? "You" : msg.from), document.createTextNode(` ${msg.text}`));
+  log.append(li);
+  while (log.children.length > 100) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
 }
 
 // ---------- connection ----------
@@ -96,6 +147,10 @@ function receive(msg) {
       if (!game.hand || game.hand.join() !== oldHand) selection = [];
       break;
     }
+    case "chat":
+      addChat(msg);
+      if (msg.seat !== me.seat || msg.seat === null) SOUNDS.chat();
+      return;
     case "hint": {
       const l = game && game.legal.find((x) => x.action === msg.action);
       if (l) {
@@ -120,6 +175,7 @@ function leave() {
   me.host = false;
   room = null;
   game = null;
+  $("chat-log").innerHTML = "";
   history.replaceState(null, "", "/");
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: "leave" }));
   render();
@@ -281,6 +337,8 @@ function announceChanges(old, next) {
   if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) said.push("Your turn.");
   if (next.over && (!old || !old.over)) said.push("Game over.");
   if (said.length) live.textContent = said.join(" ");
+  if (next.log.length > oldLog && old) SOUNDS.trick();
+  if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) SOUNDS.turn();
   freshFrom = oldTrick;
 }
 
@@ -627,6 +685,12 @@ function render() {
   }
   if (view === "lobby") renderLobby();
   if (view === "table") keepingFocus(renderTable);
+  // chat only matters with other people around
+  const people = inRoom ? room.seats.filter((s) => s.kind === "human").length + room.spectators : 0;
+  $("chat-box").classList.toggle("hidden", people < 2);
+  const slot = $(view === "lobby" ? "lobby-chat-slot" : "side-chat-slot");
+  if ($("chat-box").parentElement !== slot) slot.append($("chat-box"));
+  updateTitle();
 }
 
 // Keyboard: 1-6 add a card of that rank to the selection, Enter plays it, Escape clears it.
@@ -659,6 +723,19 @@ async function main() {
   setupHome();
   $("rules-btn").onclick = () => $("rules").showModal();
   $("hint-btn").onclick = () => send({ t: "hint" });
+  renderSoundButton();
+  $("sound-btn").onclick = () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
+    renderSoundButton();
+    SOUNDS.turn();
+  };
+  $("chat-form").onsubmit = (e) => {
+    e.preventDefault();
+    const text = $("chat-input").value.trim();
+    if (text) send({ t: "chat", text });
+    $("chat-input").value = "";
+  };
   $("lobby-start").onclick = () => send({ t: "start" });
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;

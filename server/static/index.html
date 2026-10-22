@@ -11,6 +11,7 @@
   <h1 class="logo"><span>R</span><span>a</span><span>i</span><span>n</span><span>b</span><span>o</span><span>w</span></h1>
   <div id="room-badge" class="badge hidden"></div>
   <div id="status" class="status" role="status"></div>
+  <button id="sound-btn" class="ghost" aria-pressed="false" title="Sounds for your turn and finished tricks">Sound off</button>
   <button id="rules-btn" class="ghost">Rules</button>
 </header>
 
@@ -53,6 +54,7 @@
         <input id="share-link" readonly aria-label="Invite link"> <button id="copy-link">Copy</button></p>
       <ol id="lobby-seats" class="lobby-seats"></ol>
       <p id="lobby-hint" class="hint"></p>
+      <div id="lobby-chat-slot"></div>
       <div class="actions">
         <button id="lobby-start" class="primary">Start game</button>
         <button id="lobby-leave">Leave</button>
@@ -100,6 +102,16 @@
         <h2>Unseen cards</h2>
         <div id="unseen" class="unseen"></div>
         <p class="caption">Cards still in other hands, reserves or set aside.</p>
+      </div>
+      <div id="side-chat-slot">
+      <div id="chat-box" class="side-box hidden">
+        <h2>Chat</h2>
+        <ol id="chat-log" class="chat-log" role="log" aria-live="polite"></ol>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="200" placeholder="Message" aria-label="Chat message" autocomplete="off">
+          <button>Send</button>
+        </form>
+      </div>
       </div>
       <div class="side-box grow">
         <h2>Trick log</h2>

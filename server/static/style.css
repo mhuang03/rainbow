@@ -299,3 +299,9 @@ dialog.rules p { color: var(--muted); }
 .tip-title { color: var(--muted); margin-bottom: 4px; }
 .tip-row { display: flex; align-items: center; gap: 6px; }
 .tip-row b { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Chat */
+.chat-log { list-style: none; margin: 0 0 8px; padding: 0; max-height: 160px; overflow: auto; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.chat-log b { color: var(--accent); font-weight: 600; }
+.chat-form { display: flex; gap: 6px; }
+.chat-form input { flex: 1; min-width: 0; }
