@@ -15,8 +15,11 @@ use arrayvec::ArrayVec;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
+use std::sync::Arc;
+
 use crate::agents::Agent;
 use crate::agents::baseline::cheapest_winner;
+use crate::agents::belief::Belief;
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
 use crate::constants::{MAX_LEGAL_ACTIONS, MAX_PLAYERS};
@@ -43,6 +46,8 @@ pub struct Params {
     pub endgame_cards: usize,
     /// Values positions at the depth limit.
     pub leaf: Evaluator,
+    /// Weights sampled deals by predicted hands; uniform deals without it.
+    pub belief: Option<Arc<Belief>>,
 }
 
 impl Default for Params {
@@ -54,6 +59,7 @@ impl Default for Params {
             reward: Reward::default(),
             endgame_cards: 8,
             leaf: Evaluator::Rollout(Rollout::Cheapest { epsilon: 0.0 }),
+            belief: None,
         }
     }
 }
@@ -217,8 +223,12 @@ impl MinimaxAgent {
             nodes: 0,
         };
         let mut totals = vec![0.0; legal.len()];
+        let weights = self.params.belief.as_ref().map(|b| b.weights(obs));
         for _ in 0..self.params.determinizations.max(1) {
-            let deal = obs.determinize(&mut self.rng);
+            let deal = match &weights {
+                Some(w) => obs.determinize_weighted(w, &mut self.rng),
+                None => obs.determinize(&mut self.rng),
+            };
             for (total, &combo) in totals.iter_mut().zip(legal) {
                 *total += search.value(&deal, combo);
             }

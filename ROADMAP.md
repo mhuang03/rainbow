@@ -314,6 +314,11 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 - [x] `hybrid:base=counter`: Counter with the exact endgame solver. Against plain `counter`
       1.07 (4p 2+2, 600 deals) and 1.21 (2p, 600 deals): the endgame is where counting alone
       leaves the most on the table, especially with two players.
+- [x] `hybrid:base=ismcts`: ISMCTS hands over to the endgame solver. Worse than plain `ismcts`:
+      0.95 (4p 2+2, 240 deals) and 0.95 (2p, 300 deals). ISMCTS already searches the endgame
+      with counter-weighted rollouts, and the solver's uniform deals throw that information away.
+- [ ] `hybrid:belief=`, `minimax:belief=`: the endgame solver samples deals weighted by a belief
+      network. Testing against the uniform solver.
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /

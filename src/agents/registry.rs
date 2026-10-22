@@ -243,7 +243,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `+`-separated paths and averages their predictions (an ensemble).
 /// - `hybrid`: `path` (a DMC network played until the endgame), `cards` (cards left in all hands
 ///   and reserves at which to switch to exact search; default 8) and `k` (deals solved per
-///   endgame move; default 8). `dqn`, `ppo` and `nfsp` also
+///   endgame move; default 8) and `belief` (a belief network weighting the endgame's deals). `dqn`, `ppo` and `nfsp` also
 ///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
 ///
 /// Rollout options are `rollout` (`random`, `cheapest` or `counter`), `eps` (random-move rate of the
@@ -255,6 +255,17 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
+/// The `belief=<network file>` option, if given.
+fn belief_option(opts: &mut Options) -> Result<Option<std::sync::Arc<belief::Belief>>, String> {
+    opts.take::<String>("belief")?
+        .map(|path| {
+            Ok(std::sync::Arc::new(belief::Belief::new(
+                dmc::Mlp::load_cached(&path)?,
+            )?))
+        })
+        .transpose()
+}
+
 pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
     let (name, options) = spec.split_once(':').unwrap_or((spec, ""));
     let mut opts = Options::parse(options)?;
@@ -314,12 +325,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 reward: rollout::Reward {
                     margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
                 },
-                belief: match opts.take::<String>("belief")? {
-                    None => None,
-                    Some(path) => Some(std::sync::Arc::new(belief::Belief::new(
-                        dmc::Mlp::load_cached(&path)?,
-                    )?)),
-                },
+                belief: belief_option(&mut opts)?,
             };
             Box::new(PimcAgent::with_params(params, seed))
         }
@@ -345,6 +351,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                     None => d.leaf,
                     Some(path) => network_leaf(&path)?,
                 },
+                belief: belief_option(&mut opts)?,
             };
             Box::new(MinimaxAgent::with_params(params, seed))
         }
@@ -402,10 +409,11 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                     );
                 }
             };
-            Box::new(HybridAgent::new(
+            Box::new(HybridAgent::with_belief(
                 base,
                 opts.take("cards")?.unwrap_or(8),
                 opts.take("k")?.unwrap_or(8),
+                belief_option(&mut opts)?,
                 seed,
             ))
         }

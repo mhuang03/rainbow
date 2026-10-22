@@ -7,7 +7,10 @@
 //! where a fixed policy's small misjudgements, like ending the game a trick too early, cost
 //! the most.
 
+use std::sync::Arc;
+
 use crate::agents::Agent;
+use crate::agents::belief::Belief;
 use crate::agents::minimax::{self, MinimaxAgent, Mode};
 use crate::game::{Combo, Observation};
 
@@ -21,11 +24,23 @@ pub struct HybridAgent {
 impl HybridAgent {
     /// `deals` sampled deals are solved per endgame decision.
     pub fn new(base: Box<dyn Agent>, threshold: usize, deals: usize, seed: u64) -> Self {
+        Self::with_belief(base, threshold, deals, None, seed)
+    }
+
+    /// As [`new`](Self::new), sampling endgame deals weighted by `belief`'s predicted hands.
+    pub fn with_belief(
+        base: Box<dyn Agent>,
+        threshold: usize,
+        deals: usize,
+        belief: Option<Arc<Belief>>,
+        seed: u64,
+    ) -> Self {
         let params = minimax::Params {
             determinizations: deals,
             depth: 2,
             mode: Mode::MaxN,
             endgame_cards: threshold,
+            belief,
             ..minimax::Params::default()
         };
         Self {
@@ -67,7 +82,6 @@ mod tests {
     use crate::game::encoding::{ACTION_FEATURES, OBS_SIZE};
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
-    use std::sync::Arc;
 
     #[test]
     fn plays_legal_moves_for_whole_games() {
