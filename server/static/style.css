@@ -161,7 +161,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
   border-radius: 18px;
   padding: 16px 20px;
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 2.2fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 20px;
   min-height: 190px;
 }
