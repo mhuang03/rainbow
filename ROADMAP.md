@@ -320,7 +320,8 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 - [x] `hybrid:belief=`, `minimax:belief=`: the endgame solver samples deals weighted by a belief
       network. Level with uniform deals: 1.01 (4p 2+2, 800 deals) and 1.00 (2p, 400 deals). With
       so few cards left, a uniform deal is already close to the truth. More endgame deals
-      (`k=16` against 8) are level too: 1.00 (4p, 600 deals).
+      (`k=16` against 8) are level too: 1.00 (4p, 600 deals), and so is switching to the solver
+      earlier, at 10 cards left instead of 8: 1.02 (4p, 600 deals).
 - [x] `hybrid:path=a+b+c`: the endgame solver on top of the league ensemble (rounds 7-9). It
       beats `hybrid` on round 9 alone 1.10 (4p 2+2, 800 deals) but is level with the ensemble
       itself, 1.00: the ensemble already plays the endgame about as well. The browser drops its
