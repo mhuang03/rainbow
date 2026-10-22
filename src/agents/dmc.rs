@@ -359,13 +359,7 @@ impl Agent for DmcAgent {
         }
         let mut values = self.evaluate(obs, legal);
         if let Some(w) = self.counter_blend {
-            let scores = crate::agents::counter::CounterAgent::with_params(
-                crate::agents::counter::Params::sampled(),
-            )
-            .scores(obs, legal);
-            for (v, s) in values.iter_mut().zip(scores) {
-                *v += w * s;
-            }
+            add_counter_scores(&mut values, w, obs, legal);
         }
         if let Some((temperature, rng)) = &mut self.sampling {
             let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
@@ -393,6 +387,19 @@ impl Agent for DmcAgent {
 #[derive(Debug, Clone)]
 pub struct EnsembleAgent {
     members: Vec<DmcAgent>,
+    /// As [`DmcAgent::counter_blend`].
+    counter_blend: Option<f32>,
+}
+
+/// Adds `weight` times the `counter` agent's score of each legal combo to `values`.
+fn add_counter_scores(values: &mut [f32], weight: f32, obs: &Observation, legal: &[Combo]) {
+    let scores = crate::agents::counter::CounterAgent::with_params(
+        crate::agents::counter::Params::sampled(),
+    )
+    .scores(obs, legal);
+    for (v, s) in values.iter_mut().zip(scores) {
+        *v += weight * s;
+    }
 }
 
 impl EnsembleAgent {
@@ -403,7 +410,18 @@ impl EnsembleAgent {
             !members.is_empty(),
             "an ensemble needs at least one network"
         );
-        Self { members }
+        Self {
+            members,
+            counter_blend: None,
+        }
+    }
+
+    /// Adds `weight` times the `counter` agent's scores to the mean predicted returns.
+    pub fn counter_blend(self, weight: f32) -> Self {
+        Self {
+            counter_blend: Some(weight),
+            ..self
+        }
     }
 
     /// Mean predicted return of each legal combo, in the order of `legal`.
@@ -428,7 +446,10 @@ impl Agent for EnsembleAgent {
         if legal.len() == 1 {
             return legal[0];
         }
-        let values = self.evaluate(obs, legal);
+        let mut values = self.evaluate(obs, legal);
+        if let Some(w) = self.counter_blend {
+            add_counter_scores(&mut values, w, obs, legal);
+        }
         let best = (0..legal.len())
             .max_by(|&a, &b| values[a].total_cmp(&values[b]))
             .expect("legal moves are never empty");

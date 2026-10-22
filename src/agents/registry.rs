@@ -405,7 +405,11 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                     None => Box::new(agent),
                 }
             } else {
-                Box::new(dmc::EnsembleAgent::new(members))
+                let ensemble = dmc::EnsembleAgent::new(members);
+                match opts.take::<f32>("counter")? {
+                    Some(w) => Box::new(ensemble.counter_blend(w)),
+                    None => Box::new(ensemble),
+                }
             }
         }
         "hybrid" => {
