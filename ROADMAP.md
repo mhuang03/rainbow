@@ -245,6 +245,10 @@ extra capacity restarts progress; the browser presets use it.
       breaks through, so capacity, not data, was the limit. Going larger again raises agreement
       but not strength, so `distill_v5` keeps the 512-512-256 size.
 
+- [x] Blending the counter prior into the network prior (`pmix=w`, geometric, applied in games
+      of 3+ players): w = 0.5 against no blend, guided ISMCTS with round 5: 1.05 (4p, 160
+      deals), 0.95 (3p), 0.99 (6p), and 0.93 in 2p before it was limited to 3+ players; w =
+      0.75: 0.94 (4p). Neutral overall, so it stays off by default.
 - [x] Ensemble leaves (`leaf=a.bin+b.bin`, averaging the networks' values): guided ISMCTS
       with a round 3 + round 4 leaf is level with the round 4 leaf alone (1.00 vs 1.00, 4p, two
       seats each, 80 deals) at about twice the leaf cost. Not used by default.
