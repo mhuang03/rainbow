@@ -54,10 +54,11 @@ pub struct Params {
     /// budget, the search continues until the most-visited root move has 1.5 times the
     /// visits of the runner-up. 1 turns it off.
     pub extend: f32,
-    /// Keeps the search tree between decisions: every play is public, so the subtree under the
-    /// plays made since the last search still holds valid statistics, and the next search
-    /// continues from it instead of starting empty.
-    pub reuse: bool,
+    /// Keeps the search tree between decisions, with this fraction of its visit statistics (0
+    /// starts every search afresh). Every play is public, so the subtree under the plays made
+    /// since the last search still applies; but its statistics come from deals sampled before
+    /// those plays were seen, and kept whole (1) they hurt (0.95 at 4p, 0.92 at 2p).
+    pub reuse: f32,
     /// With a prior: choose the root move by sequential halving (as in Gumbel MuZero,
     /// Danihelka et al. 2022) over this many candidates, instead of by visit count. The
     /// candidates are sampled from the prior with Gumbel noise, and the iterations go in rounds
@@ -89,7 +90,7 @@ impl Default for Params {
             inference: None,
             threads: 1,
             extend: 1.0,
-            reuse: false,
+            reuse: 0.0,
             gumbel: 0,
         }
     }
@@ -513,7 +514,7 @@ impl IsmctsAgent {
     }
 
     /// Moves the root down the plays made since the last search, if the tree has them all.
-    fn descend_to(&mut self, history: &[Play]) -> bool {
+    fn descend_to(&mut self, history: &[Play], keep: f32) -> bool {
         if self.nodes.is_empty() || !history.starts_with(&self.history) {
             return false;
         }
@@ -525,6 +526,14 @@ impl IsmctsAgent {
             }
         }
         self.root = node;
+        if keep < 1.0 {
+            for n in &mut self.nodes {
+                let visits = (n.visits as f32 * keep).round() as u32;
+                n.total *= visits as f32 / n.visits.max(1) as f32;
+                n.visits = visits;
+                n.available = (n.available as f32 * keep).round() as u32;
+            }
+        }
         true
     }
 
@@ -550,7 +559,7 @@ impl IsmctsAgent {
             .inference
             .as_ref()
             .map(|inference| inference.sample_pool(obs, weights.as_ref(), &mut self.rng));
-        if !(p.reuse && self.descend_to(obs.history())) {
+        if !(p.reuse > 0.0 && self.descend_to(obs.history(), p.reuse)) {
             self.nodes.clear();
             // The root's own fields are unused; only its children matter.
             self.nodes.push(Node {
@@ -564,7 +573,7 @@ impl IsmctsAgent {
             });
             self.root = 0;
         }
-        if p.reuse {
+        if p.reuse > 0.0 {
             self.history = obs.history().to_vec();
         }
         let start = std::time::Instant::now();
@@ -709,7 +718,7 @@ mod tests {
     fn reused_tree_carries_visits_into_the_next_decision() {
         let params = Params {
             iterations: 60,
-            reuse: true,
+            reuse: 1.0,
             ..Params::default()
         };
         let mut agent = IsmctsAgent::with_params(params, 4);
