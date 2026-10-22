@@ -29,6 +29,9 @@ pub static PACE: OnceLock<f32> = OnceLock::new();
 fn paced(delay: Duration) -> Duration {
     delay.mul_f32(*PACE.get().unwrap_or(&1.0))
 }
+/// How long an away player's turn waits before the computer plays it for them, while others
+/// are at the table; they take their seat back when they return.
+const AWAY_GRACE: Duration = Duration::from_secs(30);
 /// A room with nobody connected closes after this long.
 const ABANDONED_AFTER: Duration = Duration::from_secs(15 * 60);
 pub const MAX_NAME_LEN: usize = 20;
@@ -115,6 +118,8 @@ struct Game {
     log: Vec<Value>,
     /// When the agent to move may play.
     agent_at: Instant,
+    /// Plays the turns of players who are away (made on first need).
+    stand_in: Option<Box<dyn Agent>>,
 }
 
 pub struct Room {
@@ -349,7 +354,8 @@ impl Room {
     }
 
     fn is_host(&self, conn: u64) -> bool {
-        self.seat_of(conn).is_some_and(|i| self.acting_host() == Some(i))
+        self.seat_of(conn)
+            .is_some_and(|i| self.acting_host() == Some(i))
     }
 
     /// The seat that may start games and change seats: the room's creator, or while they're
@@ -392,6 +398,7 @@ impl Room {
             last_trick: None,
             log: Vec::new(),
             agent_at: Instant::now() + paced(AGENT_DELAY),
+            stand_in: None,
         });
         self.games_played += 1;
         self.broadcast();
@@ -402,19 +409,51 @@ impl Room {
         if game.state.is_over() {
             return None;
         }
-        game.agents[game.state.current_player()]
-            .as_ref()
-            .map(|_| game.agent_at)
+        let seat = game.state.current_player();
+        if game.agents[seat].is_some() {
+            Some(game.agent_at)
+        } else if self.stands_in(seat) {
+            Some(game.agent_at + paced(AWAY_GRACE))
+        } else {
+            None
+        }
+    }
+
+    /// Whether the computer covers `seat`'s turns: its player is away and someone else is here
+    /// waiting on them.
+    fn stands_in(&self, seat: usize) -> bool {
+        matches!(self.seats[seat], Seat::Human { conn: None, .. })
+            && self.connections().next().is_some()
     }
 
     fn agent_move(&mut self) {
+        let stands_in = self
+            .game
+            .as_ref()
+            .is_some_and(|g| self.stands_in(g.state.current_player()));
+        let stand_in = self
+            .presets
+            .iter()
+            .find(|p| p.id == "dmc")
+            .or_else(|| self.presets.iter().find(|p| p.id == "counter"))
+            .cloned();
         let Some(game) = &mut self.game else { return };
         let seat = game.state.current_player();
-        let Some(agent) = &mut game.agents[seat] else {
-            return;
-        };
         let legal = game.state.legal_actions();
-        let combo = agent.act(&game.state.observe(seat), &legal);
+        let obs = game.state.observe(seat);
+        let combo = match &mut game.agents[seat] {
+            Some(agent) => agent.act(&obs, &legal),
+            None if stands_in => {
+                if game.stand_in.is_none() {
+                    game.stand_in = stand_in.and_then(|p| p.create(self.rng.random()));
+                }
+                match &mut game.stand_in {
+                    Some(agent) => agent.act(&obs, &legal),
+                    None => legal[0],
+                }
+            }
+            None => return,
+        };
         self.apply(combo);
     }
 
@@ -704,6 +743,46 @@ mod tests {
             }
         }
         assert!(moves > 0);
+    }
+
+    #[test]
+    fn the_computer_covers_an_away_players_turns() {
+        PACE.get_or_init(|| 0.0);
+        let presets = Arc::new(presets::available(std::path::Path::new("no-models")));
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            Room::new("TST3".into(), vec![None, None], presets, Arc::default()).run(rx)
+        });
+        let mut inboxes = Vec::new();
+        for id in 1..=2 {
+            let (out, inbox) = tokio::sync::mpsc::unbounded_channel();
+            inboxes.push(inbox);
+            let conn = Conn { id, tx: out };
+            let name = format!("P{id}");
+            tx.send(Command::Join {
+                name,
+                token: None,
+                conn,
+            })
+            .unwrap();
+        }
+        tx.send(Command::Start { conn: 1 }).unwrap();
+        tx.send(Command::Disconnect { conn: 2 }).unwrap();
+        // P1 plays their own turns; P2's are played for them, so the game still finishes
+        loop {
+            let msg: Value = serde_json::from_str(&inboxes[0].blocking_recv().unwrap()).unwrap();
+            assert_ne!(msg["t"], "error", "{msg}");
+            if msg["t"] != "state" {
+                continue;
+            }
+            if msg["over"] == true {
+                break;
+            }
+            if let Some(play) = msg["legal"].as_array().and_then(|l| l.first()) {
+                let action = play["action"].as_u64().unwrap() as usize;
+                tx.send(Command::Play { conn: 1, action }).unwrap();
+            }
+        }
     }
 
     #[test]

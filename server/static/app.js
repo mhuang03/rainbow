@@ -563,6 +563,11 @@ function waitText(seat) {
   const s = room.seats[seat] || {};
   if (s.kind !== "human") return "";
   const ms = Date.now() - turnStart.at;
+  // the server plays an away player's turn after AWAY_GRACE (30 s) while others wait
+  if (s.connected === false) {
+    const left = Math.max(0, 30 - Math.floor(ms / 1000));
+    return left > 0 ? `computer plays in ${left}s` : "computer playing…";
+  }
   if (ms < SHOW_WAIT_AFTER) return "";
   const secs = Math.floor(ms / 1000);
   return `thinking… ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;

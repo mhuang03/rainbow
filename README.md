@@ -119,7 +119,8 @@ Open http://localhost:8080 and enter your name.
 - **With friends:** create a room and share its four-letter code or link; a link opens straight
   to a join screen. In the lobby the host can give open seats to the computer, and during a
   game can hand an absent player's seat to it. A player who reloads or loses their connection
-  gets their seat back; anyone joining a full room watches. While the host is away, the next
+  gets their seat back, and while they're away the computer plays their turns after 30 seconds;
+  anyone joining a full room watches. While the host is away, the next
   player present acts as host. Rooms have a chat.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
