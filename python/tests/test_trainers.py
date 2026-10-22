@@ -55,6 +55,9 @@ def test_belief_and_expert_iteration(tmp_path):
         check=True,
         capture_output=True,
     )
+    distill = tmp_path / "distill.bin"
+    run("train_distill.py", "--data", str(data), "--out", str(distill), "--hidden", "16", "--epochs", "1", "--eval-deals", "1")
+    re.RustAgent(f"distill:path={distill}").act(re.Game(4, seed=1))
     out = tmp_path / "exit.bin"
     run("train_exit.py", "--init", str(init), "--data", str(data), "--out", str(out), "--epochs", "1", "--eval-deals", "1")
     re.RustAgent(f"dmc:path={out}")

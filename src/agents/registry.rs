@@ -23,6 +23,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "dqn",
     "ppo",
     "nfsp",
+    "distill",
 ];
 
 /// Options of a [`create`] spec, as `key=value` pairs.
@@ -277,7 +278,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             };
             Box::new(MinimaxAgent::with_params(params, seed))
         }
-        "dqn" | "ppo" | "nfsp" => {
+        "dqn" | "ppo" | "nfsp" | "distill" => {
             let path: String = opts
                 .take("path")?
                 .ok_or_else(|| format!("{name} requires path=<network file>"))?;
@@ -285,6 +286,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             agent = match name {
                 "ppo" => agent.named("ppo"),
                 "nfsp" => agent.named("nfsp"),
+                "distill" => agent.named("distill"),
                 _ => agent,
             };
             // NFSP's average policy is a mixed strategy, so it samples by default.
@@ -337,7 +339,7 @@ mod tests {
     fn every_registered_name_builds() {
         for &name in AGENT_NAMES
             .iter()
-            .filter(|&&n| !["dmc", "hybrid", "dqn", "ppo", "nfsp"].contains(&n))
+            .filter(|&&n| !["dmc", "hybrid", "dqn", "ppo", "nfsp", "distill"].contains(&n))
         {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
