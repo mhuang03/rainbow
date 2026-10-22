@@ -29,7 +29,6 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let league = m("dmc_league9.bin");
     // the league ensemble (rounds 8-10) distilled into one network; it plays like the ensemble
     let distilled = m("dmc_distilled1.bin");
-    let ensemble = format!("{}+{}+{league}", m("dmc_league7.bin"), m("dmc_league8.bin"));
     let belief = m("belief_v3.bin");
     // Grouped by difficulty and ordered by strength (the 4-player ladder in ROADMAP.md).
     let list = [
@@ -88,13 +87,6 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "Strong",
             "Tree search over possible deals, guided by card counting.",
             "ismcts".into(),
-        ),
-        (
-            "ensemble",
-            "DMC ensemble",
-            "Expert",
-            "Three league networks voting together.",
-            format!("dmc:path={ensemble}"),
         ),
         (
             "guided",

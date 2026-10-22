@@ -380,7 +380,9 @@ stays on round 9. League rounds need the cores to themselves.
       head it ties its teachers' ensemble (0.99, 4p 2+2, 800 deals) and the browser's ensemble
       of rounds 7-9 (1.02), and beats round 9 1.13 (4p, one seat against three) and 1.04 (2p),
       and round 10 1.16 (4p) and 1.05 (2p): ensemble strength at a third of the cost. The
-      browser's DMC opponents (Beginner to Strong) use it.
+      browser's DMC opponents (Beginner to Strong) use it. Adding Counter's scores is level on
+      it (1.02, 4p) and an ensemble of it with rounds 8-9 is worse than it alone (0.98, 4p),
+      so the browser drops its separate DMC-ensemble preset.
 - [ ] `train_belief.py --history`: the belief network also reads the public history (who played
       what, in order). Training on the same 60,000 games as `belief_v4` without it.
 
