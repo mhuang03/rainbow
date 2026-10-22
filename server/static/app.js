@@ -797,6 +797,7 @@ function renderTable() {
   renderOpponents(spectator, base, n);
   renderMiddle();
   $("me").classList.toggle("hidden", spectator);
+  $("watching").classList.toggle("hidden", !spectator);
   if (!spectator) renderHand();
   renderSide();
 

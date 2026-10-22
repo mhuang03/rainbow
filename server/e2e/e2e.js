@@ -180,6 +180,18 @@ const tests = {
     assert.deepStrictEqual(a.errors, []);
   },
 
+  async "a third person in a full 2-player room watches"(browser) {
+    const a = await newPage(browser);
+    const code = await createOnlineRoom(a, "Ann", 2, ["counter"]);
+    await a.click("#lobby-start");
+    await a.waitForSelector("#table:not(.hidden)");
+    const c = await newPage(browser);
+    await joinByLink(c, code, "Cat");
+    await c.waitForSelector("#watching:not(.hidden)");
+    assert(await c.locator("#me.hidden").count(), "a spectator has no hand panel");
+    assert.deepStrictEqual(c.errors, []);
+  },
+
   async "keyboard only: start, select a card, keep focus, play it"(browser) {
     const p = await newPage(browser);
     await p.goto(BASE);

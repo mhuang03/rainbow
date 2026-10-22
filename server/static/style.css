@@ -401,3 +401,4 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
 }
 .opp .wait { font-weight: 400; font-size: 12px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
 .opp .wait:empty { display: none; }
+.watching { margin: 0; padding: 8px 14px; border-radius: var(--radius); background: var(--panel); color: var(--muted); text-align: center; }
