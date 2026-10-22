@@ -383,7 +383,9 @@ stays on round 9. League rounds need the cores to themselves.
       and round 10 1.16 (4p) and 1.05 (2p): ensemble strength at a third of the cost. The
       browser's DMC opponents (Beginner to Strong) use it. Adding Counter's scores is level on
       it (1.02, 4p) and an ensemble of it with rounds 8-9 is worse than it alone (0.98, 4p),
-      so the browser drops its separate DMC-ensemble preset.
+      so the browser drops its separate DMC-ensemble preset. As guided ISMCTS's prior and leaf
+      it is level with round 9 (0.99, 4p 2+2, 200 deals): a better network alone doesn't
+      improve the search at n=200, so Guided ISMCTS keeps round 9.
 - [ ] `train_belief.py --history`: the belief network also reads the public history (who played
       what, in order). Training on the same 60,000 games as `belief_v4` without it.
 
