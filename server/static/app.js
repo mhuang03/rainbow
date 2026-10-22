@@ -246,6 +246,14 @@ function renderTable() {
       el("span", "points", `${p.points} pts`),
     );
     box.append(who, backs, meta);
+    if (me.host && s.kind === "human" && !s.connected && !game.over) {
+      const select = el("select");
+      presetOptions(select, false);
+      select.prepend(new Option("Replace with an agent…", ""));
+      select.value = "";
+      select.onchange = () => select.value && send({ t: "seat", seat, agent: select.value });
+      box.append(select);
+    }
     opps.append(box);
   }
 
