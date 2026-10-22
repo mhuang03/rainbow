@@ -418,3 +418,6 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
 }
 .unseen-cell.gone { opacity: 0.35; }
 .log .link { font-size: 13px; }
+/* phones: unseen ranks in two even rows of three; the tip's dismiss link on one line */
+@media (max-width: 480px) { .unseen { grid-template-columns: repeat(3, 1fr); } }
+.first-tip .link { white-space: nowrap; }
