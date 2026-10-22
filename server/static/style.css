@@ -377,3 +377,7 @@ button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-
 .overlay:not(.hidden) .panel { animation: settle 200ms ease-out; }
 @keyframes settle { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .overlay:not(.hidden) .panel { animation: none; } }
+#lobby-chat-slot .side-box { padding: 0; background: none; }
+#lobby-chat-slot h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 4px 0 8px; }
+.lobby-seats .seat-line select { min-width: 220px; }
+#lobby-chat-slot .chat-form { margin-bottom: 6px; }

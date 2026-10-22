@@ -283,25 +283,27 @@ function renderLobby() {
     const li = el("li");
     const line = el("div", "seat-line");
     const who = el("span");
-    if (s.kind === "human") {
+    const editable = me.host && i !== me.seat && !(s.kind === "human" && s.connected);
+    if (editable) {
+      // the host's dropdown says who sits here; no separate label needed
+      const select = el("select");
+      presetOptions(select, true, s.kind === "agent" ? s.preset : "open");
+      if (s.kind === "human") select.prepend(new Option(`${s.name} (away)`, ""));
+      select.value = s.kind === "agent" ? s.preset : s.kind === "human" ? "" : "open";
+      select.setAttribute("aria-label", `Player for seat ${i + 1}`);
+      select.onchange = () => select.value && send({ t: "seat", seat: i, agent: select.value === "open" ? null : select.value });
+      line.append(select);
+    } else if (s.kind === "human") {
       who.append(document.createTextNode(s.name + " "));
       if (i === me.seat) who.append(el("span", "tag you", "you"));
       if (s.host) who.append(el("span", "tag", "host"));
       if (!s.connected) who.append(el("span", "tag off", "away"));
     } else if (s.kind === "agent") {
-      who.append(document.createTextNode(s.name + " "), el("span", "tag", "agent"));
+      who.append(document.createTextNode(s.name + " "), el("span", "tag", "computer"));
     } else {
       who.append(el("span", "hint", "Waiting for a player…"));
     }
-    line.append(who);
-    const editable = me.host && i !== me.seat && !(s.kind === "human" && s.connected);
-    if (editable) {
-      const select = el("select");
-      presetOptions(select, true, s.kind === "agent" ? s.preset : "open");
-      select.setAttribute("aria-label", `Player for seat ${i + 1}`);
-      select.onchange = () => send({ t: "seat", seat: i, agent: select.value === "open" ? null : select.value });
-      line.append(select);
-    }
+    if (!editable) line.append(who);
     li.append(line);
     list.append(li);
   });
@@ -683,7 +685,8 @@ function render() {
   const inRoom = me.code && room && room.code === me.code;
   const view = !inRoom ? "home" : room.phase === "lobby" || !game ? "lobby" : "table";
   for (const v of ["home", "lobby", "table"]) $(v).classList.toggle("hidden", v !== view);
-  $("room-badge").classList.toggle("hidden", !inRoom);
+  // the lobby shows the code in its heading; the badge is for the table
+  $("room-badge").classList.toggle("hidden", !inRoom || view === "lobby");
   if (inRoom) {
     $("room-badge").innerHTML = "";
     $("room-badge").append(el("span", "badge-label", "Room "), el("b", null, room.code));
