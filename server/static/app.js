@@ -442,7 +442,17 @@ function selectCombo(l) {
   });
 }
 
+// A one-time tip for a first game, until the first play or a dismissal.
+function tipSeen() {
+  try { return localStorage.getItem("rainbow.tip") === "seen"; } catch { return true; }
+}
+function markTipSeen() {
+  try { localStorage.setItem("rainbow.tip", "seen"); } catch { /* shown again next time */ }
+  $("first-tip").classList.add("hidden");
+}
+
 function play(action) {
+  markTipSeen();
   selection = [];
   send({ t: "play", action });
 }
@@ -582,6 +592,7 @@ function renderHandNow() {
   btn.classList.toggle("reason", !match && myTurn && selection.length > 0);
   btn.onclick = () => match && play(match.action);
   $("hint-btn").classList.toggle("hidden", !(room && room.hints && myTurn));
+  $("first-tip").classList.toggle("hidden", !myTurn || tipSeen());
 }
 
 function renderSide() {
@@ -802,6 +813,7 @@ async function main() {
   $("howto-btn").onclick = howto;
   $("howto-link").onclick = howto;
   $("hint-btn").onclick = () => send({ t: "hint" });
+  $("first-tip-close").onclick = markTipSeen;
   $("sound-toggle").checked = soundOn;
   $("sound-toggle").onchange = () => {
     soundOn = $("sound-toggle").checked;
