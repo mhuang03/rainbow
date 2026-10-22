@@ -227,6 +227,9 @@ it.
       | 137k | 46% | 0.97 | 0.52 |
       | 189k | 48% | 1.06 | 0.57 |
       | 287k (`models/distill_v4.bin`) | 51% | 1.21 | 0.68 |
+      | 384k | 52% | 1.18 | 0.68 |
+
+      The curve flattens at about 300k decisions for this network (256-256-256).
 
 - [x] Ensemble leaves (`leaf=a.bin+b.bin`, averaging the networks' values): guided ISMCTS
       with a round 3 + round 4 leaf is level with the round 4 leaf alone (1.00 vs 1.00, 4p, two
