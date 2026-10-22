@@ -351,8 +351,11 @@ stays on round 9. League rounds need the cores to themselves.
 - [x] A wider network from round 8 (Net2WiderNet to 1024-1024-512, then 90 minutes of league
       play): it loses to round 8 itself, 0.93 (2p) and 0.94 (4p). The extra width didn't pay
       off in one round's training time; round 10 continues from round 9.
-- [ ] `ismcts:extend=F`: past the budget, keep searching (up to F times it) while the top two
-      root moves are within a factor 1.5 in visits. Testing on guided ISMCTS.
+- [x] `ismcts:extend=F`: past the budget, keep searching (up to F times it) while the top two
+      root moves are within a factor 1.5 in visits. On guided ISMCTS, `extend=2` scores 0.96
+      (4p 2+2, 300 deals). Close decisions are mostly ones where the moves are worth about the
+      same, so extra search there reshuffles noise rather than finding a better move. Off by
+      default.
 - [x] `ismcts:reuse=1`: keep the tree between decisions (plays are public, so the subtree
       under the plays since the last search still applies). Worse on guided ISMCTS: 0.95 (4p
       2+2, 300 deals) and 0.92 (2p, 150 deals). The kept statistics come from deals sampled
