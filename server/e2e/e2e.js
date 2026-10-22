@@ -57,6 +57,23 @@ async function joinByLink(page, code, name) {
   await page.waitForSelector("#lobby:not(.hidden), #table:not(.hidden)");
 }
 
+async function axeScan(browser, colorScheme) {
+  const p = await (await browser.newContext({ viewport: { width: 1200, height: 900 }, colorScheme })).newPage();
+  const scan = async (label) => {
+    await p.addScriptTag({ content: axeSource });
+    const r = await p.evaluate(() => axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] }));
+    assert.deepStrictEqual(r.violations.map((v) => `${colorScheme} ${label}: ${v.id}`), []);
+  };
+  await p.goto(BASE);
+  await scan("home");
+  await createOnlineRoom(p, "Ax", 3, ["open", "economist"]);
+  await scan("lobby");
+  await p.click("#lobby-leave");
+  await p.click("#solo-start");
+  await p.waitForSelector("#legal .chip");
+  await scan("table");
+}
+
 const tests = {
   async "solo game to the end, hint and remembered setup"(browser) {
     const p = await newPage(browser);
@@ -150,22 +167,9 @@ const tests = {
     await p.waitForFunction((n) => document.querySelectorAll("#hand .card").length < n, before);
   },
 
-  async "no axe-core violations on home, lobby and table"(browser) {
+  async "no axe-core violations on home, lobby and table, in both themes"(browser) {
     if (!axeSource) return "skipped (npm install axe-core)";
-    const p = await newPage(browser);
-    const scan = async (label) => {
-      await p.addScriptTag({ content: axeSource });
-      const r = await p.evaluate(() => axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] }));
-      assert.deepStrictEqual(r.violations.map((v) => `${label}: ${v.id}`), []);
-    };
-    await p.goto(BASE);
-    await scan("home");
-    await createOnlineRoom(p, "Ax", 3, ["open", "economist"]);
-    await scan("lobby");
-    await p.click("#lobby-leave");
-    await p.click("#solo-start");
-    await p.waitForSelector("#legal .chip");
-    await scan("table");
+    for (const colorScheme of ["light", "dark"]) await axeScan(browser, colorScheme);
   },
 
   async "phone width: no horizontal scrolling"(browser) {

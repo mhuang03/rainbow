@@ -109,6 +109,8 @@ function connect() {
   ws.onopen = () => {
     $("status").textContent = "";
     if (me.code) send({ t: "join", code: me.code, name: playerName(), token: me.token });
+    // then anything the player did while the socket was connecting
+    while (outbox.length) send(outbox.shift());
   };
   ws.onmessage = (ev) => receive(JSON.parse(ev.data));
   ws.onclose = () => {
@@ -117,9 +119,12 @@ function connect() {
   };
 }
 
+// Messages sent while (re)connecting wait here and go out once the socket opens.
+const outbox = [];
+
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-  else toast("Not connected yet, try again in a moment");
+  else outbox.push(msg);
 }
 
 function receive(msg) {
@@ -556,8 +561,15 @@ function renderSide() {
   if (!game.log.length) log.append(el("li", "hint", "Finished tricks appear here."));
 }
 
-// Player colours for charts: a validated categorical palette (dark mode), assigned by seat.
-const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"];
+// Player colours for charts: a validated categorical palette per theme, assigned by seat.
+const SERIES_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"];
+const SERIES_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+let SERIES = SERIES_DARK;
+
+function lightTheme() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "light" : matchMedia("(prefers-color-scheme: light)").matches;
+}
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function svg(tag, attrs) {
@@ -568,6 +580,7 @@ function svg(tag, attrs) {
 
 /** Cumulative points per seat after each trick, as a line chart with a hover crosshair. */
 function renderChart() {
+  SERIES = lightTheme() ? SERIES_LIGHT : SERIES_DARK;
   const box = $("chart");
   box.innerHTML = "";
   const n = game.players.length;
@@ -730,6 +743,21 @@ async function main() {
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
     renderSoundButton();
     SOUNDS.turn();
+  };
+  const THEMES = ["auto", "light", "dark"];
+  const renderTheme = () => {
+    const t = document.documentElement.dataset.theme || "auto";
+    $("theme-btn").textContent = `Theme: ${t}`;
+  };
+  renderTheme();
+  $("theme-btn").onclick = () => {
+    const now = document.documentElement.dataset.theme || "auto";
+    const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
+    if (next === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("rainbow.theme", next); } catch { /* not remembered */ }
+    renderTheme();
+    if (game && game.over) renderChart(); // chart colours read from tokens
   };
   $("chat-form").onsubmit = (e) => {
     e.preventDefault();

@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rainbow</title>
+<script>
+  // apply a chosen theme before the first paint
+  try { const t = localStorage.getItem("rainbow.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -12,6 +16,7 @@
   <div id="room-badge" class="badge hidden"></div>
   <div id="status" class="status" role="status"></div>
   <button id="sound-btn" class="ghost" aria-pressed="false" title="Sounds for your turn and finished tricks">Sound off</button>
+  <button id="theme-btn" class="ghost" title="Colour theme: follow the system, light or dark">Theme: auto</button>
   <button id="rules-btn" class="ghost">Rules</button>
 </header>
 
