@@ -19,16 +19,19 @@ opponents=("$@")
 if [ ${#opponents[@]} -eq 0 ]; then
     opponents=(economist counter "dmc:path=$init")
 fi
-# opponent paths are relative to the repository root; the trainer runs in python/
+# relative paths are from the repository root; the trainer runs in python/
 python_opponents=()
-for o in "${opponents[@]}"; do python_opponents+=("${o//path=/path=../}"); done
+for o in "${opponents[@]}"; do
+    case $o in *path=/*) python_opponents+=("$o") ;; *) python_opponents+=("${o//path=/path=../}") ;; esac
+done
+from_python() { case $1 in /*) echo "$1" ;; *) echo "../$1" ;; esac; }
 widen=()
 if [ -n "${WIDEN:-}" ]; then read -ra sizes <<< "$WIDEN"; widen=(--widen "${sizes[@]}"); fi
 
 cargo build --release -q
-(cd python && python train_dmc.py --init "../$init" "${widen[@]}" --minutes "$minutes" \
+(cd python && python train_dmc.py --init "$(from_python "$init")" "${widen[@]}" --minutes "$minutes" \
     --lr 1e-4 --epsilon 0.05 0.02 --opponents "${python_opponents[@]}" --learners 2 \
-    --eval-every 15 --out "../$out")
+    --eval-every 15 --out "$(from_python "$out")")
 
 arena=./target/release/rainbow
 new="dmc:path=$out"
