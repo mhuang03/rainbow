@@ -392,7 +392,13 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 (None, Some("counter")) => {
                     Box::new(CounterAgent::with_params(counter::Params::sampled()))
                 }
-                _ => return Err("hybrid needs path=<dmc network file> or base=counter".into()),
+                (None, Some("ismcts")) => Box::new(IsmctsAgent::new(seed)),
+                (None, Some("pimc")) => Box::new(PimcAgent::new(seed)),
+                _ => {
+                    return Err(
+                        "hybrid needs path=<dmc network file> or base=counter|ismcts|pimc".into(),
+                    );
+                }
             };
             Box::new(HybridAgent::new(
                 base,
