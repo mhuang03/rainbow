@@ -135,6 +135,8 @@ function receive(msg) {
       break;
     case "room":
       room = msg;
+      // hosting passes to another player while the room's creator is away
+      if (me.seat !== null && room.seats[me.seat]) me.host = !!room.seats[me.seat].host;
       if (room.phase === "lobby") game = null;
       if (autoStart && me.host && room.phase === "lobby" && !room.seats.some((s) => s.kind === "open")) {
         autoStart = false;

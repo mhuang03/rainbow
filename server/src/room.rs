@@ -349,9 +349,19 @@ impl Room {
     }
 
     fn is_host(&self, conn: u64) -> bool {
-        self.seat_of(conn).is_some_and(|i| {
-            matches!(&self.seats[i], Seat::Human { token, .. } if Some(token) == self.host.as_ref())
-        })
+        self.seat_of(conn).is_some_and(|i| self.acting_host() == Some(i))
+    }
+
+    /// The seat that may start games and change seats: the room's creator, or while they're
+    /// away, the first connected player, so a room never gets stuck without one.
+    fn acting_host(&self) -> Option<usize> {
+        let connected = |s: &Seat| matches!(s, Seat::Human { conn: Some(_), .. });
+        let creator = self.seats.iter().position(
+            |s| matches!(s, Seat::Human { token, .. } if Some(token) == self.host.as_ref()),
+        );
+        creator
+            .filter(|&i| connected(&self.seats[i]))
+            .or_else(|| self.seats.iter().position(connected))
     }
 
     fn reply(&self, conn: u64, msg: &str) {
@@ -529,16 +539,18 @@ impl Room {
     }
 
     fn room_json(&self) -> Value {
+        let host = self.acting_host();
         let seats: Vec<Value> = self
             .seats
             .iter()
-            .map(|s| match s {
+            .enumerate()
+            .map(|(i, s)| match s {
                 Seat::Open => json!({ "kind": "open" }),
-                Seat::Human { name, token, conn } => json!({
+                Seat::Human { name, conn, .. } => json!({
                     "kind": "human",
                     "name": name,
                     "connected": conn.is_some(),
-                    "host": Some(token) == self.host.as_ref(),
+                    "host": host == Some(i),
                 }),
                 Seat::Agent { preset, label } => {
                     json!({ "kind": "agent", "name": label, "preset": preset })
@@ -734,6 +746,13 @@ mod tests {
         tx.send(Command::Start { conn: 1 }).unwrap();
         assert_eq!(
             next_error(&mut inboxes[0]),
+            "every seat needs a player or the computer first"
+        );
+        // with the host away, the other player acts as host
+        tx.send(Command::Disconnect { conn: 1 }).unwrap();
+        tx.send(Command::Start { conn: 2 }).unwrap();
+        assert_eq!(
+            next_error(&mut inboxes[1]),
             "every seat needs a player or the computer first"
         );
     }
