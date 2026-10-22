@@ -457,6 +457,15 @@ function hintPending(on) {
   $("hint-btn").disabled = on;
   $("hint-btn").textContent = on ? "Thinking…" : "Suggest";
 }
+/** Colours the browser's toolbar (on phones) like the page, following a chosen theme. */
+function syncThemeColor() {
+  const bg = getComputedStyle(document.body).backgroundColor;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    if (document.documentElement.dataset.theme) m.setAttribute("content", bg);
+    else m.setAttribute("content", m.media.includes("dark") ? "#12161f" : "#f4f1ea");
+  });
+}
+
 /** A server message as a sentence: capitalised, with a full stop. */
 function sentence(text) {
   const t = text.charAt(0).toUpperCase() + text.slice(1);
@@ -955,7 +964,9 @@ async function main() {
     else document.documentElement.dataset.theme = t;
     try { localStorage.setItem("rainbow.theme", t); } catch { /* not remembered */ }
     if (game && game.over) renderChart(); // the chart palette depends on the theme
+    syncThemeColor();
   };
+  syncThemeColor();
   // close the settings menu when clicking elsewhere
   document.addEventListener("click", (e) => {
     if (!$("settings").contains(e.target)) $("settings").open = false;
