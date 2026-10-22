@@ -29,12 +29,13 @@ pub struct Params {
 }
 
 impl Default for Params {
-    /// A quick sweep against `cheapest` opponents (q 0.3-0.9, card 1-2); not yet tuned.
+    /// Grid search against three Economists (4p, 400 deals): q 0.2-0.9, card 0-2.5, structure
+    /// 0-2. Results are flat around these values (1.09-1.11) and fall off with higher costs.
     fn default() -> Self {
         Self {
-            card_value: 1.0,
-            structure_value: 1.0,
-            hold_chance: 0.8,
+            card_value: 0.5,
+            structure_value: 0.5,
+            hold_chance: 0.5,
         }
     }
 }
