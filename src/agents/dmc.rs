@@ -392,10 +392,10 @@ pub struct EnsembleAgent {
 }
 
 /// Adds `weight` times the `counter` agent's score of each legal combo to `values`, in games of
-/// 3+ players: with two, where each plays twice a trick, the blend hurts (0.88 at weight 0.03
-/// against DMC alone).
+/// 3 to 5 players. Against DMC alone (round 9, weight 0.04): 1.10 (3p), 1.07 (4p), 1.04 (5p);
+/// but 0.93 with six players, and with two, where each plays twice a trick, 0.88 at 0.03.
 fn add_counter_scores(values: &mut [f32], weight: f32, obs: &Observation, legal: &[Combo]) {
-    if obs.num_players() < 3 {
+    if !(3..=5).contains(&obs.num_players()) {
         return;
     }
     let scores = crate::agents::counter::CounterAgent::with_params(
