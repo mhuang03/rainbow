@@ -240,6 +240,7 @@ const tests = {
     await p.waitForSelector("#table:not(.hidden) #watching:not(.hidden)");
     await p.waitForFunction(() => game && game.log.length >= 1, null, { timeout: 30000 });
     assert(await p.locator("#me.hidden").count(), "a watcher has no hand");
+    assert.strictEqual(await p.locator("#opponents .open-hand").count(), 4, "every computer hand is shown");
     await p.click("#leave-btn");
     await p.waitForSelector("#home:not(.hidden)");
     assert.deepStrictEqual(p.errors, []);

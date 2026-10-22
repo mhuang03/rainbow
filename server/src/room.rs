@@ -668,11 +668,16 @@ impl Room {
             .map(|i| {
                 let obs = s.observe(i);
                 let p = obs.players()[i];
-                json!({
+                let mut player = json!({
                     "hand_size": p.hand_size,
                     "reserve_size": p.reserve_size,
                     "points": p.points,
-                })
+                });
+                // in a watched game nobody plays, so watchers may see every hand
+                if self.watch {
+                    player["hand"] = json!(s.hand(i).cards().collect::<Vec<u8>>());
+                }
+                player
             })
             .collect();
         let hand = viewer.map(|v| s.hand(v).cards().collect::<Vec<u8>>());

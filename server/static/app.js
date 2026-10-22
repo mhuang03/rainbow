@@ -609,10 +609,18 @@ function renderOpponents(spectator, base, n) {
       `${p.hand_size}${p.reserve_size ? ` + ${p.reserve_size}` : ""}`));
     count.setAttribute("aria-label", `${p.hand_size} cards${p.reserve_size ? `, ${p.reserve_size} in reserve` : ""}`);
     meta.append(count, el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`));
+    // a watched game shows every hand, to learn from
+    let shown = null;
+    if (p.hand) {
+      shown = el("div", "open-hand");
+      shown.setAttribute("aria-label", `Hand: ${p.hand.join(" ") || "empty"}`);
+      for (const r of p.hand) shown.append(el("span", `card tiny r${r}`, String(r)));
+    }
     const wait = el("span", "wait", waitText(seat));
     wait.dataset.waitSeat = seat;
     head.append(wait);
     box.append(head, meta);
+    if (shown) box.append(shown);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
       select.setAttribute("aria-label", `Give ${seatName(seat)}'s seat to the computer`);
