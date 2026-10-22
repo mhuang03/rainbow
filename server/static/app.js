@@ -266,6 +266,15 @@ function renderRecord() {
   $("solo-record").textContent = text;
 }
 
+/** The next stronger opponent, once the player wins at least half their games (2 or more)
+ * against `id`; presets come ordered by strength. */
+function nextChallenge(id) {
+  const r = loadRecord()[id];
+  const i = presets.findIndex((p) => p.id === id);
+  if (!r || i < 0 || i + 1 >= presets.length || r.wins < 2 || r.wins * 2 < r.games) return null;
+  return presets[i + 1];
+}
+
 /** The single kind of computer opponent in this solo game, or null. */
 function soloOpponent() {
   if (!room || !room.hints || game.seat === null) return null;
@@ -776,7 +785,9 @@ function renderChart() {
   });
   // end-of-game bonus points (2 players) aren't in the trick log
   series.forEach((pts, seat) => { pts[pts.length - 1] = Math.max(pts[pts.length - 1], game.players[seat].points); });
-  const W = 440, H = 190, L = 34, R = 78, T = 10, B = 24;
+  // the right margin fits the longest end label ("Economist 2 43"; about 6 units a character)
+  const longest = Math.max(...series.map((p, seat) => `${who(seat)} ${p[p.length - 1]}`.length));
+  const W = 440, H = 190, L = 34, R = Math.max(60, 16 + 6 * longest), T = 10, B = 24;
   const tricks = game.log.length;
   const maxY = Math.max(10, ...series.flat());
   const x = (i) => L + (i / Math.max(1, tricks)) * (W - L - R);
@@ -872,6 +883,20 @@ function renderTable() {
     $("over-hint").textContent = me.host
       ? (soloOpponent() ? recordText(soloOpponent()) : "")
       : "Waiting for the host to start the next game.";
+    const up = me.host && winners.includes(game.seat) && soloOpponent() && nextChallenge(soloOpponent());
+    if (up) {
+      const go = el("button", "link", `Try ${up.label}`);
+      go.onclick = () => {
+        const n = game.players.length;
+        leave();
+        $("solo-players").value = String(n);
+        $("solo-custom").open = false;
+        $("solo-opponent").value = up.id;
+        $("solo-opponent").dispatchEvent(new Event("change"));
+        $("solo-start").click();
+      };
+      $("over-hint").append(". ", go);
+    }
     // move focus into the dialog once, when the game ends
     if (!$("game-over").contains(document.activeElement)) (me.host ? $("next-game") : $("over-title")).focus();
   }
