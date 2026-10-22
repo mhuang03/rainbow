@@ -208,6 +208,10 @@ Learned:
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
       0.57 against `dmc_league3`.
 
+- [x] Guided ISMCTS settings (league3 prior and leaf, belief, n=200), each variant
+      head-to-head against cpuct 1 / ptemp 0.1 (4p, two seats each, 80 deals): cpuct 0.5:
+      0.95, cpuct 2: 0.90, ptemp 0.05: 1.02, ptemp 0.2: 0.97, cpuct 2 + ptemp 0.2: 0.94. The
+      current settings are at or near the best.
 - [x] `prior=counter`: PUCT priors from a softmax over `counter`'s move scores (in points), no
       network needed. Plain ISMCTS (1000 iterations, counter rollouts) against three
       Economists: 1.97 without a prior; 2.17 / 2.08 / 2.04 with `ptemp` 1 / 2 / 4.
