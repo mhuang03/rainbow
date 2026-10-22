@@ -195,7 +195,10 @@ Learned:
       (eps 0.1). A much better playout policy matters more than the extra time it costs, as
       in Go before value networks.
 - [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v3.bin`)
-      as well as a DMC network; the kind is told by the output width.
+      as well as a DMC network; the kind is told by the output width. With `distill_v3` as the prior
+      (DMC leaf, belief, n=200) the search loses to the same search with the DMC prior: 0.93 to
+      1.07 (4p, two seats each) and 0.89 to 1.11 (2p). The distilled policy (48% top-move
+      agreement) is still too weak to steer the search.
 - [x] Mixed leaf evaluation (`leaf=...,mix=lambda`): `(1 - lambda) * DMC value + lambda *
       rollout`, as AlphaGo mixed its value network with rollouts.
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
