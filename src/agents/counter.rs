@@ -13,6 +13,8 @@
 //! structure (pairs, sets and run links broken), and plays the best.
 
 use arrayvec::ArrayVec;
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
 
 use crate::agents::Agent;
 use crate::constants::{MAX_PLAYERS, MAX_PLAYS_PER_TRICK, MAX_RANK, MIN_RANK};
@@ -29,6 +31,9 @@ pub struct Params {
     /// Learn each opponent's hold chance from the game so far: their rate of beating the trick
     /// when following, shrunk towards `1 - hold_chance` with this many pseudo-observations.
     pub adaptive: Option<f32>,
+    /// Deals of the unseen cards sampled to estimate whether each later opponent can beat a
+    /// combo. 0 uses the worst-case bound over all unseen cards instead.
+    pub samples: usize,
 }
 
 impl Default for Params {
@@ -40,6 +45,7 @@ impl Default for Params {
             structure_value: 0.5,
             hold_chance: 0.5,
             adaptive: None,
+            samples: 0,
         }
     }
 }
@@ -139,6 +145,34 @@ impl CounterAgent {
             }
         }
 
+        // With sampling, each later opponent's best possible play (per trick type) in each
+        // sampled deal; the chance they can beat a combo is the fraction of deals where it's
+        // stronger. Seeded from the position so scores stay a pure function of it.
+        let mut sampled: Vec<[[u8; 3]; MAX_PLAYERS]> = Vec::with_capacity(p.samples);
+        if p.samples > 0 {
+            let seed = hand
+                .counts()
+                .iter()
+                .fold(obs.history().len() as u64, |h, &c| {
+                    h.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ u64::from(c)
+                });
+            let mut rng = SmallRng::seed_from_u64(seed);
+            for _ in 0..p.samples {
+                let world = obs.determinize(&mut rng);
+                let mut best = [[0u8; 3]; MAX_PLAYERS];
+                for &s in later.iter().filter(|&&s| s != me) {
+                    let h = world.hand(s);
+                    for (i, tt) in [TrickType::Open, TrickType::Set, TrickType::Run]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        best[s][i] = strongest_possible(&h, h.len(), tt);
+                    }
+                }
+                sampled.push(best);
+            }
+        }
+
         // Every play takes a pile by its finishing rank, so a combo is worth the pile it
         // expects to finish on: plays already made that it doesn't beat rank ahead of it (ties
         // go to the earlier play), and each later opponent who could beat it does so with
@@ -155,8 +189,16 @@ impl CounterAgent {
             let mut dist: ArrayVec<f32, { MAX_PLAYS_PER_TRICK + 1 }> = ArrayVec::new();
             dist.push(1.0);
             for &s in later.iter().filter(|&&s| s != me) {
-                let bound = strongest_possible(&unknown, players[s].hand_size.into(), trick_type);
-                let beat = if strength > bound { 0.0 } else { 1.0 - hold[s] };
+                let can_beat = if sampled.is_empty() {
+                    let bound =
+                        strongest_possible(&unknown, players[s].hand_size.into(), trick_type);
+                    f32::from(strength <= bound)
+                } else {
+                    let tt = trick_type as usize;
+                    sampled.iter().filter(|b| b[s][tt] > strength).count() as f32
+                        / sampled.len() as f32
+                };
+                let beat = can_beat * (1.0 - hold[s]);
                 dist.push(0.0);
                 for k in (0..dist.len()).rev() {
                     let stay = dist[k] * (1.0 - beat);
