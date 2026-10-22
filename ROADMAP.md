@@ -160,6 +160,9 @@ Learned:
       guided ISMCTS's root visit counts. On the 43k decisions of the first expert-iteration
       round it reaches only 36% top-move agreement with the search and 0.42 against three
       Economists; sharpening the targets (temperature 0.3 or 0.1) doesn't help (0.39, 0.40).
+      It is data-limited: with search data from the round-3 network (n=200, league3 prior and
+      leaf, belief), 91k decisions give 43% agreement and 0.88 against Economists (0.45 against
+      three `dmc_league3`); all 137k decisions (`models/distill_v2.bin`) give 0.97 (0.52).
 - [x] `dmc_hist`: DMC with public-history features (`Observation::encode_history`: the last 12
       plays with lead and beat flags, and each seat's rate of beating the trick when following;
       `train_dmc.py --history`). Existing networks are unaffected: `DmcAgent` tells a history
