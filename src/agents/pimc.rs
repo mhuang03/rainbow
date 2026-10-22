@@ -21,12 +21,14 @@ pub struct Params {
 }
 
 impl Default for Params {
-    /// Random rollouts: playouts with the `cheapest` policy assume every opponent plays like
-    /// it, which wins against `cheapest` but loses badly to stronger players.
+    /// `counter` rollouts with 10% random moves: 1.80 against three Economists, where random
+    /// rollouts score 0.94. (`cheapest` rollouts assume every opponent plays like `cheapest`,
+    /// which wins against it but loses badly to stronger players; `counter` is close enough to
+    /// good play that this bias stops hurting.)
     fn default() -> Self {
         Self {
             determinizations: 64,
-            rollout: Rollout::Random,
+            rollout: Rollout::Counter { epsilon: 0.1 },
             reward: Reward::default(),
         }
     }

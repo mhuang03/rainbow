@@ -170,7 +170,36 @@ Learned:
       60 minutes of self-play from scratch, as v2: 1.12M games (v2: 2.43M; rebuilding the history
       features each decision halves throughput), 0.95 against three Economists (v2 at a similar
       game count: 1.32). Head-to-head against v2: 0.80 (2p), 0.64 (4p); table against Economists
-      1.56 / 1.04 / 0.95 / 0.89. Being continued to v2's game count for a fair comparison.
+      1.56 / 1.04 / 0.95 / 0.89. Continued for 30 more minutes (about 2M games in all; a container
+      restart ended the run at its last checkpoint): 1.12 against Economists, but still 0.90
+      (2p) and 0.61 (4p) head-to-head against v2. **Negative result:** the history features
+      don't help at this budget, and they halve self-play throughput.
+
+## Milestone 14: Better playouts and search inputs
+
+- [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
+      Against three Economists (4p, 200 deals):
+
+      | Agent | Rollout | Relative |
+      |---|---|---|
+      | ISMCTS (1000 iterations) | cheapest, eps 0.3 (old default) | 1.41 |
+      | | random | 1.20 |
+      | | counter, eps 0.1 / 0.15 / **0.2** / 0.3 / 0.45 / 0.6 | 1.79 / 1.88 / **1.97** / 1.71 / 1.64 / 1.56 |
+      | ISMCTS, 20 ms per move | cheapest / counter eps 0.2 | 1.41 / 1.59 |
+      | PIMC (64 deals) | random (old default) | 0.94 |
+      | | counter, eps 0 / **0.1** / 0.2 | 1.78 / **1.80** / 1.73 |
+      | ISMCTS n=200 with the league3 prior | counter, eps 0.3 | 1.86 |
+
+      Head-to-head (4p, two seats each), counter-rollout ISMCTS beats cheapest-rollout ISMCTS
+      1.29 to 0.71. Counter rollouts are now the default for both ISMCTS (eps 0.2) and PIMC
+      (eps 0.1). A much better playout policy matters more than the extra time it costs, as
+      in Go before value networks.
+- [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v3.bin`)
+      as well as a DMC network; the kind is told by the output width.
+- [x] Mixed leaf evaluation (`leaf=...,mix=lambda`): `(1 - lambda) * DMC value + lambda *
+      rollout`, as AlphaGo mixed its value network with rollouts.
+- [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
+      0.57 against `dmc_league3`.
 
 ## Tooling added along the way
 

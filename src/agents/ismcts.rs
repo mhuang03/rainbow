@@ -49,14 +49,15 @@ pub struct Params {
 }
 
 impl Default for Params {
-    /// Tuned against three Economists in 4-player games. Unlike PIMC, ISMCTS does best with
-    /// mostly-`cheapest` rollouts: the tree models opponents' near-term choices itself.
+    /// Tuned against three Economists in 4-player games. `counter` rollouts with 20% random
+    /// moves score 1.97 there, against 1.41 for mostly-`cheapest` rollouts (1.59 against 1.41
+    /// at an equal 20 ms per move).
     fn default() -> Self {
         Self {
             iterations: 1000,
             time_limit: None,
             exploration: 0.7,
-            evaluator: Evaluator::Rollout(Rollout::Cheapest { epsilon: 0.3 }),
+            evaluator: Evaluator::Rollout(Rollout::Counter { epsilon: 0.2 }),
             reward: Reward::default(),
             prior: None,
             belief: None,
