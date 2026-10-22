@@ -256,19 +256,19 @@ impl Room {
                     return self.reply(conn, "no such seat");
                 };
                 if matches!(current, Seat::Human { conn: Some(_), .. }) {
-                    return self.reply(conn, "that seat belongs to a connected player");
+                    return self.reply(conn, "someone is sitting there");
                 }
                 let new = match agent {
                     Some(id) => match self.agent_seat(&id) {
                         Some(s) => s,
-                        None => return self.reply(conn, "unknown agent"),
+                        None => return self.reply(conn, "that opponent isn't available"),
                     },
                     None => Seat::Open,
                 };
                 // During a game a seat can only be handed to an agent, never left empty.
                 if self.game.as_ref().is_some_and(|g| !g.state.is_over()) {
                     let Seat::Agent { preset, .. } = &new else {
-                        return self.reply(conn, "a seat can't be opened during a game");
+                        return self.reply(conn, "seats can only be opened between games");
                     };
                     let agent = self
                         .presets
@@ -419,7 +419,7 @@ impl Room {
             .get(&conn)
             .is_some_and(|t| now.duration_since(*t) < CHAT_INTERVAL)
         {
-            return self.reply(conn, "you're sending messages too quickly");
+            return self.reply(conn, "wait a moment before sending another message");
         }
         self.last_chat.insert(conn, now);
         let from = match self.seat_of(conn).map(|i| &self.seats[i]) {
@@ -480,7 +480,7 @@ impl Room {
         }
         match Combo::from_action_index(action).filter(|&c| game.state.is_legal(c)) {
             Some(combo) => self.apply(combo),
-            None => self.reply(conn, "that play isn't legal"),
+            None => self.reply(conn, "you can't play that now"),
         }
     }
 

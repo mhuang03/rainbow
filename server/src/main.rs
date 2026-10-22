@@ -198,7 +198,7 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
             }
             let mut rooms = app.rooms.lock().expect("lock");
             if rooms.len() >= MAX_ROOMS {
-                return send_error("the server is full, try again later");
+                return send_error("the server is busy right now; try again in a few minutes");
             }
             let code = new_code(&rooms);
             let seats = std::iter::once(None)

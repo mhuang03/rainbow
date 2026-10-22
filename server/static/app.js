@@ -533,9 +533,9 @@ function renderOpponents(spectator, base, n) {
     box.append(head, meta);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
-      select.setAttribute("aria-label", `Replace ${seatName(seat)} with an agent`);
+      select.setAttribute("aria-label", `Give ${seatName(seat)}'s seat to the computer`);
       presetOptions(select, false);
-      select.prepend(new Option("Replace with an agent…", ""));
+      select.prepend(new Option("Hand seat to the computer…", ""));
       select.value = "";
       select.onchange = () => select.value && send({ t: "seat", seat, agent: select.value });
       box.append(select);
@@ -886,7 +886,7 @@ async function main() {
   try {
     presets = await (await fetch("/api/agents")).json();
   } catch {
-    toast("Couldn't load the agent list");
+    toast("Couldn't load the opponents. Reload the page to try again.");
   }
   setupHome();
   const howto = () => {
