@@ -245,10 +245,12 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
 /// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dmc` also takes several
 ///   `+`-separated paths and averages their predictions (an ensemble).
-/// - `hybrid`: `path` (a DMC network played until the endgame), `cards` (cards left in all hands
-///   and reserves at which to switch to exact search; default 8) and `k` (deals solved per
-///   endgame move; default 8) and `belief` (a belief network weighting the endgame's deals). `dqn`, `ppo` and `nfsp` also
-///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
+/// - `hybrid`: `path` (a DMC network, or an `a+b` ensemble, played until the endgame) or `base`
+///   (`counter`, `ismcts` or `pimc`), `cards` (cards left in all hands and reserves at which to
+///   switch to exact search; default 8), `k` (deals solved per endgame move; default 8) and
+///   `belief` (a belief network weighting the endgame's deals).
+/// - `dqn`, `ppo` and `nfsp` also take `sample` (`true` to sample from the softmax of the
+///   outputs; the default for `nfsp`).
 ///
 /// Rollout options are `rollout` (`random`, `cheapest` or `counter`), `eps` (random-move rate of the
 /// cheapest and counter rollouts) and `margin` (score-margin reward weight).
@@ -401,7 +403,18 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 opts.take::<String>("path")?,
                 opts.take::<String>("base")?.as_deref(),
             ) {
-                (Some(path), None) => Box::new(DmcAgent::new(dmc::Mlp::load_cached(&path)?)?),
+                // one network, or an ensemble (`a+b+c`)
+                (Some(path), None) => {
+                    let mut members = path
+                        .split('+')
+                        .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
+                        .collect::<Result<Vec<_>, String>>()?;
+                    if members.len() == 1 {
+                        Box::new(members.remove(0))
+                    } else {
+                        Box::new(dmc::EnsembleAgent::new(members))
+                    }
+                }
                 (None, Some("counter")) => {
                     Box::new(CounterAgent::with_params(counter::Params::sampled()))
                 }
