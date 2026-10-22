@@ -362,11 +362,12 @@ stays on round 9. League rounds need the cores to themselves.
       before the latest plays were seen, which belief-weighted sampling now rules out; they
       outweigh the fresh iterations and bias the search. Off by default; `reuse=0.25` keeps a
       quarter of the old statistics instead (testing).
-- [ ] `ismcts:gumbel=m`: sequential halving at the root, as in Gumbel MuZero (Danihelka et al.
-      2022), which improves on PUCT at small budgets. Network-free at n=50: with the Gumbel noise
-      kept in the final ranking 0.95 against PUCT (4p 2+2, 200 deals), since the noise mostly
-      adds randomness to play; ranking by prior and value alone 0.99, level. Testing guided
-      (n=200).
+- [x] `ismcts:gumbel=m`: sequential halving at the root, as in Gumbel MuZero (Danihelka et al.
+      2022), which improves on PUCT at small budgets. Network-free at n=50: 0.95 against PUCT
+      with the Gumbel noise kept in the final ranking (it mostly adds randomness to play), 0.99
+      without it. On guided ISMCTS (n=200, 16 candidates) 0.87 (4p 2+2, 300 deals): splitting
+      200 iterations evenly over rounds starves the moves the network prior already favours,
+      which PUCT searches deeply. Off by default.
 - [x] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
       weight (1 - w)^p, w being the learner's rate of finishing ahead of each, as in AlphaStar.
       A repeat of round 10 with p = 2 (as starved of CPU, 105,000 games): against the uniform
