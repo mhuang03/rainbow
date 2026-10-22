@@ -825,6 +825,39 @@ mod tests {
     }
 
     #[test]
+    fn fast_play_is_for_solo_games_only() {
+        let presets = Arc::new(presets::available(std::path::Path::new("no-models")));
+        let mut room = Room::new("TST4".into(), vec![None, None], presets, Arc::default());
+        let mut inboxes = Vec::new();
+        for id in 1..=2 {
+            let (out, inbox) = tokio::sync::mpsc::unbounded_channel();
+            inboxes.push(inbox);
+            let name = format!("P{id}");
+            room.handle(Command::Join {
+                name,
+                token: None,
+                conn: Conn { id, tx: out },
+            });
+        }
+        room.handle(Command::Speed {
+            conn: 1,
+            fast: true,
+        });
+        assert!(!room.fast, "two people are seated");
+        room.handle(Command::Disconnect { conn: 2 });
+        room.handle(Command::SetSeat {
+            conn: 1,
+            seat: 1,
+            agent: Some("random".into()),
+        });
+        room.handle(Command::Speed {
+            conn: 1,
+            fast: true,
+        });
+        assert!(room.fast, "alone against the computer");
+    }
+
+    #[test]
     fn only_the_host_starts_and_open_seats_block_the_start() {
         PACE.get_or_init(|| 0.0);
         let presets = Arc::new(presets::available(std::path::Path::new("no-models")));
