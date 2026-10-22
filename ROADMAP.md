@@ -283,7 +283,26 @@ it.
 
 ## Results
 
-### Current ladder (4p, 60 random lineups of 4 from 14 agents, 40 duplicate deals each)
+### Current ladder (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
+
+| Agent | Relative | +/- |
+|---|---|---|
+| ismcts:n=200,prior=dmc_league5.bin,leaf=dmc_league5.bin,belief=belief_v1.bin | **1.72** | 0.06 |
+| dmc:path=dmc_league3.bin+dmc_league4.bin+dmc_league5.bin | 1.40 | 0.05 |
+| hybrid:path=dmc_league5.bin | 1.36 | 0.08 |
+| ismcts | 1.29 | 0.07 |
+| dmc:path=dmc_league5.bin | 1.19 | 0.06 |
+| pimc | 1.04 | 0.08 |
+| distill:path=distill_v4.bin | 0.74 | 0.07 |
+| counter | 0.64 | 0.04 |
+| economist | 0.42 | 0.04 |
+| cheapest | 0.26 | 0.02 |
+
+A stronger field than the previous ladder, so scores are compressed. Network-free ISMCTS
+(counter rollouts and prior) now ranks above the raw round-5 network, and counter clearly
+above the Economist.
+
+### Previous ladder (4p, 60 random lineups of 4 from 14 agents, 40 duplicate deals each)
 
 | Agent | Relative | +/- |
 |---|---|---|
