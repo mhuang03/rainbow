@@ -399,3 +399,5 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
   .card { border-color: currentColor; text-shadow: none; }
   .opp, .me, .side-box, .panel { border: 1px solid var(--text); }
 }
+.opp .wait { font-weight: 400; font-size: 12px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.opp .wait:empty { display: none; }

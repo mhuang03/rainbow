@@ -483,7 +483,29 @@ function flyIn(row) {
   flight = null;
 }
 
+// When the current turn started, to show how long a person has been thinking.
+let turnStart = { seat: null, at: 0 };
+const SHOW_WAIT_AFTER = 15000;
+
+function waitText(seat) {
+  if (game.over || game.current !== seat) return "";
+  const s = room.seats[seat] || {};
+  if (s.kind !== "human") return "";
+  const ms = Date.now() - turnStart.at;
+  if (ms < SHOW_WAIT_AFTER) return "";
+  const secs = Math.floor(ms / 1000);
+  return `thinking… ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+// refresh the waiting time once a second without re-rendering the table
+setInterval(() => {
+  document.querySelectorAll("[data-wait-seat]").forEach((e) => {
+    e.textContent = waitText(+e.dataset.waitSeat);
+  });
+}, 1000);
+
 function renderOpponents(spectator, base, n) {
+  if (turnStart.seat !== game.current) turnStart = { seat: game.current, at: Date.now() };
   const opps = $("opponents");
   opps.innerHTML = "";
   for (let k = spectator ? 0 : 1; k < n; k++) {
@@ -505,6 +527,9 @@ function renderOpponents(spectator, base, n) {
       `${p.hand_size}${p.reserve_size ? ` + ${p.reserve_size}` : ""}`));
     count.setAttribute("aria-label", `${p.hand_size} cards${p.reserve_size ? `, ${p.reserve_size} in reserve` : ""}`);
     meta.append(count, el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`));
+    const wait = el("span", "wait", waitText(seat));
+    wait.dataset.waitSeat = seat;
+    head.append(wait);
     box.append(head, meta);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
