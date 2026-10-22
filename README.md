@@ -103,6 +103,35 @@ in a field of mostly learned agents it ranks just below it.
 
 [ROADMAP.md](ROADMAP.md) has the full results and what each experiment taught.
 
+## Play in the browser
+
+`server/` is a web server for playing Rainbow yourself, alone against the agents or online with
+other people:
+
+```sh
+cargo run --release -p rainbow-server -- --port 8080 --models models
+```
+
+Open http://localhost:8080 and enter your name.
+
+- **Play against agents:** pick the number of players and an agent for each other seat. The
+  choices are Random, Cheapest, Economist, Counter, DMC, the DMC ensemble, Hybrid, ISMCTS and
+  Guided ISMCTS, the strongest.
+- **Play online:** create a room and share its four-letter code or link. Each other seat is
+  either open for a person or given to an agent. The host can hand an open seat (or an absent
+  player's seat, mid-game) to an agent and starts each game. A player who reloads or loses
+  their connection gets their seat back. Anyone joining a full room watches.
+
+To play with people on other machines, the port must be reachable from them, for example on a
+LAN, through port forwarding, or behind a reverse proxy that passes WebSockets through (the page
+connects to `/ws`). Agents wait briefly before moving so people can follow the game. `--pace 0`
+removes the wait, and `--pace 2` doubles it. Network agents are listed only when their model
+files are found in `--models`.
+
+The server runs each room on its own thread, which owns the game and its agents. Each browser
+only receives its own hand and legal moves plus the public state, so nobody can see hidden
+cards.
+
 ## Python bindings
 
 The `python/` crate builds a `rainbow_engine` extension module with PyO3 and maturin:

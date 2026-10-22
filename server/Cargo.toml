@@ -1,0 +1,13 @@
+[package]
+name = "rainbow-server"
+version = "0.1.0"
+edition = "2024"
+description = "Play Rainbow in the browser against the agents or other people"
+
+[dependencies]
+rainbow = { path = ".." }
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.10.2"

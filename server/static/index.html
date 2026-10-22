@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rainbow</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="bar">
+  <h1 class="logo"><span>R</span><span>a</span><span>i</span><span>n</span><span>b</span><span>o</span><span>w</span></h1>
+  <div id="room-badge" class="badge hidden"></div>
+  <div id="status" class="status"></div>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="home" class="view">
+    <label class="name-field">Your name
+      <input id="name" maxlength="20" placeholder="Player" autocomplete="nickname">
+    </label>
+    <div class="panels">
+      <div class="panel">
+        <h2>Play against agents</h2>
+        <label>Players
+          <select id="solo-players"></select>
+        </label>
+        <div id="solo-seats" class="seat-pickers"></div>
+        <button id="solo-start" class="primary">Start game</button>
+      </div>
+      <div class="panel">
+        <h2>Play online</h2>
+        <label>Players
+          <select id="online-players"></select>
+        </label>
+        <div id="online-seats" class="seat-pickers"></div>
+        <button id="online-create" class="primary">Create room</button>
+        <div class="divider">or join one</div>
+        <div class="join-row">
+          <input id="join-code" maxlength="4" placeholder="CODE" autocapitalize="characters">
+          <button id="join-btn">Join</button>
+        </div>
+      </div>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <p>The deck has ten cards of each rank, 1 to 6. Each trick, everyone plays once (twice in
+      a 2-player game): a <b>single</b>, a <b>set</b> of equal cards, or a <b>run</b> of
+      consecutive ranks. Once a set is played, only singles and sets may follow; once a run is
+      played, only singles and runs.</p>
+      <p>When the trick ends, plays are ranked: more cards beat fewer, then the higher top card,
+      then the earlier play. In that order, players take the point piles in the middle, most
+      valuable first. The played cards then form the next piles. The game ends after a trick
+      in which two players have run out of cards; the most points wins.</p>
+    </details>
+  </section>
+
+  <!-- Lobby -->
+  <section id="lobby" class="view hidden">
+    <div class="panel wide">
+      <h2>Room <span id="lobby-code" class="code"></span></h2>
+      <p class="share">Invite others with the code or this link:
+        <input id="share-link" readonly> <button id="copy-link">Copy</button></p>
+      <ol id="lobby-seats" class="lobby-seats"></ol>
+      <p id="lobby-hint" class="hint"></p>
+      <div class="actions">
+        <button id="lobby-start" class="primary">Start game</button>
+        <button id="lobby-leave">Leave</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section id="table" class="view hidden">
+    <div id="opponents" class="opponents"></div>
+    <div class="middle">
+      <div class="piles-area">
+        <div class="label">Point piles</div>
+        <div id="piles" class="piles"></div>
+      </div>
+      <div class="trick-area">
+        <div class="label"><span id="trick-title">Trick</span> <span id="trick-type" class="pill"></span></div>
+        <div id="trick" class="trick"></div>
+      </div>
+    </div>
+    <div id="me" class="me">
+      <div class="me-info"><span id="me-name"></span> <span id="me-points" class="points"></span>
+        <span id="me-reserve" class="reserve"></span>
+        <span id="turn-hint" class="turn-hint"></span></div>
+      <div id="hand" class="hand"></div>
+      <div class="play-row">
+        <div id="legal" class="legal"></div>
+        <button id="play-selected" class="primary" disabled>Play selected</button>
+      </div>
+    </div>
+    <div id="game-over" class="overlay hidden">
+      <div class="panel">
+        <h2 id="over-title">Game over</h2>
+        <ol id="standings" class="standings"></ol>
+        <div class="actions">
+          <button id="next-game" class="primary">Next game</button>
+          <button id="over-leave">Leave room</button>
+        </div>
+        <p id="over-hint" class="hint"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
