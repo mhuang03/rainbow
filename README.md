@@ -163,7 +163,7 @@ print(game.scores(), game.returns())
 ```
 
 - `Game.clone()`, `determinize(player, seed)` and `rollout(seed)` support MCTS. `rollout` runs without holding the GIL.
-- `VecEnv(num_envs, seed, players, opponents, learners)` steps many games per call and auto-resets finished ones (about 1M steps/s with random actions). With `opponents` (Rust agent specs), the environment plays the non-learner seats itself, for training against a league.
+- `VecEnv(num_envs, seed, players, opponents, learners, pfsp)` steps many games per call and auto-resets finished ones (about 1M steps/s with random actions). With `opponents` (Rust agent specs), the environment plays the non-learner seats itself, for training against a league; `pfsp` weights the draw towards the opponents the learners beat least, and `opponent_win_rates()` reports those rates.
 - `batch_observations(games)` fills `(B, OBS_SIZE)` and `(B, NUM_ACTIONS)` arrays for a list of `Game`s.
 - `python/rainbow_gym.py` wraps a game as a Gymnasium environment (one learner seat against Rust agents, with `action_masks()` for MaskablePPO-style libraries).
 - `Game` pickles compactly (starting deal plus history), and `to_bytes` / `from_bytes` expose the same encoding.
@@ -196,3 +196,10 @@ All trainers play many games at once through `VecEnv`, check progress in the Rus
 | `train_nfsp.py` | NFSP best-response and average-policy networks (`nfsp`). |
 | `train_belief.py` | Hand-prediction network for `ismcts:belief=` (supervised, from `Game.full_observation`). |
 | `train_exit.py` | Expert iteration: fine-tunes a DMC network on `rainbow selfplay` search values. |
+| `distill_ensemble.py` | Distils a DMC ensemble into one network, regressing every legal move's ensemble value in ensemble self-play. |
+
+`train_dmc.py` also takes `--init` (continue a network), `--widen` (grow it first, function-preserving),
+`--history` (public-history inputs) and, with `--opponents`, `--pfsp P` (draw opponents with weight
+(1 - win rate)^P, favouring those the learner beats least). `scripts/league_round.sh` runs one league
+round with these and a head-to-head check. `train_belief.py --history` trains a belief network on
+the public history as well.
