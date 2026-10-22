@@ -326,6 +326,10 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
       beats `hybrid` on round 9 alone 1.10 (4p 2+2, 800 deals) but is level with the ensemble
       itself, 1.00: the ensemble already plays the endgame about as well. The browser drops its
       Hybrid preset, which the DMC ensemble outplays.
+- [x] `counter:belief=`: Counter's sampled deals weighted by `belief_v3`. Slightly worse than
+      uniform deals: 0.97 (4p 2+2, 600 deals) and 0.99 (2p, 300 deals). Counter's costs were
+      tuned with uniform deals, and its question (can anyone beat this?) needs the extremes of
+      what opponents might hold, which a belief network's averages smooth away.
 - [x] Root parallelisation for guided ISMCTS: 4 threads of 50 iterations against one of 200,
       0.90 (4p 2+2, 200 deals). Independent shallow trees lose more than threads gain;
       Guided ISMCTS stays single-threaded.
