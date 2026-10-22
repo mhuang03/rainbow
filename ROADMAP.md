@@ -362,6 +362,9 @@ stays on round 9. League rounds need the cores to themselves.
       before the latest plays were seen, which belief-weighted sampling now rules out; they
       outweigh the fresh iterations and bias the search. Off by default; `reuse=0.25` keeps a
       quarter of the old statistics instead (testing).
+- [x] Guided ISMCTS's PUCT constant: `cpuct=0.5` scores 0.99 and `cpuct=2` 0.90 against the
+      default 1 (4p 2+2, 200 deals each). More exploration spends the 200 iterations on moves
+      the network already rates poorly; 1 stays.
 - [x] `ismcts:gumbel=m`: sequential halving at the root, as in Gumbel MuZero (Danihelka et al.
       2022), which improves on PUCT at small budgets. Network-free at n=50: 0.95 against PUCT
       with the Gumbel noise kept in the final ranking (it mostly adds randomness to play), 0.99
