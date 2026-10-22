@@ -243,7 +243,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
         "biggest" => Box::new(BiggestAgent),
         "cheapest" => Box::new(CheapestAgent),
         "counter" => {
-            let d = counter::Params::default();
+            let d = counter::Params::sampled();
             Box::new(CounterAgent::with_params(counter::Params {
                 card_value: opts.take("card")?.unwrap_or(d.card_value),
                 structure_value: opts.take("structure")?.unwrap_or(d.structure_value),

@@ -36,6 +36,22 @@ pub struct Params {
     pub samples: usize,
 }
 
+impl Params {
+    /// The `counter` agent's settings: 24 sampled deals instead of the bound, with the costs
+    /// retuned for them (q 0, card 2, structure 0.5). Against three Economists: 1.20, where
+    /// the bound version scores 1.12 (600 deals); head-to-head 1.12 to 0.88 (4p). Rollouts and
+    /// search priors keep the faster bound version ([`Params::default`]).
+    pub fn sampled() -> Self {
+        Self {
+            card_value: 2.0,
+            structure_value: 0.5,
+            hold_chance: 0.0,
+            samples: 24,
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for Params {
     /// Grid search against three Economists (4p, 400 deals): q 0.2-0.9, card 0-2.5, structure
     /// 0-2. Results are flat around these values (1.09-1.11) and fall off with higher costs.

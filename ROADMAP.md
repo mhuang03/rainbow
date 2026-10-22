@@ -175,6 +175,12 @@ Learned:
       (2p) and 0.61 (4p) head-to-head against v2. **Negative result:** the history features
       don't help at this budget, and they halve self-play throughput.
 
+### League round 4 (`models/dmc_league4.bin`)
+
+Continued from round 3 for 60 minutes against economist, counter, dmc_league2 and dmc_league3
+(1.97 against three Economists, 1.83 against three Counters). Against round 3: 1.07 (2p) and
+1.06 (4p) head-to-head. The browser presets now use it.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
@@ -220,7 +226,14 @@ Learned:
       off).
 - [x] `counter:samples=k`: estimate whether each later opponent can beat a combo from k sampled
       deals instead of the worst-case bound. Needs a higher card cost to compensate (q 0, card
-      1.5: 1.10, level with the bound version); sweep continuing.
+      1.5: 1.10, level with the bound version). Tuned (q 0, card 2, structure 0.5, 24 deals):
+      **1.20** against three Economists where the bound version scores 1.12 (600 deals), and
+      1.12 to 0.88 head-to-head (4p). Now the `counter` agent's default; rollouts and priors
+      keep the bound version for speed.
+- [x] Network-free ISMCTS (counter prior and counter rollouts, 1000 iterations) against
+      `dmc_league3`: 0.96 (4p, against three) and 0.95 (2p). Before the counter rollouts and
+      prior, plain ISMCTS sat far below the league networks (1.06 against `dmc_league`'s 1.66
+      on the earlier ladder).
 - [x] `counter:adaptive=w`: each opponent's hold chance learned from their beat rate when
       following, shrunk to the prior with weight w. Neutral: against three Economists 1.10
       (fixed) vs 1.11-1.13 (w = 2-50, within noise), but worse against three `cheapest`
