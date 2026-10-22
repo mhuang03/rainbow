@@ -386,8 +386,12 @@ stays on round 9. League rounds need the cores to themselves.
       so the browser drops its separate DMC-ensemble preset. As guided ISMCTS's prior and leaf
       it is level with round 9 (0.99, 4p 2+2, 200 deals): a better network alone doesn't
       improve the search at n=200, so Guided ISMCTS keeps round 9.
-- [ ] `train_belief.py --history`: the belief network also reads the public history (who played
-      what, in order). Training on the same 60,000 games as `belief_v4` without it.
+- [x] `belief_v4` and `train_belief.py --history` (`belief_v4h`): 60,000 games (30% of positions
+      kept, to fit memory), 1024-1024, without and with the public history. Validation loss
+      0.00212 and 0.00213, and in guided ISMCTS against `belief_v3` 0.98 and 0.99 (4p 2+2, 240
+      deals); v4h against v4 1.03 (2p, 150 deals). Twice the data, a wider network and the play
+      history add nothing: the belief network's accuracy looks saturated for this search, and
+      the browser keeps `belief_v3`.
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /
