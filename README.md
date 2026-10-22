@@ -74,6 +74,8 @@ cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random 
 
 [ROADMAP.md](ROADMAP.md) tracks planned agents and records tournament results.
 
+`scripts/league_round.sh` runs one round of DMC league training and compares the result head-to-head with its starting network (`WIDEN=` grows the network first).
+
 `rainbow selfplay` plays games with network-guided ISMCTS and records the search's value for every root move, as training data for expert iteration.
 
 ### Results
