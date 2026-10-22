@@ -480,7 +480,8 @@ function play(action) {
 
 /** FLIP: start the new play's cards where they were in the hand and let them slide into place. */
 function flyIn(row) {
-  if (!flight || reducedMotion.matches || Date.now() - flight.at > 1500) return;
+  const reduce = reducedMotion.matches || document.documentElement.dataset.motion === "reduce";
+  if (!flight || reduce || Date.now() - flight.at > 1500) return;
   const cards = [...row.children];
   cards.forEach((c, i) => {
     const from = flight.rects[Math.min(i, flight.rects.length - 1)];
@@ -916,6 +917,13 @@ async function main() {
     soundOn = $("sound-toggle").checked;
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
     SOUNDS.turn();
+  };
+  $("motion-toggle").checked = document.documentElement.dataset.motion === "reduce";
+  $("motion-toggle").onchange = () => {
+    const reduce = $("motion-toggle").checked;
+    if (reduce) document.documentElement.dataset.motion = "reduce";
+    else delete document.documentElement.dataset.motion;
+    try { localStorage.setItem("rainbow.motion", reduce ? "reduce" : "full"); } catch { /* not remembered */ }
   };
   $("theme-select").value = document.documentElement.dataset.theme || "auto";
   $("theme-select").onchange = () => {
