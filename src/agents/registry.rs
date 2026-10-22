@@ -367,7 +367,11 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
                 .collect::<Result<Vec<_>, String>>()?;
             if members.len() == 1 {
-                Box::new(members.remove(0))
+                let agent = members.remove(0);
+                match opts.take::<f32>("temp")? {
+                    Some(t) => Box::new(agent.sampling(t, seed)),
+                    None => Box::new(agent),
+                }
             } else {
                 Box::new(dmc::EnsembleAgent::new(members))
             }

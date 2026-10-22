@@ -300,6 +300,12 @@ much as round 2 did. The browser presets use it.
       ISMCTS (round 6 prior and leaf, n=200) it beats `belief_v1` 1.06 (4p, 100 deals) and 1.03
       (2p, 150 deals). The browser's Guided ISMCTS uses it.
 
+- [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
+      opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /
+      0.1 / 0.2: 1.79 / 1.07 / 0.55 / 0.23. The browser offers T = 0.1 ("DMC, playful",
+      Beginner) and T = 0.04 ("DMC, relaxed", Casual) to fill the gaps in its difficulty
+      ladder.
+
 ## Tooling added along the way
 
 - [x] `VecEnv`: batched Python environment, 11x faster stepping than per-game calls; all

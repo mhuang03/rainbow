@@ -46,6 +46,13 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "cheapest".into(),
         ),
         (
+            "dmc-playful",
+            "DMC, playful",
+            "Beginner",
+            "The neural network with its moves loosened: often sensible, sometimes not.",
+            format!("dmc:path={league},temp=0.1"),
+        ),
+        (
             "economist",
             "Economist",
             "Casual",
@@ -58,6 +65,13 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "Casual",
             "Counts cards to judge what opponents can still play.",
             "counter".into(),
+        ),
+        (
+            "dmc-relaxed",
+            "DMC, relaxed",
+            "Casual",
+            "The neural network playing a little loosely.",
+            format!("dmc:path={league},temp=0.04"),
         ),
         (
             "dmc",

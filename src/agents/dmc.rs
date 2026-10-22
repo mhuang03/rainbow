@@ -12,6 +12,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use rand::rngs::SmallRng;
+use rand::{RngExt, SeedableRng};
+
 use crate::agents::Agent;
 use crate::game::encoding::{self, ACTION_FEATURES, HIST_OBS_SIZE, OBS_SIZE};
 use crate::game::{Combo, Observation};
@@ -241,6 +244,9 @@ pub struct DmcAgent {
     net: Arc<Mlp>,
     /// Whether the network also takes the public-history features.
     history: bool,
+    /// When set, moves are sampled from a softmax over the predicted returns at this
+    /// temperature instead of taking the best: a weaker, less predictable player.
+    sampling: Option<(f32, SmallRng)>,
 }
 
 impl DmcAgent {
@@ -260,7 +266,19 @@ impl DmcAgent {
                 net.outputs()
             ));
         }
-        Ok(Self { net, history })
+        Ok(Self {
+            net,
+            history,
+            sampling: None,
+        })
+    }
+
+    /// Samples moves from a softmax over predicted returns with `temperature`.
+    pub fn sampling(self, temperature: f32, seed: u64) -> Self {
+        Self {
+            sampling: Some((temperature, SmallRng::seed_from_u64(seed))),
+            ..self
+        }
     }
 
     /// Whether the network uses the public-history features.
@@ -328,6 +346,20 @@ impl Agent for DmcAgent {
             return legal[0];
         }
         let values = self.evaluate(obs, legal);
+        if let Some((temperature, rng)) = &mut self.sampling {
+            let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let weights: Vec<f32> = values
+                .iter()
+                .map(|&v| ((v - max) / *temperature).exp())
+                .collect();
+            let mut x = rng.random::<f32>() * weights.iter().sum::<f32>();
+            for (&combo, &w) in legal.iter().zip(&weights) {
+                if x < w {
+                    return combo;
+                }
+                x -= w;
+            }
+        }
         let best = (0..legal.len())
             .max_by(|&a, &b| values[a].total_cmp(&values[b]))
             .expect("legal moves are never empty");
