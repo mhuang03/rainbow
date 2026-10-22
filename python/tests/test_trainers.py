@@ -24,6 +24,7 @@ def run(script: str, *args: str) -> None:
     [
         ("train_dmc.py", "dmc", ["--hidden", "16", "8", "--aux-weight", "1"]),
         ("train_dmc.py", "dmc", ["--hidden", "16", "--opponents", "cheapest"]),
+        ("train_dmc.py", "dmc", ["--hidden", "16", "--opponents", "cheapest", "random", "--pfsp", "2"]),
         ("train_dmc.py", "dmc_hist", ["--hidden", "16", "--history"]),
         ("train_dqn.py", "dqn", ["--hidden", "16", "--batch", "32"]),
         ("train_ppo.py", "ppo", ["--hidden", "16", "--rollout", "256", "--minibatch", "128"]),
@@ -36,6 +37,28 @@ def test_trainer_exports_a_playable_network(tmp_path, script, spec, extra):
     run(script, *QUICK, "--out", str(out), *extra)
     agent = re.RustAgent(f"{spec}:path={out}")
     game = re.Game(3, seed=0)
+    while not game.is_over:
+        game.step(agent.act(game))
+
+
+def test_ensemble_distillation(tmp_path):
+    teachers = [tmp_path / f"teacher{i}.bin" for i in range(2)]
+    for i, t in enumerate(teachers):
+        run("train_dmc.py", *QUICK, "--hidden", "16", "--seed", str(i), "--out", str(t))
+    out = tmp_path / "student.bin"
+    run("distill_ensemble.py", *QUICK, "--teachers", *map(str, teachers), "--batch", "64", "--out", str(out))
+    agent = re.RustAgent(f"dmc:path={out}")
+    game = re.Game(4, seed=1)
+    while not game.is_over:
+        game.step(agent.act(game))
+
+
+def test_history_belief(tmp_path):
+    belief = tmp_path / "belief.bin"
+    run("train_belief.py", "--games", "4", "--epochs", "1", "--hidden", "16", "--agents", "cheapest",
+        "--history", "--out", str(belief))
+    agent = re.RustAgent(f"ismcts:n=8,belief={belief}")
+    game = re.Game(3, seed=2)
     while not game.is_over:
         game.step(agent.act(game))
 
