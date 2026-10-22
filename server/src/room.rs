@@ -451,8 +451,9 @@ impl Room {
         if game.state.is_over() || game.state.current_player() != seat {
             return self.reply(conn, "it isn't your turn");
         }
-        // The strongest fast agent available gives the hint.
-        let Some(mut adviser) = ["dmc", "counter"]
+        // The strongest agent available gives the hint (Guided ISMCTS takes about a second,
+        // which is fine for advice; hints are only offered in solo rooms).
+        let Some(mut adviser) = ["guided", "dmc", "counter"]
             .iter()
             .find_map(|id| self.presets.iter().find(|p| p.id == *id))
             .and_then(|p| p.create(self.rng.random()))

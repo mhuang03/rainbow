@@ -158,6 +158,7 @@ function receive(msg) {
       if (msg.seat !== me.seat || msg.seat === null) SOUNDS.chat();
       return;
     case "hint": {
+      hintPending(false);
       const l = game && game.legal.find((x) => x.action === msg.action);
       if (l) {
         selectCombo(l);
@@ -166,6 +167,7 @@ function receive(msg) {
       return;
     }
     case "error":
+      hintPending(false);
       toast(msg.msg);
       if (msg.msg === "that room doesn't exist or has closed" || msg.msg === "the room has closed") leave();
       break;
@@ -440,6 +442,17 @@ function selectCombo(l) {
     used.add(i);
     return i;
   });
+}
+
+// Suggestions come from the strongest agent and take a moment; the button says so.
+function hintPending(on) {
+  $("hint-btn").disabled = on;
+  $("hint-btn").textContent = on ? "Thinking…" : "Suggest";
+}
+function askHint() {
+  if ($("hint-btn").disabled) return;
+  hintPending(true);
+  send({ t: "hint" });
 }
 
 // A one-time tip for a first game, until the first play or a dismissal.
@@ -870,7 +883,7 @@ document.addEventListener("keydown", (e) => {
     const match = matchingLegal();
     if (match) { e.preventDefault(); play(match.action); }
   } else if (e.key === "h" || e.key === "H") {
-    if (room && room.hints && game.current === game.seat) send({ t: "hint" });
+    if (room && room.hints && game.current === game.seat) askHint();
   } else if (e.key === "Escape") {
     selection = [];
     renderHand();
@@ -896,7 +909,7 @@ async function main() {
   };
   $("howto-btn").onclick = howto;
   $("howto-link").onclick = howto;
-  $("hint-btn").onclick = () => send({ t: "hint" });
+  $("hint-btn").onclick = askHint;
   $("first-tip-close").onclick = markTipSeen;
   $("sound-toggle").checked = soundOn;
   $("sound-toggle").onchange = () => {
