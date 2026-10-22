@@ -19,6 +19,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "ismcts",
     "minimax",
     "dmc",
+    "dmc_hist",
     "hybrid",
     "dqn",
     "ppo",
@@ -295,10 +296,11 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             }
             Box::new(agent)
         }
-        "dmc" => {
+        // `dmc_hist` is the same agent: a history network is told apart by its input width.
+        "dmc" | "dmc_hist" => {
             let path: String = opts
                 .take("path")?
-                .ok_or("dmc requires path=<network file>")?;
+                .ok_or_else(|| format!("{name} requires path=<network file>"))?;
             let mut members = path
                 .split('+')
                 .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
@@ -337,10 +339,9 @@ mod tests {
 
     #[test]
     fn every_registered_name_builds() {
-        for &name in AGENT_NAMES
-            .iter()
-            .filter(|&&n| !["dmc", "hybrid", "dqn", "ppo", "nfsp", "distill"].contains(&n))
-        {
+        for &name in AGENT_NAMES.iter().filter(|&&n| {
+            !["dmc", "dmc_hist", "hybrid", "dqn", "ppo", "nfsp", "distill"].contains(&n)
+        }) {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
         }

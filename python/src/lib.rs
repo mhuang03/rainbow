@@ -11,7 +11,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use rainbow::agents::{self, Agent};
 use rainbow::constants::{MAX_PLAYERS, MIN_PLAYERS};
-use rainbow::game::encoding::{self, ACTION_FEATURES, FULL_OBS_SIZE, HIDDEN_SIZE, OBS_SIZE};
+use rainbow::game::encoding::{
+    self, ACTION_FEATURES, FULL_OBS_SIZE, HIDDEN_SIZE, HIST_OBS_SIZE, HISTORY_SIZE, OBS_SIZE,
+};
 use rainbow::{Combo, ComboKind, GameState, NUM_ACTIONS, TrickType};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
@@ -204,6 +206,20 @@ impl Game {
     ) -> PyResult<Bound<'py, PyArray1<f32>>> {
         let obs = self.state.observe(self.seat(player)?);
         Ok(PyArray1::from_slice(py, &obs.encoded()))
+    }
+
+    /// `player`'s observation followed by the public-history features, as a float32 array of
+    /// shape (HIST_OBS_SIZE,). For history-aware DMC networks (`dmc_hist`).
+    fn history_observation<'py>(
+        &self,
+        py: Python<'py>,
+        player: usize,
+    ) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        let mut out = [0.0; HIST_OBS_SIZE];
+        self.state
+            .observe(self.seat(player)?)
+            .encode_with_history(&mut out);
+        Ok(PyArray1::from_slice(py, &out))
     }
 
     /// `player`'s observation followed by every hand and reserve (seats relative to `player`),
@@ -508,11 +524,19 @@ impl VecEnv {
     }
 
     /// Observations and legal-action masks for each game's current player, like
-    /// `batch_observations`. With `full=True`, also full-information observations.
-    #[pyo3(signature = (full=false))]
-    fn observe<'py>(&self, py: Python<'py>, full: bool) -> Bound<'py, pyo3::types::PyTuple> {
+    /// `batch_observations`. With `full=True`, also full-information observations. With
+    /// `history=True`, observations have the public-history features appended (width
+    /// HIST_OBS_SIZE).
+    #[pyo3(signature = (full=false, history=false))]
+    fn observe<'py>(
+        &self,
+        py: Python<'py>,
+        full: bool,
+        history: bool,
+    ) -> Bound<'py, pyo3::types::PyTuple> {
         let b = self.games.len();
-        let obs = PyArray2::<f32>::zeros(py, [b, OBS_SIZE], false);
+        let width = if history { HIST_OBS_SIZE } else { OBS_SIZE };
+        let obs = PyArray2::<f32>::zeros(py, [b, width], false);
         let masks = PyArray2::<bool>::zeros(py, [b, NUM_ACTIONS], false);
         let full_obs = full.then(|| PyArray2::<f32>::zeros(py, [b, FULL_OBS_SIZE], false));
         {
@@ -522,8 +546,12 @@ impl VecEnv {
             let m = masks_rw.as_slice_mut().expect("contiguous");
             for (i, game) in self.games.iter().enumerate() {
                 let seat = game.current_player();
-                game.observe(seat)
-                    .encode(&mut o[i * OBS_SIZE..][..OBS_SIZE]);
+                let row = &mut o[i * width..][..width];
+                if history {
+                    game.observe(seat).encode_with_history(row);
+                } else {
+                    game.observe(seat).encode(row);
+                }
                 m[i * NUM_ACTIONS..][..NUM_ACTIONS]
                     .copy_from_slice(&mask_bits(game.legal_action_mask()));
             }
@@ -649,6 +677,8 @@ fn rainbow_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("ACTION_FEATURES", ACTION_FEATURES)?;
     m.add("HIDDEN_SIZE", HIDDEN_SIZE)?;
     m.add("FULL_OBS_SIZE", FULL_OBS_SIZE)?;
+    m.add("HISTORY_SIZE", HISTORY_SIZE)?;
+    m.add("HIST_OBS_SIZE", HIST_OBS_SIZE)?;
     m.add("MIN_PLAYERS", MIN_PLAYERS)?;
     m.add("MAX_PLAYERS", MAX_PLAYERS)?;
     Ok(())

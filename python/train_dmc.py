@@ -25,7 +25,6 @@ import rainbow_engine as re
 from rl_common import ARENA, arena_relative, export, final_returns_row, load, mlp
 
 ACTIONS = re.action_features()  # (NUM_ACTIONS, ACTION_FEATURES)
-INPUT_SIZE = re.OBS_SIZE + re.ACTION_FEATURES
 
 
 class DmcNet(nn.Module):
@@ -33,38 +32,40 @@ class DmcNet(nn.Module):
     action part, so an optional auxiliary head can predict hidden hands from the observation
     part alone. Exports as a plain MLP over the concatenated input."""
 
-    def __init__(self, hidden: list[int]):
+    def __init__(self, hidden: list[int], obs_size: int = re.OBS_SIZE):
         super().__init__()
-        self.obs_layer = nn.Linear(re.OBS_SIZE, hidden[0])
+        self.obs_size = obs_size
+        self.obs_layer = nn.Linear(obs_size, hidden[0])
         self.act_layer = nn.Linear(re.ACTION_FEATURES, hidden[0], bias=False)
         self.rest = mlp(hidden[0], hidden[1:], 1)
         self.aux_head = nn.Linear(hidden[0], re.HIDDEN_SIZE)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        obs, act = x[:, : re.OBS_SIZE], x[:, re.OBS_SIZE :]
+        obs, act = x[:, : self.obs_size], x[:, self.obs_size :]
         return self.rest(torch.relu(self.obs_layer(obs) + self.act_layer(act)))
 
     def aux(self, x: torch.Tensor) -> torch.Tensor:
         """Predicted hidden cards (count / 10 per rank, relative seats) from the observation."""
-        return self.aux_head(torch.relu(self.obs_layer(x[:, : re.OBS_SIZE])))
+        return self.aux_head(torch.relu(self.obs_layer(x[:, : self.obs_size])))
 
     @classmethod
     def from_sequential(cls, seq: nn.Sequential) -> "DmcNet":
         """Wraps a loaded plain MLP (see `rl_common.load`), splitting its first layer."""
         linears = [m for m in seq if isinstance(m, nn.Linear)]
-        net = cls([l.out_features for l in linears[:-1]])
+        obs_size = linears[0].in_features - re.ACTION_FEATURES
+        net = cls([l.out_features for l in linears[:-1]], obs_size)
         with torch.no_grad():
             first = linears[0]
-            net.obs_layer.weight.copy_(first.weight[:, : re.OBS_SIZE])
+            net.obs_layer.weight.copy_(first.weight[:, :obs_size])
             net.obs_layer.bias.copy_(first.bias)
-            net.act_layer.weight.copy_(first.weight[:, re.OBS_SIZE :])
+            net.act_layer.weight.copy_(first.weight[:, obs_size:])
             for mine, theirs in zip([m for m in net.rest if isinstance(m, nn.Linear)], linears[1:]):
                 mine.weight.copy_(theirs.weight)
                 mine.bias.copy_(theirs.bias)
         return net
 
     def to_sequential(self) -> nn.Sequential:
-        first = nn.Linear(INPUT_SIZE, self.obs_layer.out_features)
+        first = nn.Linear(self.obs_size + re.ACTION_FEATURES, self.obs_layer.out_features)
         with torch.no_grad():
             first.weight.copy_(torch.cat([self.obs_layer.weight, self.act_layer.weight], dim=1))
             first.bias.copy_(self.obs_layer.bias)
@@ -74,8 +75,8 @@ class DmcNet(nn.Module):
 class Buffer:
     """Ring buffer of (input row, target return, hidden cards) triples."""
 
-    def __init__(self, capacity: int):
-        self.x = np.zeros((capacity, INPUT_SIZE), dtype=np.float32)
+    def __init__(self, capacity: int, obs_size: int = re.OBS_SIZE):
+        self.x = np.zeros((capacity, obs_size + re.ACTION_FEATURES), dtype=np.float32)
         self.y = np.zeros(capacity, dtype=np.float32)
         self.h = np.zeros((capacity, re.HIDDEN_SIZE), dtype=np.float32)
         self.capacity = capacity
@@ -98,8 +99,10 @@ class Buffer:
 class Actors:
     """A batch of concurrent self-play games."""
 
-    def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1):
+    def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1,
+                 history: bool = False):
         self.rng = rng
+        self.with_history = history
         self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners)
         # per game: (seat, input row, hidden cards) for every decision so far
         self.history: list[list[tuple[int, np.ndarray, np.ndarray]]] = [[] for _ in range(count)]
@@ -107,7 +110,7 @@ class Actors:
 
     def step(self, net: nn.Module, epsilon: float, buffer: Buffer) -> int:
         """Advances every game one move; returns the number of decisions made."""
-        obs, masks, full = self.env.observe(full=True)
+        obs, masks, full = self.env.observe(full=True, history=self.with_history)
         hidden = full[:, re.OBS_SIZE :]
         seats = self.env.current_players()
         players = self.env.num_players()
@@ -162,6 +165,8 @@ def main() -> None:
     parser.add_argument("--opponents", nargs="+", default=None,
                         help="Rust agent specs for non-learner seats (default: pure self-play)")
     parser.add_argument("--learners", type=int, default=1, help="learner seats per game with --opponents")
+    parser.add_argument("--history", action="store_true",
+                        help="also feed the public-history features (plays as dmc_hist)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--threads", type=int, default=0, help="torch threads (0: torch default)")
     args = parser.parse_args()
@@ -170,10 +175,13 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    net = DmcNet.from_sequential(load(args.init)) if args.init else DmcNet(args.hidden)
+    obs_size = re.HIST_OBS_SIZE if args.history else re.OBS_SIZE
+    net = DmcNet.from_sequential(load(args.init)) if args.init else DmcNet(args.hidden, obs_size)
+    if net.obs_size != obs_size:
+        parser.error("--init network's inputs don't match --history")
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
-    buffer = Buffer(args.buffer)
-    actors = Actors(args.actors, rng, args.opponents, args.learners)
+    buffer = Buffer(args.buffer, obs_size)
+    actors = Actors(args.actors, rng, args.opponents, args.learners, args.history)
 
     start = time.monotonic()
     deadline = start + args.minutes * 60

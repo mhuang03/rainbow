@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::agents::Agent;
-use crate::game::encoding::{self, ACTION_FEATURES, OBS_SIZE};
+use crate::game::encoding::{self, ACTION_FEATURES, HIST_OBS_SIZE, OBS_SIZE};
 use crate::game::{Combo, Observation};
 
 const MAGIC: &[u8; 8] = b"RBMLP1\0\0";
@@ -239,34 +239,54 @@ pub(crate) fn test_mlp(layers: &[(usize, usize)], seed: u64) -> Mlp {
 #[derive(Debug, Clone)]
 pub struct DmcAgent {
     net: Arc<Mlp>,
+    /// Whether the network also takes the public-history features.
+    history: bool,
 }
 
 impl DmcAgent {
+    /// Takes either an observation ([`OBS_SIZE`]) or an observation with public history
+    /// ([`HIST_OBS_SIZE`]), followed by action features; which one is told by the input width.
+    ///
     /// # Errors
-    /// If the network doesn't take an observation plus action features and output one value.
+    /// If the network has neither input width or doesn't output one value.
     pub fn new(net: Arc<Mlp>) -> Result<Self, String> {
-        if net.inputs() != OBS_SIZE + ACTION_FEATURES || net.outputs() != 1 {
+        let history = net.inputs() == HIST_OBS_SIZE + ACTION_FEATURES;
+        if !(history || net.inputs() == OBS_SIZE + ACTION_FEATURES) || net.outputs() != 1 {
             return Err(format!(
-                "DMC network must map {} inputs to 1 output, got {} -> {}",
+                "DMC network must map {} or {} inputs to 1 output, got {} -> {}",
                 OBS_SIZE + ACTION_FEATURES,
+                HIST_OBS_SIZE + ACTION_FEATURES,
                 net.inputs(),
                 net.outputs()
             ));
         }
-        Ok(Self { net })
+        Ok(Self { net, history })
+    }
+
+    /// Whether the network uses the public-history features.
+    pub fn uses_history(&self) -> bool {
+        self.history
     }
 
     /// Predicted return of each legal combo, in the order of `legal`.
     pub fn evaluate(&self, obs: &Observation, legal: &[Combo]) -> Vec<f32> {
         let first = &self.net.layers[0];
-        let observation = obs.encoded();
+        let mut buf = [0.0; HIST_OBS_SIZE];
+        let observation: &[f32] = if self.history {
+            obs.encode_with_history(&mut buf);
+            &buf
+        } else {
+            obs.encode(&mut buf[..OBS_SIZE]);
+            &buf[..OBS_SIZE]
+        };
+        let width = observation.len();
         // The first layer splits into an observation part, shared by every action, and a small
         // action part.
         let shared: Vec<f32> = first
             .weights
             .chunks_exact(first.inputs)
             .zip(&first.bias)
-            .map(|(row, b)| dot(&row[..OBS_SIZE], &observation) + b)
+            .map(|(row, b)| dot(&row[..width], observation) + b)
             .collect();
 
         // Evaluate every action together, layer by layer, so each weight row is loaded once
@@ -283,7 +303,7 @@ impl DmcAgent {
                     .chunks_exact(first.inputs)
                     .zip(&shared)
                     .map(|(row, s)| {
-                        let y = s + dot(&row[OBS_SIZE..], &action);
+                        let y = s + dot(&row[width..], &action);
                         if single_layer { y } else { y.max(0.0) }
                     }),
             );
@@ -300,7 +320,7 @@ impl DmcAgent {
 
 impl Agent for DmcAgent {
     fn name(&self) -> &str {
-        "dmc"
+        if self.history { "dmc_hist" } else { "dmc" }
     }
 
     fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
@@ -369,6 +389,26 @@ mod tests {
     use crate::GameState;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
+
+    #[test]
+    fn history_network_is_detected_by_input_width() {
+        let inputs = HIST_OBS_SIZE + ACTION_FEATURES;
+        let net = Arc::new(test_mlp(&[(inputs, 8), (8, 1)], 3));
+        let mut agent = DmcAgent::new(net).unwrap();
+        assert!(agent.uses_history());
+        assert_eq!(agent.name(), "dmc_hist");
+        let mut rng = SmallRng::seed_from_u64(9);
+        let mut state = GameState::new(4, 0, &mut rng);
+        while !state.is_over() {
+            let combo = agent.act(
+                &state.observe(state.current_player()),
+                &state.legal_actions(),
+            );
+            state.apply(combo).unwrap();
+        }
+        let bad = Arc::new(test_mlp(&[(inputs + 1, 1)], 0));
+        assert!(DmcAgent::new(bad).is_err());
+    }
 
     fn write_mlp(layers: &[(usize, usize)], value: impl Fn(usize) -> f32) -> Vec<u8> {
         let mut bytes = MAGIC.to_vec();

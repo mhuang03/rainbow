@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
-use rand::{Rng, RngExt};
+use rand::{Rng, RngExt, SeedableRng};
 
 use crate::constants::{
     CARDS_PER_RANK, DECK_SIZE, MAX_GAME_PLAYS, MAX_HAND_SIZE, MAX_PILES, MAX_PLAYERS,
@@ -402,6 +402,71 @@ impl Observation {
         }
     }
 
+    /// Writes the public-history features described in [`encoding::HISTORY`] into `out`: the
+    /// most recent plays, and how often each seat beat the trick when following.
+    ///
+    /// # Panics
+    /// If `out.len() != HISTORY_SIZE`.
+    pub fn encode_history(&self, out: &mut [f32]) {
+        use encoding::*;
+        assert_eq!(out.len(), HISTORY_SIZE, "history buffer has the wrong size");
+        out.fill(0.0);
+        let n = self.players.len();
+        let rel = |seat: u8| (seat as usize + n - self.observer as usize) % n;
+        // Trick boundaries depend only on public hand sizes, so replaying the history from any
+        // consistent deal finds them; a fixed seed keeps the encoding deterministic.
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
+        let mut state = self.start_of(&self.determinize(&mut rng));
+        let mut follows = [0u32; MAX_PLAYERS];
+        let mut beats = [0u32; MAX_PLAYERS];
+        let recent = self.history.len().saturating_sub(HISTORY_PLAYS);
+        for (i, play) in self.history.iter().enumerate() {
+            let best = state.trick().iter().map(|t| t.combo.strength()).max();
+            let lead = best.is_none();
+            let beat = best.is_some_and(|b| play.combo.strength() > b);
+            let seat = rel(play.seat);
+            if !lead {
+                follows[seat] += 1;
+                beats[seat] += u32::from(beat);
+            }
+            if i >= recent {
+                // newest play first
+                let slot = self.history.len() - 1 - i;
+                let o = &mut out[slot * HISTORY_FEATURES..][..HISTORY_FEATURES];
+                o[0] = 1.0;
+                o[1] = f32::from(lead);
+                o[2] = f32::from(beat);
+                o[3 + seat] = 1.0;
+                for (x, rank) in o[3 + MAX_PLAYERS..].iter_mut().zip(MIN_RANK..=MAX_RANK) {
+                    *x = f32::from(play.combo.count_of(rank)) / f32::from(CARDS_PER_RANK);
+                }
+            }
+            state.apply(play.combo).expect("history replays legally");
+        }
+        let rates = &mut out[HISTORY_PLAYS * HISTORY_FEATURES..];
+        for seat in 0..n {
+            if follows[seat] > 0 {
+                rates[2 * seat] = beats[seat] as f32 / follows[seat] as f32;
+            }
+            rates[2 * seat + 1] = (follows[seat] as f32 / TRICKS_SCALE).min(1.0);
+        }
+    }
+
+    /// [`Self::encode`] followed by [`Self::encode_history`], for history-aware networks.
+    ///
+    /// # Panics
+    /// If `out.len() != HIST_OBS_SIZE`.
+    pub fn encode_with_history(&self, out: &mut [f32]) {
+        assert_eq!(
+            out.len(),
+            encoding::HIST_OBS_SIZE,
+            "observation buffer has the wrong size"
+        );
+        let (obs, history) = out.split_at_mut(encoding::OBS_SIZE);
+        self.encode(obs);
+        self.encode_history(history);
+    }
+
     /// Allocating convenience wrapper around [`Self::encode`].
     pub fn encoded(&self) -> [f32; encoding::OBS_SIZE] {
         let mut out = [0.0; encoding::OBS_SIZE];
@@ -472,6 +537,17 @@ pub mod encoding {
     pub const HIDDEN_SIZE: usize = MAX_PLAYERS * 2 * NUM_RANKS;
     /// [`OBS_SIZE`] observation features followed by [`HIDDEN_SIZE`] hidden features.
     pub const FULL_OBS_SIZE: usize = OBS_SIZE + HIDDEN_SIZE;
+
+    /// Public history, written by [`Observation::encode_history`]: the last [`HISTORY_PLAYS`]
+    /// plays, newest first, each as present, led the trick, beat the trick so far, relative seat
+    /// one-hot and card count per rank / 10; then per relative seat, the fraction of its
+    /// following plays that beat the trick, and its following plays / 30.
+    pub const HISTORY: usize = 0;
+    pub const HISTORY_PLAYS: usize = 12;
+    pub const HISTORY_FEATURES: usize = 3 + MAX_PLAYERS + NUM_RANKS;
+    pub const HISTORY_SIZE: usize = HISTORY_PLAYS * HISTORY_FEATURES + 2 * MAX_PLAYERS;
+    /// [`OBS_SIZE`] observation features followed by [`HISTORY_SIZE`] history features.
+    pub const HIST_OBS_SIZE: usize = OBS_SIZE + HISTORY_SIZE;
 
     /// Strength of the strongest combo, ten 6s.
     const MAX_STRENGTH: u8 = Combo::set(MAX_RANK, CARDS_PER_RANK).strength();
@@ -613,6 +689,29 @@ mod tests {
                 let d = obs.determinize_weighted(&weights, &mut rng);
                 prop_assert_eq!(&d.observe(seat), &obs);
             }
+        }
+
+        #[test]
+        fn history_encoding_is_public(
+            seed in any::<u64>(),
+            num_players in MIN_PLAYERS..=MAX_PLAYERS,
+            moves in 0..70usize,
+        ) {
+            use super::encoding::HISTORY_SIZE;
+            let g = midgame(seed, num_players, moves);
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let seat = seed as usize % num_players;
+            let mut a = [0.0; HISTORY_SIZE];
+            g.observe(seat).encode_history(&mut a);
+            prop_assert!(a.iter().all(|&x| (0.0..=1.0).contains(&x)));
+            // the same for any deal the observer can't tell apart from this one
+            let mut b = [0.0; HISTORY_SIZE];
+            g.observe(seat).determinize(&mut rng).observe(seat).encode_history(&mut b);
+            prop_assert_eq!(a, b);
+            // one present slot per recent play
+            let played = g.observe(seat).history().len().min(super::encoding::HISTORY_PLAYS);
+            let present = a.chunks(super::encoding::HISTORY_FEATURES).take(super::encoding::HISTORY_PLAYS);
+            prop_assert_eq!(present.filter(|o| o[0] == 1.0).count(), played);
         }
 
         #[test]
