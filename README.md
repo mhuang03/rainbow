@@ -53,7 +53,7 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
 | `margin` | The Economist scoring piles by their *difference* from what the other players take (`economist:objective=margin`). `economist:adaptive=N` also learns each opponent's willingness to contest tricks from the play history. |
-| `counter` | Card counter: bounds each later opponent's strongest possible combo from the unseen cards, and plays to win only when the pile gap pays for the cards spent. |
+| `counter` | Card counter: bounds each later opponent's strongest possible combo from the unseen cards and scores each combo by the pile it expects to finish on. The strongest hand-written agent. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
 | `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from `models/dmc_league.bin` and `belief=models/belief_v1.bin` it is the strongest agent. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |

@@ -129,6 +129,42 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
       `nfsp:path=...` samples from the average policy.
 - [ ] Train and evaluate.
 
+## Milestone 13: Second round of agents
+
+Hand-written:
+- [x] `margin` (`economist:objective=margin`): scores a claimed pile by how far it is above
+      the average of what the other players in the trick take, not by its raw value. Default
+      weights: 1.09 / 0.78 / 0.93 / 0.90 against Economists at 2 / 3 / 4 / 6 players, 1.59 / 1.05 /
+      1.27 / 1.29 against `cheapest`. It helps head-to-head (2p), where a pile is zero-sum, and
+      hurts with more players. Weights tuned for it (`tune_economist ... margin`, held-out 1.56 ->
+      1.61 on the tuning field) did worse against Economists (2p 0.92), so they aren't used.
+- [x] `economist:adaptive=N`: per-opponent willingness to contest tricks, estimated from the
+      play history with a prior of N observations. Neutral: 0.99 / 0.95 / 1.00 / 0.93.
+- [x] `counter`: bounds each later opponent's strongest possible combo from the unseen cards,
+      then scores every legal combo by the pile it expects to finish on (a distribution over how
+      many later opponents beat it) minus card and structure costs. The first version, which
+      only compared the top pile with the bottom one, scored 0.46 against Economists; valuing the
+      pile at each finishing rank raised it to 0.78, and a grid search to
+      **1.14 / 1.07 / 1.10 / 0.96**, the strongest hand-written agent (0.31-0.49 against
+      `dmc_league3`).
+
+Meta-agents:
+- [x] Ensembles (`dmc:path=a.bin+b.bin+...`): the three league rounds averaged score 1.05 (2p)
+      and 1.02 (4p) head-to-head against round 3 alone (400 deals).
+- [x] `hybrid`: DMC that switches to exact max-n minimax over k=8 sampled deals once at most 8
+      cards are left in hands and reserves. 1.03 (2p) and 1.01 (4p) against `dmc_league3`;
+      switching at 12 cards, 0.98. The network already plays endgames well.
+
+Learned:
+- [x] `distill` (`python/train_distill.py`): a policy network trained with cross-entropy on
+      guided ISMCTS's root visit counts. On the 43k decisions of the first expert-iteration
+      round it reaches only 36% top-move agreement with the search and 0.42 against three
+      Economists; sharpening the targets (temperature 0.3 or 0.1) doesn't help (0.39, 0.40).
+- [x] `dmc_hist`: DMC with public-history features (`Observation::encode_history`: the last 12
+      plays with lead and beat flags, and each seat's rate of beating the trick when following;
+      `train_dmc.py --history`). Existing networks are unaffected: `DmcAgent` tells a history
+      network by its input width.
+
 ## Tooling added along the way
 
 - [x] `VecEnv`: batched Python environment, 11x faster stepping than per-game calls; all
