@@ -142,11 +142,23 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     };
     let prior = match opts.take::<String>("prior")? {
         None => None,
-        Some(path) => Some(ismcts::Prior {
-            net: load_dmc(&path)?,
-            temperature: opts.take("ptemp")?.unwrap_or(0.1),
-            c_puct: opts.take("cpuct")?.unwrap_or(1.0),
-        }),
+        Some(path) => {
+            // a DMC network or a policy network (one logit per action)
+            let net = dmc::Mlp::load_cached(&path)?;
+            let policy = net.outputs() == crate::game::NUM_ACTIONS;
+            if policy {
+                DqnAgent::new(std::sync::Arc::clone(&net))?;
+            } else {
+                DmcAgent::new(std::sync::Arc::clone(&net))?;
+            }
+            Some(ismcts::Prior {
+                net,
+                temperature: opts
+                    .take("ptemp")?
+                    .unwrap_or(if policy { 1.0 } else { 0.1 }),
+                c_puct: opts.take("cpuct")?.unwrap_or(1.0),
+            })
+        }
     };
     let params = ismcts::Params {
         iterations: opts.take("n")?.unwrap_or(d.iterations),
@@ -183,7 +195,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `pimc`: `k` (deals per decision), plus the rollout options.
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
-///   `prior` (DMC network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
+///   `prior` (DMC or policy network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options below.
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards

@@ -16,10 +16,11 @@ use std::sync::Arc;
 use crate::agents::Agent;
 use crate::agents::belief::Belief;
 use crate::agents::dmc::{DmcAgent, Mlp};
+use crate::agents::dqn::DqnAgent;
 use crate::agents::inference::Inference;
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
-use crate::game::{Combo, GameState, Observation};
+use crate::game::{Combo, GameState, NUM_ACTIONS, Observation};
 
 #[derive(Debug, Clone)]
 pub struct Params {
@@ -64,7 +65,8 @@ impl Default for Params {
     }
 }
 
-/// Move priors from a DMC network: a softmax over its predicted returns.
+/// Move priors from a network: a softmax over a DMC network's predicted returns, or over a
+/// policy network's logits (one output per action, as trained by `train_distill.py`).
 #[derive(Debug, Clone)]
 pub struct Prior {
     pub net: Arc<Mlp>,
@@ -75,9 +77,16 @@ pub struct Prior {
 
 impl Prior {
     fn probabilities(&self, state: &GameState, legal: &[Combo]) -> Vec<f32> {
-        let q = DmcAgent::new(Arc::clone(&self.net))
-            .expect("validated on construction")
-            .evaluate(&state.observe(state.current_player()), legal);
+        let obs = state.observe(state.current_player());
+        let q = if self.net.outputs() == NUM_ACTIONS {
+            DqnAgent::new(Arc::clone(&self.net))
+                .expect("validated on construction")
+                .evaluate(&obs, legal)
+        } else {
+            DmcAgent::new(Arc::clone(&self.net))
+                .expect("validated on construction")
+                .evaluate(&obs, legal)
+        };
         let max = q.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let exp: Vec<f32> = q
             .iter()
@@ -383,6 +392,23 @@ mod tests {
                 state.apply(combo).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn policy_network_prior_is_a_distribution_over_legal_moves() {
+        use crate::game::encoding::OBS_SIZE;
+        let prior = Prior {
+            net: Arc::new(crate::agents::dmc::test_mlp(&[(OBS_SIZE, 8), (8, NUM_ACTIONS)], 5)),
+            temperature: 1.0,
+            c_puct: 1.0,
+        };
+        let mut rng = SmallRng::seed_from_u64(1);
+        let state = GameState::new(3, 0, &mut rng);
+        let legal = state.legal_actions();
+        let p = prior.probabilities(&state, &legal);
+        assert_eq!(p.len(), legal.len());
+        assert!((p.iter().sum::<f32>() - 1.0).abs() < 1e-4);
+        assert!(p.iter().all(|&x| x > 0.0));
     }
 
     #[test]
