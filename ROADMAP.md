@@ -197,6 +197,12 @@ training against economist, counter, dmc_league4 and dmc_league5. Against round 
 extra capacity restarts progress; the browser presets use it. Under guided search (n=200, belief) round 6 against
 round 5: level in 4p (1.00, 100 deals) and 1.08 in 2p (150 deals).
 
+### League round 7 (`models/dmc_league7.bin`)
+
+Continued from widened round 6 for 90 minutes against economist, counter, dmc_league5 and
+dmc_league6 (1.97 against three Economists). Against round 6: 1.06 (2p) and **1.08 (4p)**, the
+largest gain since round 2. The browser presets use it.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
