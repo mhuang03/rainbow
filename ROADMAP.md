@@ -295,6 +295,11 @@ much as round 2 did. The browser presets use it.
       (fixed) vs 1.11-1.13 (w = 2-50, within noise), but worse against three `cheapest`
       (1.27 vs 1.05-1.21). Not the default.
 
+- [x] `models/belief_v2.bin`: the hand-prediction network retrained on 12,000 games by today's
+      agents (league rounds 5-6, counter, economist) with a bigger network (512-512). In guided
+      ISMCTS (round 6 prior and leaf, n=200) it beats `belief_v1` 1.06 (4p, 100 deals) and 1.03
+      (2p, 150 deals). The browser's Guided ISMCTS uses it.
+
 ## Tooling added along the way
 
 - [x] `VecEnv`: batched Python environment, 11x faster stepping than per-game calls; all
