@@ -240,26 +240,35 @@ function loadRecord() {
 
 /** Records a finished solo game against a single kind of opponent. */
 function recordResult() {
-  if (!room || !room.hints || game.seat === null) return;
-  const opponents = room.seats.filter((s, i) => i !== game.seat).map((s) => s.preset);
-  if (!opponents.length || opponents.some((p) => p !== opponents[0])) return;
+  const opponent = soloOpponent();
+  if (!opponent) return;
   const record = loadRecord();
-  const r = record[opponents[0]] || { games: 0, wins: 0 };
+  const r = record[opponent] || { games: 0, wins: 0 };
   r.games += 1;
   if ((game.winners || []).includes(game.seat)) r.wins += 1;
-  record[opponents[0]] = r;
+  record[opponent] = r;
   try { localStorage.setItem("rainbow.record", JSON.stringify(record)); } catch { /* not kept */ }
 }
 
-function renderRecord() {
-  const id = $("solo-opponent").value;
+/** "Your record against X: ..." for a preset id, or "" without a record. */
+function recordText(id) {
   const r = loadRecord()[id];
   const p = presets.find((x) => x.id === id);
-  $("solo-record").classList.toggle("hidden", !r || !p);
-  if (r && p) {
-    $("solo-record").textContent =
-      `Your record against ${p.label}: ${r.wins} win${r.wins === 1 ? "" : "s"} in ${r.games} game${r.games === 1 ? "" : "s"}`;
-  }
+  if (!r || !p) return "";
+  return `Your record against ${p.label}: ${r.wins} win${r.wins === 1 ? "" : "s"} in ${r.games} game${r.games === 1 ? "" : "s"}`;
+}
+
+function renderRecord() {
+  const text = recordText($("solo-opponent").value);
+  $("solo-record").classList.toggle("hidden", !text);
+  $("solo-record").textContent = text;
+}
+
+/** The single kind of computer opponent in this solo game, or null. */
+function soloOpponent() {
+  if (!room || !room.hints || game.seat === null) return null;
+  const opponents = room.seats.filter((s, i) => i !== game.seat).map((s) => s.preset);
+  return opponents.length && opponents.every((p) => p === opponents[0]) ? opponents[0] : null;
 }
 
 function loadSetup() {
@@ -726,7 +735,9 @@ function renderTable() {
     $("next-game").classList.toggle("hidden", !me.host);
     // against the computer there's no room to leave, just a setup to change
     $("over-leave").textContent = room.hints ? "Change opponents" : "Leave room";
-    $("over-hint").textContent = me.host ? "" : "Waiting for the host to start the next game.";
+    $("over-hint").textContent = me.host
+      ? (soloOpponent() ? recordText(soloOpponent()) : "")
+      : "Waiting for the host to start the next game.";
     // move focus into the dialog once, when the game ends
     if (!$("game-over").contains(document.activeElement)) (me.host ? $("next-game") : $("over-title")).focus();
   }
