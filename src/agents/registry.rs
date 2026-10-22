@@ -230,7 +230,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value), `pmix` (with a
-///   network `prior`: weight of the counter prior blended into it),
+///   network `prior`: weight of the counter prior blended into it in games of 3+ players),
 ///   `prior` (`counter`, the default, or a DMC or policy network path, for PUCT priors;
 ///   `none` for plain UCB) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the

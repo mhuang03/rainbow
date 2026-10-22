@@ -81,7 +81,8 @@ pub struct Prior {
     pub source: PriorSource,
     pub temperature: f32,
     /// With a network source, the weight of the `counter` prior blended in (geometrically,
-    /// in log space; the counter scores use temperature 1). 0 uses the network alone.
+    /// in log space; the counter scores use temperature 1) in games of 3+ players. 0 uses the
+    /// network alone.
     pub counter_weight: f32,
     /// PUCT exploration constant.
     pub c_puct: f32,
@@ -113,7 +114,11 @@ impl Prior {
         };
         let max = q.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut logits: Vec<f32> = q.iter().map(|&v| (v - max) / self.temperature).collect();
-        if self.counter_weight > 0.0 && matches!(self.source, PriorSource::Network(_)) {
+        // The blend helps in multiplayer games and hurts heads-up (4p 1.05, 2p 0.93 at 0.5).
+        if self.counter_weight > 0.0
+            && state.num_players() >= 3
+            && matches!(self.source, PriorSource::Network(_))
+        {
             let c = CounterAgent::new().scores(&obs, legal);
             let cmax = c.iter().copied().fold(f32::NEG_INFINITY, f32::max);
             let w = self.counter_weight;
