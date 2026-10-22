@@ -10,7 +10,8 @@
 <header class="bar">
   <h1 class="logo"><span>R</span><span>a</span><span>i</span><span>n</span><span>b</span><span>o</span><span>w</span></h1>
   <div id="room-badge" class="badge hidden"></div>
-  <div id="status" class="status"></div>
+  <div id="status" class="status" role="status"></div>
+  <button id="rules-btn" class="ghost">Rules</button>
 </header>
 
 <main>
@@ -42,17 +43,6 @@
         </div>
       </div>
     </div>
-    <details class="rules">
-      <summary>How to play</summary>
-      <p>The deck has ten cards of each rank, 1 to 6. Each trick, everyone plays once (twice in
-      a 2-player game): a <b>single</b>, a <b>set</b> of equal cards, or a <b>run</b> of
-      consecutive ranks. Once a set is played, only singles and sets may follow; once a run is
-      played, only singles and runs.</p>
-      <p>When the trick ends, plays are ranked: more cards beat fewer, then the higher top card,
-      then the earlier play. In that order, players take the point piles in the middle, most
-      valuable first. The played cards then form the next piles. The game ends after a trick
-      in which two players have run out of cards; the most points wins.</p>
-    </details>
   </section>
 
   <!-- Lobby -->
@@ -72,33 +62,54 @@
 
   <!-- Table -->
   <section id="table" class="view hidden">
-    <div id="opponents" class="opponents"></div>
-    <div class="middle">
-      <div class="piles-area">
-        <div class="label">Point piles</div>
-        <div id="piles" class="piles"></div>
+    <div class="table-main">
+      <div id="opponents" class="opponents" aria-label="Other players"></div>
+      <div class="middle">
+        <div class="piles-area">
+          <div class="label">Point piles</div>
+          <div id="piles" class="piles"></div>
+          <p class="caption">The strongest play takes the 1st pile, the next strongest the 2nd, and so on.</p>
+        </div>
+        <div class="trick-area">
+          <div class="label"><span id="trick-title">Trick</span> <span id="trick-type" class="pill"></span></div>
+          <div id="trick" class="trick"></div>
+        </div>
       </div>
-      <div class="trick-area">
-        <div class="label"><span id="trick-title">Trick</span> <span id="trick-type" class="pill"></span></div>
-        <div id="trick" class="trick"></div>
+      <div id="me" class="me">
+        <div class="me-info"><span id="me-name"></span> <span id="me-points" class="points"></span>
+          <span id="me-reserve" class="reserve"></span>
+          <span id="turn-hint" class="turn-hint" aria-hidden="true"></span></div>
+        <div id="hand" class="hand" aria-label="Your hand"></div>
+        <div class="play-row">
+          <div id="legal" class="legal" aria-label="Legal plays"></div>
+          <div class="play-box">
+            <button id="play-selected" class="primary" disabled>Play</button>
+            <p id="legal-help" class="hint keys">Click a play or cards to select, then Play. <kbd>1</kbd>–<kbd>6</kbd> pick cards, <kbd>Enter</kbd> plays, <kbd>Esc</kbd> clears. Highlighted plays beat the trick so far.</p>
+          </div>
+        </div>
       </div>
     </div>
-    <div id="me" class="me">
-      <div class="me-info"><span id="me-name"></span> <span id="me-points" class="points"></span>
-        <span id="me-reserve" class="reserve"></span>
-        <span id="turn-hint" class="turn-hint"></span></div>
-      <div id="hand" class="hand"></div>
-      <div class="play-row">
-        <div id="legal" class="legal"></div>
-        <button id="play-selected" class="primary" disabled>Play selected</button>
+    <aside class="side">
+      <div class="side-box">
+        <h3>Scores</h3>
+        <ol id="scores" class="scores"></ol>
       </div>
-    </div>
-    <div id="game-over" class="overlay hidden">
+      <div id="unseen-box" class="side-box">
+        <h3>Unseen cards</h3>
+        <div id="unseen" class="unseen"></div>
+        <p class="caption">Cards still in other hands, reserves or set aside.</p>
+      </div>
+      <div class="side-box grow">
+        <h3>Trick log</h3>
+        <ol id="log" class="log"></ol>
+      </div>
+    </aside>
+    <div id="game-over" class="overlay hidden" role="dialog" aria-labelledby="over-title">
       <div class="panel">
         <h2 id="over-title">Game over</h2>
         <ol id="standings" class="standings"></ol>
         <div class="actions">
-          <button id="next-game" class="primary">Next game</button>
+          <button id="next-game" class="primary">Play again</button>
           <button id="over-leave">Leave room</button>
         </div>
         <p id="over-hint" class="hint"></p>
@@ -107,7 +118,23 @@
   </section>
 </main>
 
-<div id="toast" class="toast hidden"></div>
+<dialog id="rules" class="rules">
+      <h2>How to play</h2>
+      <p>The deck has ten cards of each rank, 1 to 6. Each trick, everyone plays once (twice in
+      a 2-player game): a <b>single</b>, a <b>set</b> of equal cards, or a <b>run</b> of
+      consecutive ranks. Once a set is played, only singles and sets may follow; once a run is
+      played, only singles and runs.</p>
+      <p>When the trick ends, plays are ranked: more cards beat fewer, then the higher top card,
+      then the earlier play. In that order, players take the point piles in the middle, most
+      valuable first. The played cards then form the next piles. The game ends after a trick
+      in which two players have run out of cards; the most points wins.</p>
+      <p>With two players, each plays twice per trick, and a face-down reserve of 14 cards is
+      picked up when a hand first runs out. Running out a second time ends the game, and the
+      other player scores a point for each card left in their hand.</p>
+      <form method="dialog"><button class="primary">Got it</button></form>
+    </dialog>
+<div id="toast" class="toast hidden" role="alert"></div>
+<div id="live" class="sr-only" aria-live="polite"></div>
 <script src="/app.js"></script>
 </body>
 </html>

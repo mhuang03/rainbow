@@ -67,17 +67,19 @@ fn parse_rollout(
     default: rollout::Rollout,
 ) -> Result<rollout::Rollout, String> {
     let epsilon = match default {
-        rollout::Rollout::Cheapest { epsilon } => epsilon,
+        rollout::Rollout::Cheapest { epsilon } | rollout::Rollout::Counter { epsilon } => epsilon,
         rollout::Rollout::Random => 0.1,
     };
     let epsilon = opts.take("eps")?.unwrap_or(epsilon);
     Ok(match opts.take::<String>("rollout")?.as_deref() {
         None => match default {
             rollout::Rollout::Cheapest { .. } => rollout::Rollout::Cheapest { epsilon },
+            rollout::Rollout::Counter { .. } => rollout::Rollout::Counter { epsilon },
             other => other,
         },
         Some("random") => rollout::Rollout::Random,
         Some("cheapest") => rollout::Rollout::Cheapest { epsilon },
+        Some("counter") => rollout::Rollout::Counter { epsilon },
         Some(other) => return Err(format!("unknown rollout {other:?}")),
     })
 }
@@ -193,8 +195,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   endgame move; default 8). `dqn`, `ppo` and `nfsp` also
 ///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
 ///
-/// Rollout options are `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
-/// cheapest rollout) and `margin` (score-margin reward weight).
+/// Rollout options are `rollout` (`random`, `cheapest` or `counter`), `eps` (random-move rate of the
+/// cheapest and counter rollouts) and `margin` (score-margin reward weight).
 ///
 /// Inference options are `infer` (`cheapest` or a DMC network path, as the opponent model),
 /// `icands` (candidate deals), `iwindow` (recent plays scored), `ipower` (likelihood exponent),

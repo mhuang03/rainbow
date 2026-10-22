@@ -91,6 +91,7 @@ function receive(msg) {
       break;
     case "state": {
       const oldHand = game && game.hand ? game.hand.join() : "";
+      announceChanges(game && game.tricks_played <= msg.tricks_played ? game : null, msg);
       game = msg;
       if (!game.hand || game.hand.join() !== oldHand) selection = [];
       break;
@@ -211,10 +212,53 @@ function renderLobby() {
 }
 
 // ---------- table ----------
+const KIND_NAMES = { single: "Singles", set: "Sets", run: "Runs" };
+let freshFrom = Infinity; // plays in the current trick from this index on are new: animate them
+
+function who(seat) {
+  return seat === game.seat ? "You" : seatName(seat);
+}
+
+function cardsText(cards) {
+  return cards.join(" ");
+}
+
+/** Screen-reader (and log) announcements for what changed between two states. */
+function announceChanges(old, next) {
+  const live = $("live");
+  const said = [];
+  const oldLog = old ? old.log.length : 0;
+  const oldTrick = old && old.log.length === next.log.length ? old.trick.length : 0;
+  if (next.log.length > oldLog) {
+    const done = next.log[next.log.length - 1];
+    // plays of the finished trick not yet announced
+    done.plays.slice(oldLog === next.log.length - 1 && old ? old.trick.length : 0)
+      .forEach((pl) => said.push(`${who(pl.seat)} played ${cardsText(pl.cards)}.`));
+    const gains = [...new Set(done.plays.map((pl) => pl.seat))]
+      .map((seat) => `${who(seat)} +${done.taken[seat]}`);
+    said.push(`Trick over: ${gains.join(", ")}.`);
+  }
+  next.trick.slice(oldTrick).forEach((pl) => said.push(`${who(pl.seat)} played ${cardsText(pl.cards)}.`));
+  if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) said.push("Your turn.");
+  if (next.over && (!old || !old.over)) said.push("Game over.");
+  if (said.length) live.textContent = said.join(" ");
+  freshFrom = oldTrick;
+}
+
 function matchingLegal() {
   if (!game || !game.legal.length || !selection.length) return null;
   const ranks = selection.map((i) => game.hand[i]).sort((a, b) => a - b).join();
   return game.legal.find((l) => l.cards.join() === ranks) || null;
+}
+
+/** Selects the hand cards of a legal play. */
+function selectCombo(l) {
+  const used = new Set();
+  selection = l.cards.map((r) => {
+    const i = game.hand.findIndex((x, j) => x === r && !used.has(j));
+    used.add(i);
+    return i;
+  });
 }
 
 function play(action) {
@@ -222,32 +266,32 @@ function play(action) {
   send({ t: "play", action });
 }
 
-function renderTable() {
-  const n = game.players.length;
-  const base = game.seat === null ? 0 : game.seat;
-  const spectator = game.seat === null;
-
-  // opponents, clockwise from the seat after mine
+function renderOpponents(spectator, base, n) {
   const opps = $("opponents");
   opps.innerHTML = "";
   for (let k = spectator ? 0 : 1; k < n; k++) {
     const seat = (base + k) % n;
     const p = game.players[seat];
     const s = room.seats[seat] || {};
-    const box = el("div", "opp" + (game.current === seat ? " turn" : ""));
-    const who = el("div", "who");
-    const name = el("span", game.current === seat && s.kind === "agent" ? "thinking" : "", seatName(seat));
-    who.append(name, el("span", "kind", s.kind === "agent" ? "agent" : s.connected === false ? "away" : ""));
+    const turn = game.current === seat;
+    const box = el("div", "opp" + (turn ? " turn" : ""));
+    const head = el("div", "who");
+    head.append(
+      el("span", turn && s.kind === "agent" ? "thinking" : "", seatName(seat)),
+      el("span", "kind" + (s.connected === false ? " offline" : ""), s.kind === "agent" ? "agent" : s.connected === false ? "away" : ""),
+    );
     const backs = el("div", "backs");
+    backs.setAttribute("aria-hidden", "true");
     for (let i = 0; i < p.hand_size; i++) backs.append(el("div", "back"));
     const meta = el("div", "meta");
     meta.append(
       el("span", null, `${p.hand_size} card${p.hand_size === 1 ? "" : "s"}${p.reserve_size ? ` + ${p.reserve_size} reserve` : ""}`),
       el("span", "points", `${p.points} pts`),
     );
-    box.append(who, backs, meta);
+    box.append(head, backs, meta);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
+      select.setAttribute("aria-label", `Replace ${seatName(seat)} with an agent`);
       presetOptions(select, false);
       select.prepend(new Option("Replace with an agent…", ""));
       select.value = "";
@@ -256,86 +300,152 @@ function renderTable() {
     }
     opps.append(box);
   }
+}
 
-  // piles
+function renderMiddle() {
   const piles = $("piles");
   piles.innerHTML = "";
   game.piles.forEach((v, i) => {
     const pile = el("div", "pile");
+    pile.setAttribute("aria-label", `${ORDINALS[i]} pile: ${v} points`);
     pile.append(el("b", null, String(v)), el("small", null, ORDINALS[i]));
     piles.append(pile);
   });
-  if (!game.piles.length) piles.append(el("span", "hint", "none"));
+  if (!game.piles.length) piles.append(el("span", "hint", "No piles left"));
 
-  // trick: the current one, or the last finished one while a new trick hasn't started
+  // the current trick, or the last finished one until the next trick starts
   const trick = $("trick");
   trick.innerHTML = "";
   const current = !game.last_trick || (game.trick.length > 0 && !game.over);
   const plays = current ? game.trick : game.last_trick.plays;
   trick.classList.toggle("past", !current);
   $("trick-title").textContent = current ? `Trick ${game.tricks_played + 1}` : "Last trick";
-  $("trick-type").textContent = current ? TRICK_TYPES[game.trick_type] : "";
+  $("trick-type").textContent = current ? `Allowed: ${TRICK_TYPES[game.trick_type]}` : "";
+  $("trick-type").classList.toggle("hidden", !current);
   plays.forEach((pl, i) => {
-    const box = el("div", "play");
-    const by = el("div", "by", pl.seat === game.seat ? "You" : seatName(pl.seat));
+    const leading = current && i === game.trick_leader;
+    const box = el("div", "play" + (leading ? " leading" : "") + (current && i >= freshFrom ? " fresh" : ""));
+    const by = el("div", "by", who(pl.seat));
+    if (leading && plays.length > 1) by.append(el("span", "lead-tag", "leading"));
     const lastOfSeat = !plays.slice(i + 1).some((q) => q.seat === pl.seat);
-    if (!current && lastOfSeat) {
-      const gain = game.last_trick.taken[pl.seat];
-      by.append(document.createTextNode(" "), el("span", "gain", `+${gain}`));
-    }
+    if (!current && lastOfSeat) by.append(el("span", "gain", `+${game.last_trick.taken[pl.seat]}`));
     box.append(by, cardRow(pl.cards, true));
     trick.append(box);
   });
-  if (!plays.length) trick.append(el("span", "hint", "Waiting for the lead…"));
+  if (!plays.length) trick.append(el("span", "hint", `${who(game.current)} to lead`));
+}
 
-  // my hand
-  $("me").classList.toggle("hidden", spectator);
-  if (!spectator) {
-    const mine = game.players[game.seat];
-    const myTurn = game.current === game.seat;
-    $("me").classList.toggle("turn", myTurn);
-    $("me-name").textContent = seatName(game.seat);
-    $("me-points").textContent = `${mine.points} pts`;
-    $("me-reserve").textContent = mine.reserve_size ? `${mine.reserve_size} cards in reserve` : "";
-    $("turn-hint").textContent = game.over ? "" : myTurn ? "Your turn" : `Waiting for ${seatName(game.current)}`;
+function renderHand() {
+  const mine = game.players[game.seat];
+  const myTurn = game.current === game.seat;
+  $("me").classList.toggle("turn", myTurn);
+  $("me-name").textContent = seatName(game.seat);
+  $("me-points").textContent = `${mine.points} pts`;
+  $("me-reserve").textContent = mine.reserve_size ? `${mine.reserve_size} cards in reserve` : "";
+  $("turn-hint").textContent = game.over ? "" : myTurn ? "Your turn" : `Waiting for ${seatName(game.current)}…`;
 
-    const hand = $("hand");
-    hand.innerHTML = "";
-    hand.classList.toggle("waiting", !myTurn);
-    let group = null;
-    let lastRank = null;
-    game.hand.forEach((rank, i) => {
-      if (rank !== lastRank) {
-        group = el("div", "group");
-        hand.append(group);
-        lastRank = rank;
-      }
-      const c = card(rank);
-      if (selection.includes(i)) c.classList.add("sel");
-      c.onclick = () => {
-        selection = selection.includes(i) ? selection.filter((j) => j !== i) : [...selection, i];
-        renderTable();
-      };
-      group.append(c);
-    });
-    if (!game.hand.length) hand.append(el("span", "hint", "No cards left"));
-
-    const match = matchingLegal();
-    const legal = $("legal");
-    legal.innerHTML = "";
-    game.legal.forEach((l) => {
-      const b = el("button", match && match.action === l.action ? "match" : "");
-      b.title = `Play ${l.label}`;
-      l.cards.forEach((r) => b.append(card(r, true)));
-      b.onclick = () => play(l.action);
-      legal.append(b);
-    });
-    if (myTurn && game.legal.length) {
-      legal.prepend(el("span", "hint", "Play:"));
+  const hand = $("hand");
+  hand.innerHTML = "";
+  let group = null;
+  let lastRank = null;
+  game.hand.forEach((rank, i) => {
+    if (rank !== lastRank) {
+      group = el("div", "group");
+      hand.append(group);
+      lastRank = rank;
     }
-    $("play-selected").disabled = !match;
-    $("play-selected").onclick = () => match && play(match.action);
+    const c = el("button", `card r${rank}`, String(rank));
+    const selected = selection.includes(i);
+    c.classList.toggle("sel", selected);
+    c.setAttribute("aria-pressed", String(selected));
+    c.setAttribute("aria-label", `Card ${rank}`);
+    c.onclick = () => {
+      selection = selected ? selection.filter((j) => j !== i) : [...selection, i];
+      renderHand();
+    };
+    group.append(c);
+  });
+  if (!game.hand.length) hand.append(el("span", "hint", "No cards left"));
+
+  const match = matchingLegal();
+  const legal = $("legal");
+  legal.innerHTML = "";
+  // mark the plays that beat the trick, unless they all do (or none do)
+  const beating = game.legal.filter((l) => l.beats).length;
+  const markBeats = game.trick.length > 0 && beating > 0 && beating < game.legal.length;
+  for (const kind of ["single", "set", "run"]) {
+    const options = game.legal.filter((l) => l.kind === kind);
+    if (!options.length) continue;
+    const row = el("div", "legal-group");
+    row.append(el("span", "legal-kind", KIND_NAMES[kind]));
+    options.forEach((l) => {
+      const b = el("button", "chip" + (match && match.action === l.action ? " match" : "") + (markBeats && l.beats ? " beats" : ""));
+      b.setAttribute("aria-label", `${l.cards.join(" ")}${markBeats && l.beats ? ", beats the trick" : ""}`);
+      b.title = markBeats && l.beats ? "Beats every play so far" : "";
+      l.cards.forEach((r) => b.append(card(r, true)));
+      b.onclick = () => { selectCombo(l); renderHand(); };
+      b.ondblclick = () => play(l.action);
+      row.append(b);
+    });
+    legal.append(row);
   }
+  const btn = $("play-selected");
+  btn.disabled = !match;
+  btn.textContent = match ? `Play ${cardsText(match.cards)}` : myTurn ? "Select cards" : "Play";
+  btn.onclick = () => match && play(match.action);
+  $("legal-help").classList.toggle("hidden", !myTurn);
+}
+
+function renderSide() {
+  // scores, best first
+  const scores = $("scores");
+  scores.innerHTML = "";
+  [...game.players.keys()]
+    .sort((a, b) => game.players[b].points - game.players[a].points)
+    .forEach((seat) => {
+      const li = el("li", seat === game.seat ? "mine" : "");
+      li.append(el("span", null, who(seat)), el("span", "points", String(game.players[seat].points)));
+      scores.append(li);
+    });
+
+  // cards I haven't seen, per rank
+  const unseen = $("unseen");
+  unseen.innerHTML = "";
+  $("unseen-box").classList.toggle("hidden", !game.unseen);
+  (game.unseen || []).forEach((count, i) => {
+    const cell = el("div", "unseen-cell");
+    cell.append(card(i + 1, true), el("span", null, `×${count}`));
+    cell.setAttribute("aria-label", `${count} unseen ${i + 1}s`);
+    unseen.append(cell);
+  });
+
+  // trick log, newest first
+  const log = $("log");
+  log.innerHTML = "";
+  game.log.slice().reverse().forEach((t, k) => {
+    const li = el("li");
+    li.append(el("div", "log-title", `Trick ${game.log.length - k}`));
+    t.plays.forEach((pl, i) => {
+      const line = el("div", "log-line");
+      line.append(el("span", null, who(pl.seat)), cardRow(pl.cards, true));
+      const lastOfSeat = !t.plays.slice(i + 1).some((q) => q.seat === pl.seat);
+      if (lastOfSeat) line.append(el("span", "gain", `+${t.taken[pl.seat]}`));
+      li.append(line);
+    });
+    log.append(li);
+  });
+  if (!game.log.length) log.append(el("li", "hint", "Finished tricks appear here."));
+}
+
+function renderTable() {
+  const n = game.players.length;
+  const spectator = game.seat === null;
+  const base = spectator ? 0 : game.seat;
+  renderOpponents(spectator, base, n);
+  renderMiddle();
+  $("me").classList.toggle("hidden", spectator);
+  if (!spectator) renderHand();
+  renderSide();
 
   // game over
   $("game-over").classList.toggle("hidden", !game.over);
@@ -349,12 +459,13 @@ function renderTable() {
     [...game.players.keys()]
       .sort((a, b) => game.players[b].points - game.players[a].points)
       .forEach((seat) => {
-        const li = el("li", winners.includes(seat) ? "win" : "",
-          `${seat === game.seat ? "You" : seatName(seat)}: ${game.players[seat].points} points`);
+        const li = el("li", winners.includes(seat) ? "win" : "");
+        li.append(el("span", null, who(seat)), el("span", "points", `${game.players[seat].points} pts`));
         standings.append(li);
       });
     $("next-game").classList.toggle("hidden", !me.host);
     $("over-hint").textContent = me.host ? "" : "Waiting for the host to start the next game.";
+    if (me.host && document.activeElement !== $("next-game")) $("next-game").focus();
   }
 }
 
@@ -373,10 +484,21 @@ function render() {
   if (view === "table") renderTable();
 }
 
+// Keyboard: 1-6 add a card of that rank to the selection, Enter plays it, Escape clears it.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && game && document.activeElement.tagName !== "INPUT") {
+  if (!game || game.seat === null || $("table").classList.contains("hidden")) return;
+  const tag = document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Enter" && tag !== "BUTTON") {
     const match = matchingLegal();
-    if (match) play(match.action);
+    if (match) { e.preventDefault(); play(match.action); }
+  } else if (e.key === "Escape") {
+    selection = [];
+    renderHand();
+  } else if (/^[1-6]$/.test(e.key)) {
+    const rank = +e.key;
+    const i = game.hand.findIndex((r, j) => r === rank && !selection.includes(j));
+    if (i >= 0) { selection = [...selection, i]; renderHand(); }
   }
 });
 
@@ -388,6 +510,7 @@ async function main() {
     toast("Couldn't load the agent list");
   }
   setupHome();
+  $("rules-btn").onclick = () => $("rules").showModal();
   $("lobby-start").onclick = () => send({ t: "start" });
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;

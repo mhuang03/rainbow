@@ -2,7 +2,9 @@
 
 use rand::{Rng, RngExt};
 
+use crate::agents::Agent;
 use crate::agents::baseline::cheapest_winner;
+use crate::agents::counter::CounterAgent;
 use crate::constants::MAX_PLAYERS;
 use crate::game::{Combo, GameState};
 
@@ -14,6 +16,9 @@ pub enum Rollout {
     /// The `cheapest` baseline, playing a random move with probability `epsilon` to keep
     /// playouts diverse.
     Cheapest { epsilon: f32 },
+    /// The `counter` strategy, playing a random move with probability `epsilon`. Slower than
+    /// `cheapest` (it observes the state every move) but much closer to good play.
+    Counter { epsilon: f32 },
 }
 
 impl Default for Rollout {
@@ -27,6 +32,9 @@ impl Rollout {
         match self {
             Self::Cheapest { epsilon } if rng.random::<f32>() >= epsilon => {
                 cheapest_winner(state.trick(), legal)
+            }
+            Self::Counter { epsilon } if rng.random::<f32>() >= epsilon => {
+                CounterAgent::new().act(&state.observe(state.current_player()), legal)
             }
             _ => legal[rng.random_range(0..legal.len())],
         }

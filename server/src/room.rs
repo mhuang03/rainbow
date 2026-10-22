@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use rainbow::agents::Agent;
 use rainbow::constants::{MAX_RANK, MIN_RANK};
-use rainbow::{Combo, GameState};
+use rainbow::{Combo, ComboKind, GameState};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
 use serde_json::{Value, json};
@@ -98,6 +98,8 @@ struct Game {
     agents: Vec<Option<Box<dyn Agent>>>,
     /// The last completed trick: its plays and the points each seat took from it.
     last_trick: Option<Value>,
+    /// Every completed trick this game, oldest first.
+    log: Vec<Value>,
     /// When the agent to move may play.
     agent_at: Instant,
 }
@@ -359,6 +361,7 @@ impl Room {
             state,
             agents,
             last_trick: None,
+            log: Vec::new(),
             agent_at: Instant::now() + paced(AGENT_DELAY),
         });
         self.games_played += 1;
@@ -429,7 +432,9 @@ impl Room {
                 .zip(&before)
                 .map(|(after, before)| after - before)
                 .collect();
-            game.last_trick = Some(json!({ "plays": plays, "taken": taken }));
+            let summary = json!({ "plays": plays, "taken": taken });
+            game.log.push(summary.clone());
+            game.last_trick = Some(summary);
             delay = TRICK_PAUSE;
         }
         game.agent_at = Instant::now() + paced(delay);
@@ -509,10 +514,26 @@ impl Room {
             .collect();
         let hand = viewer.map(|v| s.hand(v).cards().collect::<Vec<u8>>());
         let my_turn = viewer.is_some_and(|v| !over && s.current_player() == v);
+        // The play leading the trick: the strongest, ties going to the earlier play.
+        let best = s.trick().iter().map(|p| p.combo.strength()).max();
+        let leader = best.and_then(|b| s.trick().iter().position(|p| p.combo.strength() == b));
         let legal: Vec<Value> = if my_turn {
             s.legal_actions()
                 .iter()
-                .map(|&c| json!({ "action": c.action_index(), "cards": cards(c), "label": c.to_string() }))
+                .map(|&c| {
+                    let kind = match c.kind() {
+                        ComboKind::Single { .. } => "single",
+                        ComboKind::Set { .. } => "set",
+                        ComboKind::Run { .. } => "run",
+                    };
+                    json!({
+                        "action": c.action_index(),
+                        "cards": cards(c),
+                        "label": c.to_string(),
+                        "kind": kind,
+                        "beats": best.is_none_or(|b| c.strength() > b),
+                    })
+                })
                 .collect()
         } else {
             Vec::new()
@@ -522,6 +543,8 @@ impl Room {
             .iter()
             .map(|p| play_json(p.seat.into(), p.combo))
             .collect();
+        // Cards the viewer hasn't seen: other hands, reserves and set-aside cards.
+        let unseen = viewer.map(|v| s.observe(v).unknown().counts());
         let trick_type = format!("{:?}", s.trick_type()).to_lowercase();
         Some(json!({
             "t": "state",
@@ -530,6 +553,9 @@ impl Room {
             "players": players,
             "piles": s.piles(),
             "trick": trick,
+            "trick_leader": leader,
+            "unseen": unseen,
+            "log": game.log,
             "trick_type": trick_type,
             "hand": hand,
             "legal": legal,
