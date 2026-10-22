@@ -92,6 +92,9 @@ async function axeScan(browser, colorScheme) {
   };
   await p.goto(BASE);
   await scan("home");
+  await p.click("#howto-link");
+  await scan("how to play");
+  await p.keyboard.press("Escape");
   await createOnlineRoom(p, "Ax", 3, ["open", "economist"]);
   await scan("lobby");
   await p.click("#lobby-leave");
