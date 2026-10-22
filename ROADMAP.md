@@ -317,10 +317,20 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 - [x] `hybrid:base=ismcts`: ISMCTS hands over to the endgame solver. Worse than plain `ismcts`:
       0.95 (4p 2+2, 240 deals) and 0.95 (2p, 300 deals). ISMCTS already searches the endgame
       with counter-weighted rollouts, and the solver's uniform deals throw that information away.
-- [ ] `hybrid:belief=`, `minimax:belief=`: the endgame solver samples deals weighted by a belief
-      network. Testing against the uniform solver.
-- [ ] `hybrid:path=a+b+c`: the endgame solver on top of the league ensemble. Testing against the
-      ensemble alone and against `hybrid` on one network.
+- [x] `hybrid:belief=`, `minimax:belief=`: the endgame solver samples deals weighted by a belief
+      network. Level with uniform deals: 1.01 (4p 2+2, 800 deals) and 1.00 (2p, 400 deals). With
+      so few cards left, a uniform deal is already close to the truth. More endgame deals
+      (`k=16` against 8) are level too: 1.00 (4p, 600 deals).
+- [x] `hybrid:path=a+b+c`: the endgame solver on top of the league ensemble (rounds 7-9). It
+      beats `hybrid` on round 9 alone 1.10 (4p 2+2, 800 deals) but is level with the ensemble
+      itself, 1.00: the ensemble already plays the endgame about as well. The browser drops its
+      Hybrid preset, which the DMC ensemble outplays.
+- [x] Root parallelisation for guided ISMCTS: 4 threads of 50 iterations against one of 200,
+      0.90 (4p 2+2, 200 deals). Independent shallow trees lose more than threads gain;
+      Guided ISMCTS stays single-threaded.
+- [x] A wider network from round 8 (Net2WiderNet to 1024-1024-512, then 90 minutes of league
+      play): it loses to round 8 itself, 0.93 (2p) and 0.94 (4p). The extra width didn't pay
+      off in one round's training time; round 10 continues from round 9.
 - [ ] `ismcts:extend=F`: past the budget, keep searching (up to F times it) while the top two
       root moves are within a factor 1.5 in visits. Testing on guided ISMCTS.
 - [ ] `ismcts:reuse=true`: keep the tree between decisions. Plays are public, so the subtree

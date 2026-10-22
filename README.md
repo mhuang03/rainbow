@@ -114,7 +114,7 @@ Open http://localhost:8080 and enter your name.
 
 - **Against the computer:** pick the number of players and an opponent, grouped from Beginner
   (Random, Cheapest, a loosened DMC) through Casual (Economist, Counter) and Strong (DMC,
-  ISMCTS) to Expert (Hybrid, the DMC ensemble and Guided ISMCTS, the strongest), or choose each
+  ISMCTS) to Expert (the DMC ensemble and Guided ISMCTS, the strongest), or choose each
   seat separately. *Suggest* asks the strongest available agent for a move.
 - **With friends:** create a room and share its four-letter code or link; a link opens straight
   to a join screen. In the lobby the host can give open seats to the computer, and during a

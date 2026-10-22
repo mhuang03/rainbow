@@ -88,13 +88,6 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "ismcts".into(),
         ),
         (
-            "hybrid",
-            "Hybrid",
-            "Expert",
-            "DMC that solves the endgame exactly by search.",
-            format!("hybrid:path={league}"),
-        ),
-        (
             "ensemble",
             "DMC ensemble",
             "Expert",
