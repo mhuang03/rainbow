@@ -200,7 +200,11 @@ Learned:
       1.07 (4p, two seats each) and 0.89 to 1.11 (2p). The distilled policy (48% top-move
       agreement) is still too weak to steer the search.
 - [x] Mixed leaf evaluation (`leaf=...,mix=lambda`): `(1 - lambda) * DMC value + lambda *
-      rollout`, as AlphaGo mixed its value network with rollouts.
+      rollout`, as AlphaGo mixed its value network with rollouts. **Negative:** with lambda 0.25 and
+      counter rollouts (eps 0.2), guided ISMCTS (league3 prior and leaf, belief, n=200) is
+      level with the pure-network leaf in 4p (0.99 vs 1.01, two seats each) and loses in 2p
+      (0.80 vs 1.20), at about twice the cost. The league network's values are already better
+      than counter playouts.
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
       0.57 against `dmc_league3`.
 
