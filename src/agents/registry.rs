@@ -84,6 +84,19 @@ fn parse_rollout(
     })
 }
 
+/// A network leaf evaluator: one DMC network, or several joined with `+` to be averaged.
+fn network_leaf(path: &str) -> Result<value::Evaluator, String> {
+    let mut nets = path
+        .split('+')
+        .map(load_dmc)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(if nets.len() == 1 {
+        value::Evaluator::Dmc(nets.remove(0))
+    } else {
+        value::Evaluator::Ensemble(nets)
+    })
+}
+
 /// Loads a DMC network and checks its shape.
 fn load_dmc(path: &str) -> Result<std::sync::Arc<dmc::Mlp>, String> {
     let net = dmc::Mlp::load_cached(path)?;
@@ -133,7 +146,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     let d = ismcts::Params::default();
     let rollout = match d.evaluator {
         value::Evaluator::Rollout(r) => r,
-        value::Evaluator::Dmc(_) | value::Evaluator::Mixed { .. } => {
+        value::Evaluator::Dmc(_)
+        | value::Evaluator::Ensemble(_)
+        | value::Evaluator::Mixed { .. } => {
             unreachable!("default evaluator is a rollout")
         }
     };
@@ -141,7 +156,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     let evaluator = match opts.take::<String>("leaf")? {
         None => value::Evaluator::Rollout(rollout),
         Some(path) => match opts.take::<f32>("mix")? {
-            None => value::Evaluator::Dmc(load_dmc(&path)?),
+            None => network_leaf(&path)?,
             Some(lambda) => value::Evaluator::Mixed {
                 net: load_dmc(&path)?,
                 rollout,
@@ -289,7 +304,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 determinizations: opts.take("k")?.unwrap_or(d.determinizations),
                 leaf: match opts.take::<String>("leaf")? {
                     None => value::Evaluator::Rollout(rollout),
-                    Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+                    Some(path) => network_leaf(&path)?,
                 },
                 reward: rollout::Reward {
                     margin_weight: opts.take("margin")?.unwrap_or(d.reward.margin_weight),
@@ -317,7 +332,7 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 endgame_cards: opts.take("endgame")?.unwrap_or(d.endgame_cards),
                 leaf: match opts.take::<String>("leaf")? {
                     None => d.leaf,
-                    Some(path) => value::Evaluator::Dmc(load_dmc(&path)?),
+                    Some(path) => network_leaf(&path)?,
                 },
             };
             Box::new(MinimaxAgent::with_params(params, seed))
