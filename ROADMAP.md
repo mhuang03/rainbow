@@ -207,7 +207,7 @@ it.
       1.29 to 0.71. Counter rollouts are now the default for both ISMCTS (eps 0.2) and PIMC
       (eps 0.1). A much better playout policy matters more than the extra time it costs, as
       in Go before value networks.
-- [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v4.bin`)
+- [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v5.bin`)
       as well as a DMC network; the kind is told by the output width. With `distill_v3` as the prior
       (DMC leaf, belief, n=200) the search loses to the same search with the DMC prior: 0.93 to
       1.07 (4p, two seats each) and 0.89 to 1.11 (2p). The distilled policy (48% top-move
@@ -226,10 +226,12 @@ it.
       | 91k | 43% | 0.88 | 0.45 |
       | 137k | 46% | 0.97 | 0.52 |
       | 189k | 48% | 1.06 | 0.57 |
-      | 287k (`models/distill_v4.bin`) | 51% | 1.21 | 0.68 |
+      | 287k | 51% | 1.21 | 0.68 |
       | 384k | 52% | 1.18 | 0.68 |
+      | 384k, 512-512-256, 25 epochs (`models/distill_v5.bin`) | 56% | **1.45** | **0.92** |
 
-      The curve flattens at about 300k decisions for this network (256-256-256).
+      The curve flattens at about 300k decisions for the 256-256-256 network; a bigger network
+      breaks through, so capacity, not data, was the limit.
 
 - [x] Ensemble leaves (`leaf=a.bin+b.bin`, averaging the networks' values): guided ISMCTS
       with a round 3 + round 4 leaf is level with the round 4 leaf alone (1.00 vs 1.00, 4p, two
