@@ -139,8 +139,14 @@ async fn agents_list(State(app): State<Arc<App>>) -> Response {
     axum::Json(app.presets.as_ref().clone()).into_response()
 }
 
+/// Largest message a browser may send; real ones (a play, a chat line) are well under 1 KiB.
+const MAX_MESSAGE: usize = 16 * 1024;
+
 async fn ws(upgrade: WebSocketUpgrade, State(app): State<Arc<App>>) -> Response {
-    upgrade.on_upgrade(move |socket| connection(socket, app))
+    upgrade
+        .max_message_size(MAX_MESSAGE)
+        .max_frame_size(MAX_MESSAGE)
+        .on_upgrade(move |socket| connection(socket, app))
 }
 
 fn new_code(rooms: &HashMap<String, Sender<Command>>) -> String {
