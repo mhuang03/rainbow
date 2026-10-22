@@ -104,15 +104,10 @@ fn structure(hand: &Hand) -> u32 {
     value
 }
 
-impl Agent for CounterAgent {
-    fn name(&self) -> &str {
-        "counter"
-    }
-
-    fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
-        if legal.len() == 1 {
-            return legal[0];
-        }
+impl CounterAgent {
+    /// The value of each legal combo, in the order of `legal`: the pile it expects to finish
+    /// on, less the cost of the cards it spends and the hand structure it breaks.
+    pub fn scores(&self, obs: &Observation, legal: &[Combo]) -> Vec<f32> {
         let p = self.params;
         let me = obs.observer();
         let n = obs.num_players();
@@ -161,11 +156,7 @@ impl Agent for CounterAgent {
             dist.push(1.0);
             for &s in later.iter().filter(|&&s| s != me) {
                 let bound = strongest_possible(&unknown, players[s].hand_size.into(), trick_type);
-                let beat = if strength > bound {
-                    0.0
-                } else {
-                    1.0 - hold[s]
-                };
+                let beat = if strength > bound { 0.0 } else { 1.0 - hold[s] };
                 dist.push(0.0);
                 for k in (0..dist.len()).rev() {
                     let stay = dist[k] * (1.0 - beat);
@@ -184,11 +175,24 @@ impl Agent for CounterAgent {
                 - p.structure_value * base.saturating_sub(structure(&after)) as f32
                 - f32::from(combo.high_rank()) * 0.01
         };
-        legal
-            .iter()
-            .copied()
-            .max_by(|&a, &b| score(a).total_cmp(&score(b)))
-            .expect("legal moves are never empty")
+        legal.iter().map(|&c| score(c)).collect()
+    }
+}
+
+impl Agent for CounterAgent {
+    fn name(&self) -> &str {
+        "counter"
+    }
+
+    fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
+        if legal.len() == 1 {
+            return legal[0];
+        }
+        let scores = self.scores(obs, legal);
+        let best = (0..legal.len())
+            .max_by(|&a, &b| scores[a].total_cmp(&scores[b]))
+            .expect("legal moves are never empty");
+        legal[best]
     }
 }
 

@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use crate::agents::Agent;
 use crate::agents::belief::Belief;
+use crate::agents::counter::CounterAgent;
 use crate::agents::dmc::{DmcAgent, Mlp};
 use crate::agents::dqn::DqnAgent;
 use crate::agents::inference::Inference;
@@ -70,23 +71,35 @@ impl Default for Params {
 /// policy network's logits (one output per action, as trained by `train_distill.py`).
 #[derive(Debug, Clone)]
 pub struct Prior {
-    pub net: Arc<Mlp>,
+    pub source: PriorSource,
     pub temperature: f32,
     /// PUCT exploration constant.
     pub c_puct: f32,
 }
 
+/// Where move priors come from.
+#[derive(Debug, Clone)]
+pub enum PriorSource {
+    /// A DMC network (predicted returns) or a policy network (one logit per action), told
+    /// apart by the output width.
+    Network(Arc<Mlp>),
+    /// The `counter` strategy's move scores, in points; no network needed.
+    Counter,
+}
+
 impl Prior {
     fn probabilities(&self, state: &GameState, legal: &[Combo]) -> Vec<f32> {
         let obs = state.observe(state.current_player());
-        let q = if self.net.outputs() == NUM_ACTIONS {
-            DqnAgent::new(Arc::clone(&self.net))
+        let q = match &self.source {
+            PriorSource::Network(net) if net.outputs() == NUM_ACTIONS => {
+                DqnAgent::new(Arc::clone(net))
+                    .expect("validated on construction")
+                    .evaluate(&obs, legal)
+            }
+            PriorSource::Network(net) => DmcAgent::new(Arc::clone(net))
                 .expect("validated on construction")
-                .evaluate(&obs, legal)
-        } else {
-            DmcAgent::new(Arc::clone(&self.net))
-                .expect("validated on construction")
-                .evaluate(&obs, legal)
+                .evaluate(&obs, legal),
+            PriorSource::Counter => CounterAgent::new().scores(&obs, legal),
         };
         let max = q.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let exp: Vec<f32> = q
@@ -399,10 +412,10 @@ mod tests {
     fn policy_network_prior_is_a_distribution_over_legal_moves() {
         use crate::game::encoding::OBS_SIZE;
         let prior = Prior {
-            net: Arc::new(crate::agents::dmc::test_mlp(
+            source: PriorSource::Network(Arc::new(crate::agents::dmc::test_mlp(
                 &[(OBS_SIZE, 8), (8, NUM_ACTIONS)],
                 5,
-            )),
+            ))),
             temperature: 1.0,
             c_puct: 1.0,
         };
@@ -416,6 +429,27 @@ mod tests {
     }
 
     #[test]
+    fn counter_prior_guides_a_whole_game() {
+        let params = Params {
+            iterations: 40,
+            prior: Some(Prior {
+                source: PriorSource::Counter,
+                temperature: 2.0,
+                c_puct: 1.0,
+            }),
+            ..Params::default()
+        };
+        let mut rng = SmallRng::seed_from_u64(8);
+        let mut state = GameState::new(3, 0, &mut rng);
+        let mut agent = IsmctsAgent::with_params(params, 1);
+        while !state.is_over() {
+            let seat = state.current_player();
+            let combo = agent.act(&state.observe(seat), &state.legal_actions());
+            state.apply(combo).unwrap();
+        }
+    }
+
+    #[test]
     fn network_guided_search_plays_legal_moves() {
         use crate::game::encoding::{ACTION_FEATURES, OBS_SIZE};
         let net = Arc::new(crate::agents::dmc::test_mlp(
@@ -426,7 +460,7 @@ mod tests {
             iterations: 60,
             evaluator: Evaluator::Dmc(Arc::clone(&net)),
             prior: Some(Prior {
-                net,
+                source: PriorSource::Network(net),
                 temperature: 0.5,
                 c_puct: 1.0,
             }),

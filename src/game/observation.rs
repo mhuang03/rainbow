@@ -413,7 +413,10 @@ impl Observation {
             .iter()
             .map(|play| {
                 let best = state.trick().iter().map(|t| t.combo.strength()).max();
-                let flags = (best.is_none(), best.is_some_and(|b| play.combo.strength() > b));
+                let flags = (
+                    best.is_none(),
+                    best.is_some_and(|b| play.combo.strength() > b),
+                );
                 state.apply(play.combo).expect("history replays legally");
                 flags
             })

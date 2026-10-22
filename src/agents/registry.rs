@@ -151,6 +151,11 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
     };
     let prior = match opts.take::<String>("prior")? {
         None => None,
+        Some(source) if source == "counter" => Some(ismcts::Prior {
+            source: ismcts::PriorSource::Counter,
+            temperature: opts.take("ptemp")?.unwrap_or(2.0),
+            c_puct: opts.take("cpuct")?.unwrap_or(1.0),
+        }),
         Some(path) => {
             // a DMC network or a policy network (one logit per action)
             let net = dmc::Mlp::load_cached(&path)?;
@@ -161,7 +166,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
                 DmcAgent::new(std::sync::Arc::clone(&net))?;
             }
             Some(ismcts::Prior {
-                net,
+                source: ismcts::PriorSource::Network(net),
                 temperature: opts
                     .take("ptemp")?
                     .unwrap_or(if policy { 1.0 } else { 0.1 }),
@@ -205,7 +210,7 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `ismcts`: `n` (iterations), `ms` (time budget per move; whichever limit comes first),
 ///   `c` (exploration), `leaf` (DMC network path for leaf values),
 ///   `mix` (with `leaf`: weight of a rollout blended into the network value),
-///   `prior` (DMC or policy network path for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
+///   `prior` (`counter`, or a DMC or policy network path, for PUCT priors) with `ptemp` (softmax temperature) and `cpuct`,
 ///   `belief` (hand-prediction network path for weighted deals), the rollout options, and the
 ///   inference options below.
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards

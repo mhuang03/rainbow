@@ -204,6 +204,11 @@ Learned:
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
       0.57 against `dmc_league3`.
 
+- [x] `counter:adaptive=w`: each opponent's hold chance learned from their beat rate when
+      following, shrunk to the prior with weight w. Neutral: against three Economists 1.10
+      (fixed) vs 1.11-1.13 (w = 2-50, within noise), but worse against three `cheapest`
+      (1.27 vs 1.05-1.21). Not the default.
+
 ## Tooling added along the way
 
 - [x] `VecEnv`: batched Python environment, 11x faster stepping than per-game calls; all
