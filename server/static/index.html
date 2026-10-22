@@ -12,6 +12,8 @@
   try { if (localStorage.getItem("rainbow.motion") === "reduce") document.documentElement.dataset.motion = "reduce"; } catch {}
 </script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='7' width='13' height='19' rx='3' fill='%23d62839' transform='rotate(-14 9 16)'/><rect x='10' y='5' width='13' height='19' rx='3' fill='%23f9c74f'/><rect x='16' y='7' width='13' height='19' rx='3' fill='%232f6fc0' transform='rotate(14 23 16)'/></svg>">
+<link rel="preload" href="/fonts/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -72,12 +74,12 @@
         </details>
         <button id="solo-start" class="primary">Start game</button>
       </div>
-      <div class="panel">
+      <div class="panel secondary">
         <h2>Play with friends</h2>
         <label>Players
           <select id="online-players"></select>
         </label>
-        <button id="online-create" class="primary">Create a room</button>
+        <button id="online-create">Create a room</button>
         <div class="divider">or join one</div>
         <div class="join-row">
           <input id="join-code" placeholder="CODE" autocapitalize="characters" autocomplete="off" aria-label="Room code or invite link">

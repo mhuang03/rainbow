@@ -126,6 +126,16 @@ async fn main() {
             "/style.css",
             get(|| async { static_file("text/css", include_str!("../static/style.css")) }),
         )
+        // Atkinson Hyperlegible (SIL Open Font License, static/fonts/OFL.txt): numerals
+        // designed to be told apart, for a game read through rank numbers
+        .route(
+            "/fonts/atkinson-400.woff2",
+            get(|| async { font(include_bytes!("../static/fonts/atkinson-400.woff2")) }),
+        )
+        .route(
+            "/fonts/atkinson-700.woff2",
+            get(|| async { font(include_bytes!("../static/fonts/atkinson-700.woff2")) }),
+        )
         .route("/api/agents", get(agents_list))
         .route("/ws", get(ws))
         .with_state(app);
@@ -139,6 +149,17 @@ async fn main() {
 
 fn static_file(mime: &'static str, body: &'static str) -> Response {
     ([(header::CONTENT_TYPE, mime)], body).into_response()
+}
+
+fn font(body: &'static [u8]) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "font/woff2"),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 async fn agents_list(State(app): State<Arc<App>>) -> Response {

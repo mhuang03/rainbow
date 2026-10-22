@@ -49,12 +49,17 @@
 }
 
 
+/* Atkinson Hyperlegible: drawn so that look-alike characters differ, numerals above all, and
+   this game is read through rank numbers. Served with the page (SIL OFL, fonts/OFL.txt). */
+@font-face { font-family: "Atkinson Hyperlegible"; src: url("/fonts/atkinson-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url("/fonts/atkinson-700.woff2") format("woff2"); font-weight: 600 700; font-display: swap; }
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 15px/1.45 "Atkinson Hyperlegible", system-ui, sans-serif;
   display: flex;
   flex-direction: column;
 }
@@ -99,7 +104,10 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 
 /* Home */
 .name-field { display: flex; flex-direction: column; gap: 6px; max-width: 280px; margin-bottom: 18px; color: var(--muted); }
-.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.panels { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 28px; align-items: start; }
+/* playing with friends is the second path: a plain column beside the main panel */
+.panel.secondary { background: none; padding: 18px 4px; }
+@media (max-width: 760px) { .panels { grid-template-columns: minmax(0, 1fr); gap: 8px; } .panel.secondary { padding-top: 8px; border-top: 1px solid var(--line); border-radius: 0; } }
 .panel { background: var(--panel); border-radius: var(--radius); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
 .panel h2 { margin: 0 0 4px; font-size: 18px; }
 .panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); }
@@ -142,7 +150,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
   flex-direction: column;
   gap: 6px;
 }
-.opp.turn, .me.turn { border-color: var(--accent); box-shadow: 0 0 18px rgba(255, 209, 102, 0.25); }
+.opp.turn, .me.turn { border-color: var(--accent); }
 .opp .who { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
 .opp .kind { font-weight: 400; font-size: 12px; color: var(--muted); }
 .opp .meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; }
@@ -165,8 +173,8 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
   gap: 20px;
   min-height: 190px;
 }
-.label { color: var(--felt-muted); font-size: 13px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-.pill { text-transform: none; letter-spacing: 0; background: rgba(0, 0, 0, 0.25); padding: 1px 8px; border-radius: 999px; }
+.label { color: var(--felt-text); font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.pill { font-weight: 400; background: rgba(0, 0, 0, 0.25); padding: 1px 8px; border-radius: 999px; }
 .piles { display: flex; gap: 10px; flex-wrap: wrap; }
 .pile {
   width: 52px; height: 64px; border-radius: 8px; background: rgba(0, 0, 0, 0.28);
@@ -214,13 +222,13 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .standings { margin: 0; padding-left: 22px; }
 .standings li { padding: 3px 0; }
 .standings .win { color: var(--accent-text); font-weight: 600; }
-.standings .win span:first-child::after { content: " ★"; }
 
 .toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
   background: var(--danger); color: #fff; padding: 9px 16px; border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
+.toast.info { background: var(--text); color: var(--bg); }
 
 @media (max-width: 700px) {
   main { padding: 12px; }
@@ -250,7 +258,7 @@ button.card.r3 { color: #3b2a00; }
 /* Piles and trick */
 .play { padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
 .play.leading { border-color: rgba(255, 209, 102, 0.7); background: rgba(255, 209, 102, 0.08); }
-.lead-tag { margin-left: 6px; font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
+.lead-tag { margin-left: 6px; font-size: 12px; color: var(--accent); }
 .play .gain { margin-left: 6px; color: var(--accent); font-weight: 600; }
 .play.fresh { animation: drop-in 260ms ease-out; }
 @keyframes drop-in {
@@ -266,9 +274,10 @@ button.card.r3 { color: #3b2a00; }
 
 /* Side panel */
 .side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; max-height: calc(100vh - 90px); }
-.side-box { background: var(--panel); border-radius: var(--radius); padding: 12px 14px; }
+.side-box { padding: 12px 2px 0; border-top: 1px solid var(--line); }
+.side-box:first-child { border-top: none; padding-top: 0; }
 .side-box.grow { flex: 1; min-height: 120px; overflow: auto; }
-.side h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.side h2 { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: var(--text); }
 .unseen { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px 10px; }
 .unseen-cell { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -360,9 +369,7 @@ details.custom[open] summary { margin-bottom: 10px; }
 /* A seat's points glow briefly when they change */
 .points.bump { animation: bump 900ms ease-out; }
 @keyframes bump {
-  0% { color: var(--text); text-shadow: 0 0 0 transparent; }
-  25% { text-shadow: 0 0 12px var(--accent); }
-  100% { text-shadow: 0 0 0 transparent; }
+  0%, 40% { color: var(--text); }
 }
 
 /* How to play */
@@ -388,7 +395,7 @@ button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-
 @keyframes settle { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .overlay:not(.hidden) .panel { animation: none; } }
 #lobby-chat-slot .side-box { padding: 0; background: none; }
-#lobby-chat-slot h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 4px 0 8px; }
+#lobby-chat-slot h2 { font-size: 15px; font-weight: 700; margin: 4px 0 8px; }
 .lobby-seats .seat-line select { min-width: 220px; }
 #lobby-chat-slot .chat-form { margin-bottom: 6px; }
 dialog.howto .example { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
@@ -411,7 +418,7 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
 }
 .opp .wait { font-weight: 400; font-size: 12px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
 .opp .wait:empty { display: none; }
-.watching { margin: 0; padding: 8px 14px; border-radius: var(--radius); background: var(--panel); color: var(--muted); text-align: center; }
+.watching { margin: 0; color: var(--muted); text-align: center; }
 /* "Reduce motion" in Settings: no animations or transitions, whatever the system setting */
 :root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after {
   animation: none !important;
@@ -443,20 +450,6 @@ button.close { padding: 6px; line-height: 0; }
 @media (max-width: 700px) {
   .hand .card { width: 38px; height: 54px; font-size: 20px; }
   .hand .group { gap: 3px; margin-right: 6px; }
-}
-/* a win: the title sweeps once through the rank colours, then settles */
-#over-title.won {
-  display: inline-block; align-self: flex-start;
-  background: linear-gradient(90deg, var(--text) 0 30%, var(--r1), var(--r2), var(--r3), var(--r4), var(--r5), var(--r6), var(--text) 70% 100%);
-  background-size: 300% 100%; background-position: 100% 0;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: win-sweep 1.4s ease-out 0.2s both;
-}
-@keyframes win-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
-@media (prefers-reduced-motion: reduce) { #over-title.won { animation: none; background: none; color: var(--text); } }
-:root[data-motion="reduce"] #over-title.won { animation: none; background: none; color: var(--text); }
-@media (forced-colors: active), (prefers-contrast: more) {
-  #over-title.won { animation: none; background: none; color: var(--text); }
 }
 /* the chat slot adds no gap of its own while the chat is hidden */
 #side-chat-slot { display: contents; }

@@ -30,12 +30,33 @@ function cardRow(ranks, small) {
   return row;
 }
 
-function toast(msg) {
+/** A brief message: red for errors (announced at once); `info` ones are neutral and polite. */
+function toast(msg, kind = "error") {
   const t = $("toast");
   t.textContent = msg.charAt(0).toUpperCase() + msg.slice(1);
+  t.classList.toggle("info", kind === "info");
+  t.setAttribute("role", kind === "info" ? "status" : "alert");
   t.classList.remove("hidden");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.add("hidden"), 3500);
+}
+
+// Buttons waiting on the server (start, create, join): disabled and relabelled until the
+// server answers, so a slow reply shows and a double click doesn't make two rooms.
+const pendingButtons = new Map();
+function setPending(btn, label) {
+  if (pendingButtons.has(btn)) return false;
+  pendingButtons.set(btn, btn.textContent);
+  btn.disabled = true;
+  btn.textContent = label;
+  return true;
+}
+function clearPending() {
+  for (const [btn, label] of pendingButtons) {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+  pendingButtons.clear();
 }
 
 function playerName() {
@@ -128,6 +149,7 @@ function send(msg) {
 function receive(msg) {
   switch (msg.t) {
     case "joined":
+      clearPending();
       me.code = msg.code;
       me.seat = msg.seat;
       me.token = msg.token || null;
@@ -172,6 +194,7 @@ function receive(msg) {
       return;
     }
     case "error":
+      clearPending();
       hintPending(false);
       toast(sentence(msg.msg));
       if (msg.msg === "that room doesn't exist or has closed" || msg.msg === "the room has closed") leave();
@@ -328,6 +351,7 @@ function setupHome() {
   refresh();
 
   $("solo-start").onclick = () => {
+    if (!setPending($("solo-start"), "Starting…")) return;
     autoStart = true;
     const n = +$("solo-players").value;
     const seats = $("solo-custom").open
@@ -336,14 +360,18 @@ function setupHome() {
     send({ t: "create", name: playerName(), seats });
   };
   // online rooms start with every other seat open; the host can fill seats in the lobby
-  $("online-create").onclick = () =>
+  $("online-create").onclick = () => {
+    if (!setPending($("online-create"), "Creating…")) return;
     send({ t: "create", name: playerName(), seats: Array(+$("online-players").value - 1).fill("open") });
+  };
   const join = () => {
     // accept a pasted invite link as well as a bare code
     const raw = $("join-code").value.trim();
     const fromLink = raw.match(/[?&]room=([a-z]{4})/i);
     const code = (fromLink ? fromLink[1] : raw).toUpperCase();
     if (code.length !== 4) return toast("Room codes have four letters");
+    const btn = $("home").classList.contains("invited") ? $("invite-join") : $("join-btn");
+    if (!setPending(btn, "Joining…")) return;
     me.code = code;
     me.token = localStorage.getItem(`rainbow.token.${code}`);
     send({ t: "join", code, name: playerName(), token: me.token });
@@ -916,7 +944,6 @@ function renderTable() {
     $("over-title").textContent = winners.includes(game.seat)
       ? winners.length > 1 ? "You tied for the win!" : "You win!"
       : `${winners.map(seatName).join(" and ")} win${winners.length > 1 ? "" : "s"}`;
-    $("over-title").classList.toggle("won", winners.includes(game.seat));
     const standings = $("standings");
     standings.innerHTML = "";
     [...game.players.keys()]
@@ -1096,7 +1123,7 @@ async function main() {
     if (navigator.share) {
       navigator.share({ title: "Play Rainbow with me", url }).catch(() => { /* dismissed */ });
     } else {
-      navigator.clipboard.writeText(url).then(() => toast("Link copied"), () => $("share-link").select());
+      navigator.clipboard.writeText(url).then(() => toast("Link copied", "info"), () => $("share-link").select());
     }
   };
   const code = new URLSearchParams(location.search).get("room");
