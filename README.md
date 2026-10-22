@@ -70,6 +70,26 @@ cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random 
 
 `rainbow selfplay` plays games with network-guided ISMCTS and records the search's value for every root move, as training data for expert iteration.
 
+### Results
+
+Current 4-player ladder (40 random lineups of 4 from 10 agents, 40 duplicate deals each; 1.0 is an
+average player):
+
+| Agent | Relative |
+|---|---|
+| `ismcts:n=200,prior=models/dmc_league.bin,leaf=models/dmc_league.bin,belief=models/belief_v1.bin` | 2.32 |
+| `dmc:path=models/dmc_league.bin` | 1.66 |
+| `dmc:path=models/dmc_v2.bin` | 1.20 |
+| `ismcts` | 1.06 |
+| `dqn:path=models/dqn_v1.bin` | 0.85 |
+| `pimc` | 0.68 |
+| `economist` | 0.62 |
+| `ppo:path=models/ppo_v2.bin` | 0.59 |
+| `nfsp:path=models/nfsp_v1.bin` | 0.57 |
+| `cheapest` | 0.32 |
+
+[ROADMAP.md](ROADMAP.md) has the full results and what each experiment taught.
+
 ## Python bindings
 
 The `python/` crate builds a `rainbow_engine` extension module with PyO3 and maturin:
