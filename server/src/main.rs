@@ -224,7 +224,7 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
         ClientMsg::Join { code, name, token } => {
             let code = code.trim().to_uppercase();
             let Some(tx) = app.rooms.lock().expect("lock").get(&code).cloned() else {
-                return send_error("no room with that code");
+                return send_error("that room doesn't exist or has closed");
             };
             leave(room, conn);
             *room = Some(tx);

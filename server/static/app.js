@@ -163,7 +163,7 @@ function receive(msg) {
     }
     case "error":
       toast(msg.msg);
-      if (msg.msg === "no room with that code" || msg.msg === "the room has closed") leave();
+      if (msg.msg === "that room doesn't exist or has closed" || msg.msg === "the room has closed") leave();
       break;
   }
   render();
@@ -263,7 +263,10 @@ function setupHome() {
   $("online-create").onclick = () =>
     send({ t: "create", name: playerName(), seats: Array(+$("online-players").value - 1).fill("open") });
   const join = () => {
-    const code = $("join-code").value.trim().toUpperCase();
+    // accept a pasted invite link as well as a bare code
+    const raw = $("join-code").value.trim();
+    const fromLink = raw.match(/[?&]room=([a-z]{4})/i);
+    const code = (fromLink ? fromLink[1] : raw).toUpperCase();
     if (code.length !== 4) return toast("Room codes have four letters");
     me.code = code;
     me.token = localStorage.getItem(`rainbow.token.${code}`);
@@ -772,8 +775,15 @@ async function main() {
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;
   $("over-leave").onclick = leave;
+  // phones get the system share sheet; elsewhere the link is copied
+  if (navigator.share) $("copy-link").textContent = "Share link";
   $("copy-link").onclick = () => {
-    navigator.clipboard.writeText($("share-link").value).then(() => toast("Link copied"), () => $("share-link").select());
+    const url = $("share-link").value;
+    if (navigator.share) {
+      navigator.share({ title: "Play Rainbow with me", url }).catch(() => { /* dismissed */ });
+    } else {
+      navigator.clipboard.writeText(url).then(() => toast("Link copied"), () => $("share-link").select());
+    }
   };
   const code = new URLSearchParams(location.search).get("room");
   if (code) {

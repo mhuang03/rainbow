@@ -67,6 +67,15 @@ async function createOnlineRoom(page, name, players, seats) {
   return (await page.textContent("#lobby-code")).trim();
 }
 
+/** Joins by pasting the whole invite link into the code box. */
+async function joinByPastedLink(page, code, name) {
+  await page.goto(BASE);
+  await page.fill("#name", name);
+  await page.fill("#join-code", `${BASE}/?room=${code}`);
+  await page.click("#join-btn");
+  await page.waitForSelector("#lobby:not(.hidden), #table:not(.hidden)");
+}
+
 async function joinByLink(page, code, name) {
   await page.goto(`${BASE}/?room=${code}`);
   await page.fill("#name", name);
@@ -155,7 +164,7 @@ const tests = {
     const code = await createOnlineRoom(a, "Host", 2, ["open"]);
     const bctx = await browser.newContext();
     const b = await bctx.newPage();
-    await joinByLink(b, code, "Guest");
+    await joinByPastedLink(b, code, "Guest");
     await a.waitForFunction(() => !document.querySelector("#lobby-start").disabled);
     await a.click("#lobby-start");
     await b.waitForSelector("#table:not(.hidden)");
