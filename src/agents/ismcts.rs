@@ -47,6 +47,9 @@ pub struct Params {
     /// the evidence isn't counted twice. In testing the combination still did worse than belief
     /// alone (the ratios vary widely, so a few deals take most of the weight); prefer one.
     pub inference: Option<Inference>,
+    /// Independent searches run in parallel (root parallelisation), each with an equal share
+    /// of the iterations; their root visit counts are summed.
+    pub threads: usize,
 }
 
 impl Default for Params {
@@ -70,6 +73,7 @@ impl Default for Params {
             }),
             belief: None,
             inference: None,
+            threads: 1,
         }
     }
 }
@@ -298,6 +302,55 @@ impl IsmctsAgent {
         self.nodes[best].visits == 0
     }
 
+    /// Runs `threads` independent searches at once, each with its share of the iterations, and
+    /// sums their root statistics.
+    pub fn parallel_search(&mut self, obs: &Observation) -> Vec<RootMove> {
+        let threads = self.params.threads.max(1);
+        let mut params = self.params.clone();
+        params.threads = 1;
+        params.iterations = self.params.iterations.div_ceil(threads);
+        let seeds: Vec<u64> = (0..threads).map(|_| self.rng.random()).collect();
+        let results: Vec<Vec<RootMove>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = seeds
+                .into_iter()
+                .map(|seed| {
+                    let params = params.clone();
+                    scope.spawn(move || IsmctsAgent::with_params(params, seed).search(obs))
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("search thread panicked"))
+                .collect()
+        });
+        let mut merged: Vec<RootMove> = Vec::new();
+        for moves in results {
+            for m in moves {
+                match merged.iter_mut().find(|x| x.combo == m.combo) {
+                    Some(x) => {
+                        let total = x.visits + m.visits;
+                        if total > 0 {
+                            let a = if x.mean.is_nan() {
+                                0.0
+                            } else {
+                                x.mean * x.visits as f32
+                            };
+                            let b = if m.mean.is_nan() {
+                                0.0
+                            } else {
+                                m.mean * m.visits as f32
+                            };
+                            x.mean = (a + b) / total as f32;
+                        }
+                        x.visits = total;
+                    }
+                    None => merged.push(m),
+                }
+            }
+        }
+        merged
+    }
+
     /// Runs the search and returns statistics for each of the root's moves.
     pub fn search(&mut self, obs: &Observation) -> Vec<RootMove> {
         let p = self.params.clone();
@@ -396,7 +449,12 @@ impl Agent for IsmctsAgent {
         if legal.len() == 1 {
             return legal[0];
         }
-        self.search(obs)
+        let moves = if self.params.threads > 1 {
+            self.parallel_search(obs)
+        } else {
+            self.search(obs)
+        };
+        moves
             .into_iter()
             .filter(|m| legal.contains(&m.combo))
             .max_by_key(|m| m.visits)
@@ -448,6 +506,22 @@ mod tests {
         assert_eq!(p.len(), legal.len());
         assert!((p.iter().sum::<f32>() - 1.0).abs() < 1e-4);
         assert!(p.iter().all(|&x| x > 0.0));
+    }
+
+    #[test]
+    fn parallel_search_shares_the_iterations() {
+        let params = Params {
+            iterations: 80,
+            threads: 4,
+            ..Params::default()
+        };
+        let mut rng = SmallRng::seed_from_u64(6);
+        let state = GameState::new(4, 0, &mut rng);
+        let mut agent = IsmctsAgent::with_params(params, 2);
+        let moves = agent.parallel_search(&state.observe(0));
+        assert_eq!(moves.iter().map(|m| m.visits).sum::<u32>(), 80);
+        let legal = state.legal_actions();
+        assert!(legal.contains(&agent.act(&state.observe(0), &legal)));
     }
 
     #[test]
