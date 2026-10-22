@@ -79,6 +79,8 @@ const SOUNDS = {
   turn: () => tones([[660, 0], [880, 0.1]]),
   trick: () => tones([[523, 0], [659, 0.07], [784, 0.14]], 0.18, 0.04),
   chat: () => tones([[990, 0]], 0.08, 0.03),
+  win: () => tones([[523, 0], [659, 0.1], [784, 0.2], [1047, 0.3]], 0.3, 0.05),
+  end: () => tones([[587, 0], [440, 0.16]], 0.3, 0.04),
 };
 
 
@@ -435,6 +437,10 @@ function announceChanges(old, next) {
     gainFlash = { at: Date.now(), taken: next.log[next.log.length - 1].taken };
   }
   if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) SOUNDS.turn();
+  // the game's end, after the last trick's sound
+  if (next.over && old && !old.over) {
+    setTimeout((next.winners || []).includes(next.seat) ? SOUNDS.win : SOUNDS.end, 450);
+  }
   freshFrom = oldTrick;
 }
 
