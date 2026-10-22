@@ -21,7 +21,7 @@ use crate::agents::dqn::DqnAgent;
 use crate::agents::inference::Inference;
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
-use crate::game::{Combo, GameState, NUM_ACTIONS, Observation};
+use crate::game::{Combo, GameState, NUM_ACTIONS, Observation, Play};
 
 #[derive(Debug, Clone)]
 pub struct Params {
@@ -54,6 +54,10 @@ pub struct Params {
     /// budget, the search continues until the most-visited root move has 1.5 times the
     /// visits of the runner-up. 1 turns it off.
     pub extend: f32,
+    /// Keeps the search tree between decisions: every play is public, so the subtree under the
+    /// plays made since the last search still holds valid statistics, and the next search
+    /// continues from it instead of starting empty.
+    pub reuse: bool,
 }
 
 impl Default for Params {
@@ -79,6 +83,7 @@ impl Default for Params {
             inference: None,
             threads: 1,
             extend: 1.0,
+            reuse: false,
         }
     }
 }
@@ -160,6 +165,9 @@ pub struct IsmctsAgent {
     params: Params,
     rng: SmallRng,
     nodes: Vec<Node>,
+    /// The tree's current root, and the game history when it was searched (with `reuse`).
+    root: usize,
+    history: Vec<Play>,
 }
 
 impl IsmctsAgent {
@@ -172,6 +180,8 @@ impl IsmctsAgent {
             params,
             rng: SmallRng::seed_from_u64(seed),
             nodes: Vec::new(),
+            root: 0,
+            history: Vec::new(),
         }
     }
 
@@ -356,10 +366,26 @@ impl IsmctsAgent {
         merged
     }
 
+    /// Moves the root down the plays made since the last search, if the tree has them all.
+    fn descend_to(&mut self, history: &[Play]) -> bool {
+        if self.nodes.is_empty() || !history.starts_with(&self.history) {
+            return false;
+        }
+        let mut node = self.root;
+        for play in &history[self.history.len()..] {
+            match self.child_for(node, play.combo) {
+                Some(child) if self.nodes[child].mover == play.seat => node = child,
+                _ => return false,
+            }
+        }
+        self.root = node;
+        true
+    }
+
     /// Whether the most-visited root move leads the runner-up clearly (by half again).
     fn root_decided(&self) -> bool {
         let (mut first, mut second) = (0, 0);
-        for &ch in &self.nodes[0].children {
+        for &ch in &self.nodes[self.root].children {
             let v = self.nodes[ch as usize].visits;
             if v > first {
                 (first, second) = (v, first);
@@ -378,17 +404,23 @@ impl IsmctsAgent {
             .inference
             .as_ref()
             .map(|inference| inference.sample_pool(obs, weights.as_ref(), &mut self.rng));
-        self.nodes.clear();
-        // The root's own fields are unused; only its children matter.
-        self.nodes.push(Node {
-            combo: Combo::single(1),
-            mover: 0,
-            children: Vec::new(),
-            visits: 0,
-            available: 0,
-            total: 0.0,
-            prior: 1.0,
-        });
+        if !(p.reuse && self.descend_to(obs.history())) {
+            self.nodes.clear();
+            // The root's own fields are unused; only its children matter.
+            self.nodes.push(Node {
+                combo: Combo::single(1),
+                mover: 0,
+                children: Vec::new(),
+                visits: 0,
+                available: 0,
+                total: 0.0,
+                prior: 1.0,
+            });
+            self.root = 0;
+        }
+        if p.reuse {
+            self.history = obs.history().to_vec();
+        }
         let mut path: Vec<usize> = Vec::new();
 
         let start = std::time::Instant::now();
@@ -411,7 +443,7 @@ impl IsmctsAgent {
                     None => obs.determinize(&mut self.rng),
                 },
             };
-            let mut node = 0;
+            let mut node = self.root;
             path.clear();
 
             // Selection and expansion.
@@ -435,7 +467,7 @@ impl IsmctsAgent {
             }
         }
 
-        self.nodes[0]
+        self.nodes[self.root]
             .children
             .iter()
             .map(|&ch| {
@@ -548,6 +580,40 @@ mod tests {
     }
 
     #[test]
+    fn reused_tree_carries_visits_into_the_next_decision() {
+        let params = Params {
+            iterations: 60,
+            reuse: true,
+            ..Params::default()
+        };
+        let mut agent = IsmctsAgent::with_params(params, 4);
+        let mut rng = SmallRng::seed_from_u64(9);
+        let mut state = GameState::new(3, 0, &mut rng);
+        let mut reused = 0;
+        while !state.is_over() {
+            let seat = state.current_player();
+            let legal = state.legal_actions();
+            let combo = if seat == 0 {
+                let before = agent.nodes.len();
+                let combo = agent.act(&state.observe(0), &legal);
+                if legal.len() > 1 && agent.root != 0 && before > 0 {
+                    reused += 1;
+                }
+                combo
+            } else {
+                legal[0]
+            };
+            assert!(legal.contains(&combo));
+            state.apply(combo).unwrap();
+        }
+        assert!(reused > 0, "the tree was never reused");
+        // a new game starts a fresh tree
+        let state = GameState::new(3, 0, &mut rng);
+        agent.act(&state.observe(0), &state.legal_actions());
+        assert_eq!(agent.root, 0);
+    }
+
+    #[test]
     fn extended_search_stops_once_decided() {
         let mut rng = SmallRng::seed_from_u64(6);
         let state = GameState::new(4, 0, &mut rng);
@@ -557,7 +623,11 @@ mod tests {
             ..Params::default()
         };
         let mut agent = IsmctsAgent::with_params(params, 3);
-        let visits: u32 = agent.search(&state.observe(0)).iter().map(|m| m.visits).sum();
+        let visits: u32 = agent
+            .search(&state.observe(0))
+            .iter()
+            .map(|m| m.visits)
+            .sum();
         assert!((64..=256).contains(&visits));
         // past the budget, the search only stops once the leader is clear (or at the cap)
         assert!(visits == 64 || visits == 256 || agent.root_decided());
