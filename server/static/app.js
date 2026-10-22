@@ -451,10 +451,36 @@ function markTipSeen() {
   $("first-tip").classList.add("hidden");
 }
 
+// Where the cards just played sat in the hand, so they can glide from there into the trick.
+let flight = null;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
 function play(action) {
   markTipSeen();
+  flight = {
+    at: Date.now(),
+    rects: [...document.querySelectorAll("#hand .card.sel")].map((c) => c.getBoundingClientRect()),
+  };
   selection = [];
   send({ t: "play", action });
+}
+
+/** FLIP: start the new play's cards where they were in the hand and let them slide into place. */
+function flyIn(row) {
+  if (!flight || reducedMotion.matches || Date.now() - flight.at > 1500) return;
+  const cards = [...row.children];
+  cards.forEach((c, i) => {
+    const from = flight.rects[Math.min(i, flight.rects.length - 1)];
+    if (!from) return;
+    const to = c.getBoundingClientRect();
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    c.animate(
+      [{ transform: `translate(${dx}px, ${dy}px) scale(${from.width / to.width})` }, { transform: "none" }],
+      { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" },
+    );
+  });
+  flight = null;
 }
 
 function renderOpponents(spectator, base, n) {
@@ -524,10 +550,19 @@ function renderMiddle() {
     const by = el("div", "by", who(pl.seat));
     if (current && leading && plays.length > 1) by.append(el("span", "lead-tag", "leading"));
     if (!current && lastOfSeat) by.append(el("span", "gain", `+${game.last_trick.taken[pl.seat]}`));
-    box.append(by, cardRow(pl.cards, true));
+    const row = cardRow(pl.cards, true);
+    box.append(by, row);
     trick.append(box);
   });
   if (!plays.length) trick.append(el("span", "hint", game.current === game.seat ? "Your lead" : `${who(game.current)} to lead`));
+  // my play just landed: animate it from the hand (it is the last play of mine in this trick)
+  const mine = current ? plays.map((pl, i) => [pl, i]).filter(([pl]) => pl.seat === game.seat).pop() : null;
+  if (flight && mine && mine[1] >= freshFrom) {
+    // no drop-in for this one; it flies in from the hand instead
+    const box = trick.children[mine[1]];
+    box.classList.remove("fresh");
+    requestAnimationFrame(() => flyIn(box.querySelector(".cards")));
+  }
 }
 
 /** Runs a re-render that rebuilds buttons, keeping keyboard focus on the same logical control. */
