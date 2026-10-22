@@ -298,7 +298,7 @@ it.
 | ismcts | 1.29 | 0.07 |
 | dmc:path=dmc_league5.bin | 1.19 | 0.06 |
 | pimc | 1.04 | 0.08 |
-| distill:path=distill_v4.bin | 0.74 | 0.07 |
+| distill v4 (since replaced by distill_v5) | 0.74 | 0.07 |
 | counter | 0.64 | 0.04 |
 | economist | 0.42 | 0.04 |
 | cheapest | 0.26 | 0.02 |

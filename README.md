@@ -89,7 +89,7 @@ average player):
 | `ismcts` | 1.29 |
 | `dmc:path=models/dmc_league5.bin` | 1.19 |
 | `pimc` | 1.04 |
-| `distill:path=models/distill_v4.bin` | 0.74 |
+| `distill` (v4, since replaced by `models/distill_v5.bin`) | 0.74 |
 | `counter` | 0.64 |
 | `economist` | 0.42 |
 | `cheapest` | 0.26 |
