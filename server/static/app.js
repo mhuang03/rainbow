@@ -456,7 +456,7 @@ function renderMiddle() {
     box.append(by, cardRow(pl.cards, true));
     trick.append(box);
   });
-  if (!plays.length) trick.append(el("span", "hint", `${who(game.current)} to lead`));
+  if (!plays.length) trick.append(el("span", "hint", game.current === game.seat ? "Your lead" : `${who(game.current)} to lead`));
 }
 
 /** Runs a re-render that rebuilds buttons, keeping keyboard focus on the same logical control. */

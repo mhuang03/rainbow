@@ -241,7 +241,7 @@ impl Room {
                     return self.reply(conn, "a game is already in progress");
                 }
                 if self.seats.iter().any(|s| matches!(s, Seat::Open)) {
-                    return self.reply(conn, "fill or close every open seat first");
+                    return self.reply(conn, "every seat needs a player or the computer first");
                 }
                 self.start();
             }
@@ -443,7 +443,7 @@ impl Room {
 
     fn hint(&mut self, conn: u64) {
         if !self.hints_allowed() {
-            return self.reply(conn, "hints are only available in games against agents");
+            return self.reply(conn, "suggestions are only available against the computer");
         }
         let (Some(seat), Some(game)) = (self.seat_of(conn), &self.game) else {
             return self.reply(conn, "the game hasn't started");
@@ -457,7 +457,7 @@ impl Room {
             .find_map(|id| self.presets.iter().find(|p| p.id == *id))
             .and_then(|p| p.create(self.rng.random()))
         else {
-            return self.reply(conn, "no agent is available to give hints");
+            return self.reply(conn, "suggestions aren't available on this server");
         };
         let combo = adviser.act(&game.state.observe(seat), &game.state.legal_actions());
         if let Some((_, c)) = self.connections().find(|(_, c)| c.id == conn) {
@@ -467,7 +467,7 @@ impl Room {
 
     fn human_move(&mut self, conn: u64, action: usize) {
         let Some(seat) = self.seat_of(conn) else {
-            return self.reply(conn, "you aren't seated in this room");
+            return self.reply(conn, "you're watching this game");
         };
         let Some(game) = &self.game else {
             return self.reply(conn, "the game hasn't started");
@@ -476,7 +476,7 @@ impl Room {
             return self.reply(conn, "it isn't your turn");
         }
         if game.agents[seat].is_some() {
-            return self.reply(conn, "an agent is playing this seat");
+            return self.reply(conn, "the computer is playing this seat");
         }
         match Combo::from_action_index(action).filter(|&c| game.state.is_legal(c)) {
             Some(combo) => self.apply(combo),
@@ -733,7 +733,7 @@ mod tests {
         tx.send(Command::Start { conn: 1 }).unwrap();
         assert_eq!(
             next_error(&mut inboxes[0]),
-            "fill or close every open seat first"
+            "every seat needs a player or the computer first"
         );
     }
 }
