@@ -456,6 +456,16 @@ function matchingLegal() {
   return game.legal.find((l) => l.cards.join() === ranks) || null;
 }
 
+/** For plays in order, the pile each would take if the trick ended now: plays rank by card
+ * count, then top card, then order. */
+function projectPiles(plays) {
+  const order = plays.map((_, i) => i).sort((a, b) =>
+    plays[b].length - plays[a].length || Math.max(...plays[b]) - Math.max(...plays[a]) || a - b);
+  const piles = [];
+  order.forEach((i, rank) => { piles[i] = game.piles[rank]; });
+  return piles;
+}
+
 /** Why the selected cards can't be played, in a few words for the Play button. */
 function whyNot() {
   const ranks = selection.map((i) => game.hand[i]).sort((a, b) => a - b);
@@ -633,11 +643,7 @@ function renderMiddle() {
   // card count, then top card, then order.
   const projected = new Map();
   if (current && plays.length > 1) {
-    const order = plays.map((pl, i) => i).sort((a, b) =>
-      plays[b].cards.length - plays[a].cards.length
-      || Math.max(...plays[b].cards) - Math.max(...plays[a].cards)
-      || a - b);
-    order.forEach((i, rank) => { if (rank < game.piles.length) projected.set(i, game.piles[rank]); });
+    projectPiles(plays.map((pl) => pl.cards)).forEach((pile, i) => { if (pile !== undefined) projected.set(i, pile); });
   }
   plays.forEach((pl, i) => {
     const lastOfSeat = !plays.slice(i + 1).some((q) => q.seat === pl.seat);
@@ -721,10 +727,17 @@ function renderHandNow() {
   const match = matchingLegal();
   const btn = $("play-selected");
   btn.disabled = !match;
-  btn.textContent = match ? `Play ${cardsText(match.cards)}`
+  // with the pile it would take if the trick ended now, as in the trick area
+  const would = match && game.trick && projectPiles([...game.trick.map((pl) => pl.cards), match.cards]).at(-1);
+  btn.textContent = match ? `Play ${cardsText(match.cards)}${would !== undefined && would !== null ? ` → ${would}` : ""}`
     : myTurn && selection.length ? whyNot()
     : myTurn ? "Select cards" : "Play";
   btn.classList.toggle("reason", !match && myTurn && selection.length > 0);
+  if (match && would !== undefined && would !== null) {
+    btn.setAttribute("aria-label", `Play ${cardsText(match.cards)}, would take ${would} so far`);
+  } else {
+    btn.removeAttribute("aria-label");
+  }
   btn.onclick = () => match && play(match.action);
   $("hint-btn").classList.toggle("hidden", !(room && room.hints && myTurn));
   $("first-tip").classList.toggle("hidden", !myTurn || tipSeen());
