@@ -2,8 +2,8 @@
 
 use crate::agents::{
     Agent, BiggestAgent, CheapestAgent, CounterAgent, DmcAgent, DqnAgent, EconomistAgent,
-    IsmctsAgent, LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, counter, dmc,
-    economist, inference, ismcts, minimax, pimc, rollout, value,
+    HybridAgent, IsmctsAgent, LowestAgent, MinimaxAgent, PimcAgent, RandomAgent, belief, counter,
+    dmc, economist, inference, ismcts, minimax, pimc, rollout, value,
 };
 
 /// Names accepted by [`create`].
@@ -19,6 +19,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "ismcts",
     "minimax",
     "dmc",
+    "hybrid",
     "dqn",
     "ppo",
     "nfsp",
@@ -183,7 +184,11 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   inference options below.
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards
 ///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
-/// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dqn`, `ppo` and `nfsp` also
+/// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dmc` also takes several
+///   `+`-separated paths and averages their predictions (an ensemble).
+/// - `hybrid`: `path` (a DMC network played until the endgame), `cards` (cards left in all hands
+///   and reserves at which to switch to exact search; default 8) and `k` (deals solved per
+///   endgame move; default 8). `dqn`, `ppo` and `nfsp` also
 ///   take `sample` (`true` to sample from the softmax of the outputs; the default for `nfsp`).
 ///
 /// Rollout options are `rollout` (`random` or `cheapest`), `eps` (random-move rate of the
@@ -292,7 +297,26 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             let path: String = opts
                 .take("path")?
                 .ok_or("dmc requires path=<network file>")?;
-            Box::new(DmcAgent::new(dmc::Mlp::load_cached(&path)?)?)
+            let mut members = path
+                .split('+')
+                .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
+                .collect::<Result<Vec<_>, String>>()?;
+            if members.len() == 1 {
+                Box::new(members.remove(0))
+            } else {
+                Box::new(dmc::EnsembleAgent::new(members))
+            }
+        }
+        "hybrid" => {
+            let path: String = opts
+                .take("path")?
+                .ok_or("hybrid requires path=<dmc network file>")?;
+            Box::new(HybridAgent::new(
+                DmcAgent::new(dmc::Mlp::load_cached(&path)?)?,
+                opts.take("cards")?.unwrap_or(8),
+                opts.take("k")?.unwrap_or(8),
+                seed,
+            ))
         }
         _ => {
             return Err(format!(
@@ -313,7 +337,7 @@ mod tests {
     fn every_registered_name_builds() {
         for &name in AGENT_NAMES
             .iter()
-            .filter(|&&n| !["dmc", "dqn", "ppo", "nfsp"].contains(&n))
+            .filter(|&&n| !["dmc", "hybrid", "dqn", "ppo", "nfsp"].contains(&n))
         {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);

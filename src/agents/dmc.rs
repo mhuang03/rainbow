@@ -315,6 +315,54 @@ impl Agent for DmcAgent {
     }
 }
 
+/// Averages several DMC networks' predicted returns and plays the best combo. Networks from
+/// different training runs make different mistakes, so their average is usually more reliable.
+#[derive(Debug, Clone)]
+pub struct EnsembleAgent {
+    members: Vec<DmcAgent>,
+}
+
+impl EnsembleAgent {
+    /// # Panics
+    /// If `members` is empty.
+    pub fn new(members: Vec<DmcAgent>) -> Self {
+        assert!(
+            !members.is_empty(),
+            "an ensemble needs at least one network"
+        );
+        Self { members }
+    }
+
+    /// Mean predicted return of each legal combo, in the order of `legal`.
+    pub fn evaluate(&self, obs: &Observation, legal: &[Combo]) -> Vec<f32> {
+        let mut total = vec![0.0; legal.len()];
+        for member in &self.members {
+            for (t, v) in total.iter_mut().zip(member.evaluate(obs, legal)) {
+                *t += v;
+            }
+        }
+        let k = self.members.len() as f32;
+        total.into_iter().map(|t| t / k).collect()
+    }
+}
+
+impl Agent for EnsembleAgent {
+    fn name(&self) -> &str {
+        "ensemble"
+    }
+
+    fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
+        if legal.len() == 1 {
+            return legal[0];
+        }
+        let values = self.evaluate(obs, legal);
+        let best = (0..legal.len())
+            .max_by(|&a, &b| values[a].total_cmp(&values[b]))
+            .expect("legal moves are never empty");
+        legal[best]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,6 +415,28 @@ mod tests {
             x.extend(a);
             let plain = net.forward(&x)[0];
             assert!((plain - value).abs() < 1e-4, "{plain} vs {value}");
+        }
+    }
+
+    #[test]
+    fn ensemble_of_one_matches_its_member() {
+        let inputs = OBS_SIZE + ACTION_FEATURES;
+        let net = Arc::new(test_mlp(&[(inputs, 8), (8, 1)], 3));
+        let other = Arc::new(test_mlp(&[(inputs, 8), (8, 1)], 4));
+        let state = GameState::new(3, 0, &mut SmallRng::seed_from_u64(1));
+        let (obs, legal) = (state.observe(0), state.legal_actions());
+        let single = DmcAgent::new(Arc::clone(&net)).unwrap();
+        let one = EnsembleAgent::new(vec![single.clone()]);
+        assert_eq!(one.evaluate(&obs, &legal), single.evaluate(&obs, &legal));
+        let two = EnsembleAgent::new(vec![single.clone(), DmcAgent::new(other).unwrap()]);
+        let b = DmcAgent::new(Arc::new(test_mlp(&[(inputs, 8), (8, 1)], 4))).unwrap();
+        for ((m, x), y) in two
+            .evaluate(&obs, &legal)
+            .iter()
+            .zip(single.evaluate(&obs, &legal))
+            .zip(b.evaluate(&obs, &legal))
+        {
+            assert!((m - (x + y) / 2.0).abs() < 1e-5);
         }
     }
 
