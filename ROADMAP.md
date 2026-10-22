@@ -315,7 +315,12 @@ Adding opponent inference (dmc_league as the opponent model, 100 candidate deals
 hurts: 1.18 against 1.50 without it at the same table (with two raw dmc_league networks, 80
 deals). The search then draws all 200 iterations from only 100 candidates and the sharp softmax
 (temperature 0.1) concentrates weight on a few of them; belief sampling already supplies most of
-what inference adds. More candidates, a softer temperature or `ipower` < 1 may recover it.
+what inference adds. A softer setting (400 candidates, `ipower=0.3`) still lost (1.08 against
+1.51). The cause is double counting: belief-proposed deals already condition on the history, and
+inference then weights them by the same history's likelihood. Without belief, inference does help
+guided search: 1.38 against 1.18 (with two raw dmc_league networks, 60 deals). A correct
+combination needs importance weights likelihood x prior / proposal probability, where the
+proposal probability comes from the weighted dealer; left as future work.
 
 ### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
 

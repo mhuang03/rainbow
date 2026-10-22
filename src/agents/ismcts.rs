@@ -38,6 +38,11 @@ pub struct Params {
     pub belief: Option<Arc<Belief>>,
     /// Weight sampled deals by how well they explain opponents' past moves, instead of
     /// sampling uniformly.
+    ///
+    /// Inference re-weights candidates by the likelihood of the history. With `belief` also set,
+    /// candidates are drawn from the belief network, which has already conditioned on that
+    /// history, so the evidence counts twice. That hurt with a DMC opponent model (1.08-1.18
+    /// against 1.50 for belief alone); with uniform candidates inference helped (+0.20).
     pub inference: Option<Inference>,
 }
 
