@@ -114,13 +114,16 @@ cargo run --release -p rainbow-server -- --port 8080 --models models
 
 Open http://localhost:8080 and enter your name.
 
-- **Play against agents:** pick the number of players and an agent for each other seat. The
-  choices are Random, Cheapest, Economist, Counter, DMC, the DMC ensemble, Hybrid, ISMCTS and
-  Guided ISMCTS, the strongest.
-- **Play online:** create a room and share its four-letter code or link. Each other seat is
-  either open for a person or given to an agent. The host can hand an open seat (or an absent
-  player's seat, mid-game) to an agent and starts each game. A player who reloads or loses
-  their connection gets their seat back. Anyone joining a full room watches.
+- **Against the computer:** pick the number of players and an opponent (Random, Cheapest,
+  Economist, Counter, DMC, the DMC ensemble, Hybrid, ISMCTS or Guided ISMCTS, the strongest),
+  or choose each seat separately. *Suggest* asks the DMC agent for a move.
+- **With friends:** create a room and share its four-letter code or link. In the lobby the host
+  can give open seats to the computer, and during a game can hand an absent player's seat to
+  it. A player who reloads or loses their connection gets their seat back; anyone joining a
+  full room watches. Rooms have a chat.
+
+Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
+explains the rules and controls; *Settings* has sound and a light or dark theme.
 
 To play with people on other machines, the port must be reachable from them, for example on a
 LAN, through port forwarding, or behind a reverse proxy that passes WebSockets through (the page
@@ -131,6 +134,10 @@ files are found in `--models`.
 The server runs each room on its own thread, which owns the game and its agents. Each browser
 only receives its own hand and legal moves plus the public state, so nobody can see hidden
 cards.
+
+`server/e2e/run.sh` runs browser tests against a fast-paced server (needs Node with Playwright,
+and optionally axe-core for the WCAG 2.2 AA checks): a solo game, an online room with a reload
+mid-trick, keyboard-only play, both colour themes and a 360-pixel-wide phone.
 
 ## Python bindings
 
