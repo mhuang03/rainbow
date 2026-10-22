@@ -145,6 +145,23 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Results
 
+### Ladder (4p, 40 random lineups of 4 from 9 agents, 40 duplicate deals each)
+
+| Agent | Relative | +/- |
+|---|---|---|
+| ismcts n=200, dmc_v2 prior and leaf | 2.30 | 0.07 |
+| dmc_v2 | 1.49 | 0.09 |
+| ismcts (1000 iterations) | 1.21 | 0.08 |
+| dqn_v1 | 0.96 | 0.08 |
+| pimc | 0.83 | 0.09 |
+| economist | 0.81 | 0.08 |
+| nfsp_v1 | 0.72 | 0.08 |
+| ppo_v1 | 0.35 | 0.05 |
+| cheapest | 0.32 | 0.03 |
+
+Run before the league network, PPO v2 and belief sampling existed; their results are in the
+sections below.
+
 Ladder results are added here as agents land. "Relative" is win share times the player
 count, so 1.0 is an average player. All runs are duplicate tournaments (`rainbow arena`, seed 0).
 
