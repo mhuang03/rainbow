@@ -367,9 +367,12 @@ stays on round 9. League rounds need the cores to themselves.
       kept in the final ranking 0.95 against PUCT (4p 2+2, 200 deals), since the noise mostly
       adds randomness to play; ranking by prior and value alone 0.99, level. Testing guided
       (n=200).
-- [ ] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
+- [x] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
       weight (1 - w)^p, w being the learner's rate of finishing ahead of each, as in AlphaStar.
-      Testing as a repeat of round 10 against the uniform round 10.
+      A repeat of round 10 with p = 2 (as starved of CPU, 105,000 games): against the uniform
+      round 10, 1.02 (4p) and 0.92 (2p); against round 9, 0.97 (4p) and 0.95 (2p). The learner
+      finishes ahead of the league networks only 47% of the time and of Economist and Counter
+      54-61%, so the weights barely differ from uniform; no gain. Not the default.
 - [x] `distill_ensemble.py` (`models/dmc_distilled1.bin`): the ensemble of rounds 8-10 plays
       self-play games, and every legal move's ensemble value is a regression target for one
       network of the same shape (started from round 10; 90 minutes, 12M decisions, one core).
