@@ -247,7 +247,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `minimax`: `k` (deals), `depth` (plies), `mode` (`paranoid`, `maxn` or `brs`), `endgame` (cards
 ///   left at which to search to the end) and `leaf` (DMC network path for leaf values).
 /// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dmc` also takes several
-///   `+`-separated paths and averages their predictions (an ensemble).
+///   `+`-separated paths and averages their predictions (an ensemble), and with one network
+///   `temp` (sample moves from a softmax at this temperature) and `counter` (add this multiple
+///   of the `counter` agent's scores to break near-ties).
 /// - `hybrid`: `path` (a DMC network, or an `a+b` ensemble, played until the endgame) or `base`
 ///   (`counter`, `ismcts` or `pimc`), `cards` (cards left in all hands and reserves at which to
 ///   switch to exact search; default 8), `k` (deals solved per endgame move; default 8) and
@@ -394,7 +396,10 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
                 .collect::<Result<Vec<_>, String>>()?;
             if members.len() == 1 {
-                let agent = members.remove(0);
+                let mut agent = members.remove(0);
+                if let Some(w) = opts.take::<f32>("counter")? {
+                    agent = agent.counter_blend(w);
+                }
                 match opts.take::<f32>("temp")? {
                     Some(t) => Box::new(agent.sampling(t, seed)),
                     None => Box::new(agent),

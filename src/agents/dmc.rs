@@ -247,6 +247,9 @@ pub struct DmcAgent {
     /// When set, moves are sampled from a softmax over the predicted returns at this
     /// temperature instead of taking the best: a weaker, less predictable player.
     sampling: Option<(f32, SmallRng)>,
+    /// When set, this multiple of the `counter` agent's score (in points) is added to each
+    /// predicted return before choosing, to break near-ties with card counting.
+    counter_blend: Option<f32>,
 }
 
 impl DmcAgent {
@@ -270,6 +273,7 @@ impl DmcAgent {
             net,
             history,
             sampling: None,
+            counter_blend: None,
         })
     }
 
@@ -277,6 +281,14 @@ impl DmcAgent {
     pub fn sampling(self, temperature: f32, seed: u64) -> Self {
         Self {
             sampling: Some((temperature, SmallRng::seed_from_u64(seed))),
+            ..self
+        }
+    }
+
+    /// Adds `weight` times the `counter` agent's scores to the predicted returns.
+    pub fn counter_blend(self, weight: f32) -> Self {
+        Self {
+            counter_blend: Some(weight),
             ..self
         }
     }
@@ -345,7 +357,16 @@ impl Agent for DmcAgent {
         if legal.len() == 1 {
             return legal[0];
         }
-        let values = self.evaluate(obs, legal);
+        let mut values = self.evaluate(obs, legal);
+        if let Some(w) = self.counter_blend {
+            let scores = crate::agents::counter::CounterAgent::with_params(
+                crate::agents::counter::Params::sampled(),
+            )
+            .scores(obs, legal);
+            for (v, s) in values.iter_mut().zip(scores) {
+                *v += w * s;
+            }
+        }
         if let Some((temperature, rng)) = &mut self.sampling {
             let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
             let weights: Vec<f32> = values
