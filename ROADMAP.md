@@ -176,6 +176,13 @@ round gives a modest further gain at 3-4 players. Under search the gain disappea
 round-2 network against the same search with round 1 scores 1.74 to 1.71 (4p, with two
 Economists, 120 deals) and 1.02 to 0.98 (2p head-to-head).
 
+### League round 3 (`models/dmc_league3.bin`)
+
+Continued from round 2 for 60 minutes against economist, cheapest, dmc_league and dmc_league2
+(1.92 against three Economists). Against round 2: 0.99 / 1.09 / 1.11 / 1.09 at 2 / 3 / 4 / 6 players
+(head-to-head 1.06 in 2p, 1.08 in 4p); against 1000-iteration ISMCTS: 1.03 / 1.51 / 1.55 / 1.22.
+Each league round adds a small, consistent gain over the previous network.
+
 ### Earlier ladder
 
 (4p, 40 random lineups of 4 from 9 agents, 40 duplicate deals each.)
