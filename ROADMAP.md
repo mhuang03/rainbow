@@ -343,6 +343,8 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
 - [ ] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
       weight (1 - w)^p, w being the learner's rate of finishing ahead of each, as in AlphaStar.
       Testing as a repeat of round 10 against the uniform round 10.
+- [ ] `distill_ensemble.py`: distil the league ensemble into one network by regressing every
+      legal move's ensemble value in ensemble self-play. Training from round 10 on rounds 8-10.
 - [ ] `train_belief.py --history`: the belief network also reads the public history (who played
       what, in order). Training on the same 60,000 games as `belief_v4` without it.
 
