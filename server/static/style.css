@@ -393,7 +393,7 @@ button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-
 dialog.howto .example { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
 dialog.howto .ex-row { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 10px; }
 dialog.howto .ex-pile b { color: var(--accent-text); }
-.record { margin: -4px 0 0; color: var(--muted); font-size: 13px; text-align: right; }
+.record { margin: -4px 0 0; color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 .first-tip { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 
 /* Cards: a soft top highlight and a small shadow so they read as cards, not tiles */

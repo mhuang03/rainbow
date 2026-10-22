@@ -264,10 +264,16 @@ function recordText(id) {
   return `Your record against ${p.label}: ${r.wins} win${r.wins === 1 ? "" : "s"} in ${r.games} game${r.games === 1 ? "" : "s"}`;
 }
 
+/** Under the opponent menu: what the opponent is, and the player's record against it. */
 function renderRecord() {
-  const text = recordText($("solo-opponent").value);
-  $("solo-record").classList.toggle("hidden", !text);
-  $("solo-record").textContent = text;
+  const id = $("solo-opponent").value;
+  const p = presets.find((x) => x.id === id);
+  const text = recordText(id);
+  const box = $("solo-record");
+  box.innerHTML = "";
+  if (p) box.append(el("span", null, `${p.level}. ${p.description}`));
+  if (text) box.append(el("span", null, `${text}.`));
+  box.classList.toggle("hidden", !box.childElementCount);
 }
 
 /** The next stronger opponent, once the player wins at least half their games (2 or more)
