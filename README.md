@@ -112,16 +112,19 @@ cargo run --release -p rainbow-server -- --port 8080 --models models
 
 Open http://localhost:8080 and enter your name.
 
-- **Against the computer:** pick the number of players and an opponent (Random, Cheapest,
-  Economist, Counter, DMC, the DMC ensemble, Hybrid, ISMCTS or Guided ISMCTS, the strongest),
-  or choose each seat separately. *Suggest* asks the DMC agent for a move.
-- **With friends:** create a room and share its four-letter code or link. In the lobby the host
+- **Against the computer:** pick the number of players and an opponent, grouped from Beginner
+  (Random, Cheapest, a loosened DMC) through Casual (Economist, Counter) and Strong (DMC,
+  ISMCTS) to Expert (Hybrid, the DMC ensemble and Guided ISMCTS, the strongest), or choose each
+  seat separately. *Suggest* asks the strongest available agent for a move.
+- **With friends:** create a room and share its four-letter code or link; a link opens straight
+  to a join screen. In the lobby the host
   can give open seats to the computer, and during a game can hand an absent player's seat to
   it. A player who reloads or loses their connection gets their seat back; anyone joining a
   full room watches. Rooms have a chat.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
-explains the rules and controls; *Settings* has sound and a light or dark theme.
+explains the rules and controls; *Settings* has sound, reduced motion and a light or dark
+theme.
 
 To play with people on other machines, the port must be reachable from them, for example on a
 LAN, through port forwarding, or behind a reverse proxy that passes WebSockets through (the page
