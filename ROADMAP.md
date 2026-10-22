@@ -325,8 +325,16 @@ Against round 8: 1.08 (2p) and 1.05 (4p). The browser presets use it.
       root moves are within a factor 1.5 in visits. Testing on guided ISMCTS.
 - [ ] `ismcts:reuse=true`: keep the tree between decisions. Plays are public, so the subtree
       under the plays since the last search is still valid. Testing on guided ISMCTS.
-- [ ] `ismcts:gumbel=m`: Gumbel sequential halving at the root (Danihelka et al. 2022), which
-      improves on PUCT at small budgets. Testing network-free (n=50) and guided (n=200).
+- [ ] `ismcts:gumbel=m`: sequential halving at the root, as in Gumbel MuZero (Danihelka et al.
+      2022), which improves on PUCT at small budgets. Network-free at n=50: with the Gumbel noise
+      kept in the final ranking 0.95 against PUCT (4p 2+2, 200 deals), since the noise mostly
+      adds randomness to play; ranking by prior and value alone 0.99, level. Testing guided
+      (n=200).
+- [ ] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
+      weight (1 - w)^p, w being the learner's rate of finishing ahead of each, as in AlphaStar.
+      Testing as a repeat of round 10 against the uniform round 10.
+- [ ] `train_belief.py --history`: the belief network also reads the public history (who played
+      what, in order). Training on the same 60,000 games as `belief_v4` without it.
 
 - [x] `dmc:temp=T`: sample moves from a softmax over the network's predicted returns, for
       opponents of any strength. Round 8 against three Economists: greedy 1.92; T = 0.02 / 0.05 /
