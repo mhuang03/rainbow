@@ -76,7 +76,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .seat-pickers label select { min-width: 180px; }
 .divider { text-align: center; color: var(--muted); font-size: 13px; margin: 4px 0; }
 .join-row { display: flex; gap: 8px; }
-.join-row input { flex: 1; text-transform: uppercase; letter-spacing: 3px; }
+.join-row input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 3px; }
 
 
 /* Lobby */
@@ -305,3 +305,11 @@ dialog.rules p { color: var(--muted); }
 .chat-log b { color: var(--accent); font-weight: 600; }
 .chat-form { display: flex; gap: 6px; }
 .chat-form input { flex: 1; min-width: 0; }
+
+/* Narrow phones: let the header wrap and tighten it */
+.bar { flex-wrap: wrap; row-gap: 6px; }
+@media (max-width: 480px) {
+  .bar { padding: 8px 12px; gap: 6px 10px; }
+  .logo { font-size: 19px; }
+  .bar button.ghost { padding: 6px 6px; }
+}
