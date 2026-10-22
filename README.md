@@ -53,9 +53,9 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `cheapest` | Plays the cheapest combo that currently wins the trick, otherwise its lowest single. |
 | `economist` | Hand-written strategy: scores each combo by expected pile, card cost, hand-structure damage and endgame effects. |
 | `pimc` | Samples deals consistent with what it knows and rolls out every move on each. |
-| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from `models/dmc_v2.bin` it is the strongest agent. |
+| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from `models/dmc_league.bin` and `belief=models/belief_v1.bin` it is the strongest agent. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
-| `dmc` | A DouZero-style network trained by self-play (`dmc:path=models/dmc_v2.bin`). The strongest agent that doesn't search. |
+| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned against a league (`models/dmc_league.bin`, the strongest agent that doesn't search). |
 | `dqn` | A masked Double DQN network. |
 | `ppo` | A PPO policy trained with a full-information critic. |
 | `nfsp` | An NFSP average policy (played by sampling). |

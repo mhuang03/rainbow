@@ -239,6 +239,18 @@ Inference helps when the opponent model fits the opponents: the `cheapest` model
 the Economist takes cheap wins, and gains about 0.25-0.3 (about three standard errors). Against
 ISMCTS opponents it does nothing, because they don't play like `cheapest`.
 
+### Search guided by the league network (n=200, DMC prior and leaf, belief; 120 deals)
+
+| Lineup | Guided search | Others |
+|---|---|---|
+| 4p: league-guided vs v2-guided + 2 Economists | 1.87 | v2-guided 1.54, Economists 0.30 |
+| 4p: vs 3 raw `dmc_league` networks | 1.60 | 0.80 |
+| 2p: vs raw `dmc_league` | 1.65 (82.5% of wins) | 0.35 |
+
+A better network makes a better search, and 200 iterations of search still add about 0.6 on top
+of the best network. This is the strongest agent:
+`ismcts:n=200,prior=models/dmc_league.bin,leaf=models/dmc_league.bin,belief=models/belief_v1.bin`.
+
 ### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
 
 | Lineup | With belief | Without |
