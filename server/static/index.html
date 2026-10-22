@@ -163,15 +163,22 @@
 </main>
 
 <dialog id="howto" class="howto" aria-labelledby="howto-title">
-  <h2 id="howto-title" tabindex="-1">How to Play</h2>
+  <div class="dialog-head">
+    <h2 id="howto-title" tabindex="-1">How to Play</h2>
+    <form method="dialog"><button class="ghost icon close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button></form>
+  </div>
 
   <h3>The goal</h3>
   <p>Score the most points by taking the best piles in the middle of the table.</p>
 
+  <h3>The deal</h3>
+  <p>The deck has ten cards of each rank from 1 to 6. Everyone gets a hand, and a few cards
+  are dealt face up as the first piles. With three players, 15 cards are set aside unseen.</p>
+
   <h3>Playing a trick</h3>
-  <p>The deck has ten cards each of ranks 1 to 6. Everyone is dealt a hand (14 cards with up
-  to four players, fewer with more), and a few cards are dealt face up as the first piles. With
-  three players, 15 cards are set aside unseen. In each trick, everyone plays once, in turn:</p>
+  <p>Each trick, everyone plays once, in turn:</p>
   <ul class="examples">
     <li><span class="ex"><span class="card small r4">4</span></span> <span>a <b>single</b> card,</span></li>
     <li><span class="ex"><span class="card small r5">5</span><span class="card small r5">5</span><span class="card small r5">5</span></span> <span>a <b>set</b> of equal cards, or</span></li>
@@ -185,9 +192,9 @@
   <b>higher top card</b>, then the earlier play. The best play takes the most valuable pile, the
   next best the next pile, and so on. The cards just played become the next piles.</p>
   <div class="example" aria-label="Example: a pair of 3s beats a single 5, which beats a single 2">
-    <div class="ex-row"><span class="ex"><span class="card small r3">3</span><span class="card small r3">3</span></span><span>two cards: best</span><span class="ex-pile">takes <b>6</b></span></div>
-    <div class="ex-row"><span class="ex"><span class="card small r5">5</span></span><span>one card, higher</span><span class="ex-pile">takes <b>4</b></span></div>
-    <div class="ex-row"><span class="ex"><span class="card small r2">2</span></span><span>one card, lower</span><span class="ex-pile">takes <b>2</b></span></div>
+    <div class="ex-row"><span class="ex"><span class="card small r3">3</span><span class="card small r3">3</span></span><span>2 cards: best</span><span class="ex-pile">takes <b>6</b></span></div>
+    <div class="ex-row"><span class="ex"><span class="card small r5">5</span></span><span>1 card, higher</span><span class="ex-pile">takes <b>4</b></span></div>
+    <div class="ex-row"><span class="ex"><span class="card small r2">2</span></span><span>1 card, lower</span><span class="ex-pile">takes <b>2</b></span></div>
   </div>
 
   <h3>The end</h3>

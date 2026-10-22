@@ -421,3 +421,9 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
 /* phones: unseen ranks in two even rows of three; the tip's dismiss link on one line */
 @media (max-width: 480px) { .unseen { grid-template-columns: repeat(3, 1fr); } }
 .first-tip .link { white-space: nowrap; }
+/* How to Play: title row with a close button; no keyboard list on touch-only devices */
+dialog.howto .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+dialog.howto .dialog-head h2 { margin: 0; }
+dialog.howto .dialog-head form { margin: 0; }
+button.close { padding: 6px; line-height: 0; }
+@media (hover: none) and (pointer: coarse) { dialog.howto dl.keys { display: none; } }
