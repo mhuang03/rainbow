@@ -381,3 +381,6 @@ button.primary.reason:disabled { opacity: 1; background: var(--panel-2); border-
 #lobby-chat-slot h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 4px 0 8px; }
 .lobby-seats .seat-line select { min-width: 220px; }
 #lobby-chat-slot .chat-form { margin-bottom: 6px; }
+dialog.howto .example { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
+dialog.howto .ex-row { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 10px; }
+dialog.howto .ex-pile b { color: var(--accent-text); }
