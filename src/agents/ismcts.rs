@@ -18,10 +18,10 @@ use crate::agents::belief::Belief;
 use crate::agents::counter::CounterAgent;
 use crate::agents::dmc::{DmcAgent, Mlp};
 use crate::agents::dqn::DqnAgent;
-use crate::agents::inference::Inference;
+use crate::agents::inference::{Inference, WorldPool};
 use crate::agents::rollout::{Reward, Rollout};
 use crate::agents::value::Evaluator;
-use crate::game::{Combo, GameState, NUM_ACTIONS, Observation, Play};
+use crate::game::{Combo, DealWeights, GameState, NUM_ACTIONS, Observation, Play};
 
 #[derive(Debug, Clone)]
 pub struct Params {
@@ -58,6 +58,11 @@ pub struct Params {
     /// plays made since the last search still holds valid statistics, and the next search
     /// continues from it instead of starting empty.
     pub reuse: bool,
+    /// With a prior: choose the root move by Gumbel sequential halving (Danihelka et al.
+    /// 2022) over this many candidates, instead of by visit count. The candidates are sampled
+    /// from the prior with Gumbel noise, and the iterations go in rounds to the surviving
+    /// half, ranked by noise + prior logit + scaled value. 0 turns it off.
+    pub gumbel: usize,
 }
 
 impl Default for Params {
@@ -84,6 +89,7 @@ impl Default for Params {
             threads: 1,
             extend: 1.0,
             reuse: false,
+            gumbel: 0,
         }
     }
 }
@@ -168,6 +174,8 @@ pub struct IsmctsAgent {
     /// The tree's current root, and the game history when it was searched (with `reuse`).
     root: usize,
     history: Vec<Play>,
+    /// The root move chosen by Gumbel sequential halving in the last search.
+    chosen: Option<Combo>,
 }
 
 impl IsmctsAgent {
@@ -182,6 +190,7 @@ impl IsmctsAgent {
             nodes: Vec::new(),
             root: 0,
             history: Vec::new(),
+            chosen: None,
         }
     }
 
@@ -366,6 +375,136 @@ impl IsmctsAgent {
         merged
     }
 
+    /// One iteration: sample a deal, select down the tree (through `forced` at the root, if
+    /// given), expand, evaluate and back up.
+    fn iterate(
+        &mut self,
+        obs: &Observation,
+        p: &Params,
+        weights: Option<&DealWeights>,
+        pool: Option<&WorldPool>,
+        forced: Option<Combo>,
+    ) {
+        let mut state = match pool {
+            Some(pool) => pool.sample(&mut self.rng).clone(),
+            None => match weights {
+                Some(w) => obs.determinize_weighted(w, &mut self.rng),
+                None => obs.determinize(&mut self.rng),
+            },
+        };
+        let mut node = self.root;
+        let mut path: Vec<usize> = Vec::new();
+        if let Some(combo) = forced {
+            // root children already exist (created by the Gumbel search with their priors)
+            let legal = state.legal_actions();
+            self.mark_available(node, &legal);
+            node = self
+                .child_for(node, combo)
+                .expect("candidate moves have children");
+            state.apply(combo).expect("candidates are legal");
+            path.push(node);
+        }
+
+        // Selection and expansion.
+        if path.is_empty() || self.nodes[node].visits > 0 {
+            while !state.is_over() {
+                let legal = state.legal_actions();
+                let expanded = match &p.prior {
+                    None => self.select_ucb(&mut node, &mut state, &legal, p.exploration),
+                    Some(prior) => self.select_puct(&mut node, &mut state, &legal, prior),
+                };
+                path.push(node);
+                if expanded {
+                    break;
+                }
+            }
+        }
+
+        let rewards = p.evaluator.values(&state, p.reward, &mut self.rng);
+        for &id in &path {
+            let n = &mut self.nodes[id];
+            n.visits += 1;
+            n.total += rewards[n.mover as usize];
+        }
+    }
+
+    /// Gumbel sequential halving at the root; returns the chosen move.
+    fn gumbel_search(
+        &mut self,
+        obs: &Observation,
+        p: &Params,
+        prior: &Prior,
+        weights: Option<&DealWeights>,
+        pool: Option<&WorldPool>,
+    ) -> Option<Combo> {
+        // The root player's legal moves and the prior depend only on what they can see.
+        let state = obs.determinize(&mut self.rng);
+        let legal = state.legal_actions();
+        if legal.len() < 2 {
+            return None;
+        }
+        let probs = prior.probabilities(&state, &legal);
+        let root = self.root;
+        let mover = state.current_player() as u8;
+        for (&combo, &prob) in legal.iter().zip(&probs) {
+            if self.child_for(root, combo).is_none() {
+                let id = self.add_node(root, combo, mover);
+                self.nodes[id].prior = prob;
+                self.nodes[id].available = 0;
+            }
+        }
+        // candidates: the top m moves by Gumbel noise + log prior
+        let mut cands: Vec<(Combo, f32)> = legal
+            .iter()
+            .zip(&probs)
+            .map(|(&combo, &prob)| {
+                let u: f32 = self.rng.random_range(1e-6..1.0);
+                (combo, -(-u.ln()).ln() + prob.max(1e-8).ln())
+            })
+            .collect();
+        cands.sort_by(|a, b| b.1.total_cmp(&a.1));
+        cands.truncate(p.gumbel.min(legal.len()));
+        let rounds = (cands.len() as f32).log2().ceil().max(1.0) as usize;
+        let mut left = p.iterations;
+        for round in 0..rounds {
+            if cands.len() == 1 {
+                break;
+            }
+            let per_move = (left / ((rounds - round) * cands.len())).max(1);
+            for &(combo, _) in &cands {
+                for _ in 0..per_move {
+                    self.iterate(obs, p, weights, pool, Some(combo));
+                }
+            }
+            left = left.saturating_sub(per_move * cands.len());
+            // rank by noise + log prior + value, scaled by the visits as in the paper (c_visit 50)
+            let max_visits = cands
+                .iter()
+                .map(|&(c, _)| self.nodes[self.child_for(root, c).expect("child")].visits)
+                .max()
+                .unwrap_or(0);
+            let scale = 50.0 + max_visits as f32;
+            let score = |s: &Self, &(c, g): &(Combo, f32)| {
+                let n = &s.nodes[s.child_for(root, c).expect("child")];
+                let q = if n.visits > 0 {
+                    n.total / n.visits as f32
+                } else {
+                    0.0
+                };
+                g + scale * q
+            };
+            let mut ranked: Vec<(f32, (Combo, f32))> =
+                cands.iter().map(|c| (score(self, c), *c)).collect();
+            ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+            cands = ranked
+                .into_iter()
+                .take(cands.len().div_ceil(2))
+                .map(|(_, c)| c)
+                .collect();
+        }
+        cands.first().map(|&(c, _)| c)
+    }
+
     /// Moves the root down the plays made since the last search, if the tree has them all.
     fn descend_to(&mut self, history: &[Play]) -> bool {
         if self.nodes.is_empty() || !history.starts_with(&self.history) {
@@ -421,49 +560,26 @@ impl IsmctsAgent {
         if p.reuse {
             self.history = obs.history().to_vec();
         }
-        let mut path: Vec<usize> = Vec::new();
-
         let start = std::time::Instant::now();
-        let max_iterations = (p.iterations as f32 * p.extend.max(1.0)) as usize;
-        for i in 0..max_iterations {
-            if let Some(limit) = p.time_limit
-                && i % 16 == 0
-                && i > 0
-                && start.elapsed() >= limit
-            {
-                break;
-            }
-            if i >= p.iterations && i % 16 == 0 && self.root_decided() {
-                break;
-            }
-            let mut state = match &pool {
-                Some(pool) => pool.sample(&mut self.rng).clone(),
-                None => match &weights {
-                    Some(w) => obs.determinize_weighted(w, &mut self.rng),
-                    None => obs.determinize(&mut self.rng),
-                },
-            };
-            let mut node = self.root;
-            path.clear();
-
-            // Selection and expansion.
-            while !state.is_over() {
-                let legal = state.legal_actions();
-                let expanded = match &p.prior {
-                    None => self.select_ucb(&mut node, &mut state, &legal, p.exploration),
-                    Some(prior) => self.select_puct(&mut node, &mut state, &legal, prior),
-                };
-                path.push(node);
-                if expanded {
+        self.chosen = None;
+        if p.gumbel > 0
+            && let Some(prior) = &p.prior
+        {
+            self.chosen = self.gumbel_search(obs, &p, prior, weights.as_ref(), pool.as_ref());
+        } else {
+            let max_iterations = (p.iterations as f32 * p.extend.max(1.0)) as usize;
+            for i in 0..max_iterations {
+                if let Some(limit) = p.time_limit
+                    && i % 16 == 0
+                    && i > 0
+                    && start.elapsed() >= limit
+                {
                     break;
                 }
-            }
-
-            let rewards = p.evaluator.values(&state, p.reward, &mut self.rng);
-            for &id in &path {
-                let n = &mut self.nodes[id];
-                n.visits += 1;
-                n.total += rewards[n.mover as usize];
+                if i >= p.iterations && i % 16 == 0 && self.root_decided() {
+                    break;
+                }
+                self.iterate(obs, &p, weights.as_ref(), pool.as_ref(), None);
             }
         }
 
@@ -509,6 +625,9 @@ impl Agent for IsmctsAgent {
         } else {
             self.search(obs)
         };
+        if let Some(combo) = self.chosen.filter(|c| legal.contains(c)) {
+            return combo;
+        }
         moves
             .into_iter()
             .filter(|m| legal.contains(&m.combo))
@@ -611,6 +730,29 @@ mod tests {
         let state = GameState::new(3, 0, &mut rng);
         agent.act(&state.observe(0), &state.legal_actions());
         assert_eq!(agent.root, 0);
+    }
+
+    #[test]
+    fn gumbel_root_search_picks_legal_moves_for_whole_games() {
+        let params = Params {
+            iterations: 32,
+            gumbel: 8,
+            ..Params::default()
+        };
+        let mut agent = IsmctsAgent::with_params(params, 5);
+        for n in [2, 4] {
+            let mut rng = SmallRng::seed_from_u64(n as u64);
+            let mut state = GameState::new(n, 0, &mut rng);
+            while !state.is_over() {
+                let legal = state.legal_actions();
+                let combo = agent.act(&state.observe(state.current_player()), &legal);
+                assert!(legal.contains(&combo));
+                if legal.len() > 1 {
+                    assert_eq!(agent.chosen, Some(combo));
+                }
+                state.apply(combo).unwrap();
+            }
+        }
     }
 
     #[test]
