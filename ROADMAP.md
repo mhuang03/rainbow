@@ -150,7 +150,32 @@ plus an endgame term. All weights live in a `Params` struct so they can be tuned
 
 ## Results
 
-### Ladder (4p, 40 random lineups of 4 from 9 agents, 40 duplicate deals each)
+### Current ladder (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
+
+| Agent | Relative | +/- |
+|---|---|---|
+| ismcts n=200, dmc_league prior and leaf, belief | **2.32** | 0.08 |
+| dmc_league | 1.66 | 0.13 |
+| dmc_v2 | 1.20 | 0.08 |
+| ismcts (1000 iterations) | 1.06 | 0.09 |
+| dqn_v1 | 0.85 | 0.08 |
+| pimc | 0.68 | 0.08 |
+| economist | 0.62 | 0.04 |
+| ppo_v2 | 0.59 | 0.06 |
+| nfsp_v1 | 0.57 | 0.04 |
+| cheapest | 0.32 | 0.04 |
+
+### League round 2 (`models/dmc_league2.bin`)
+
+Continued from `dmc_league` against a pool of economist, cheapest, dmc_v2 and dmc_league (48 of
+60 planned minutes; a container restart cut the run short, and its last checkpoint is shipped).
+1.95 against three Economists. Against round 1: 0.98 / 1.14 / 1.14 / 0.98 at 2 / 3 / 4 / 6 players
+(4p head-to-head 1.10); against 1000-iteration ISMCTS: 1.01 / 1.68 / 1.62 / 1.14. A second league
+round gives a modest further gain at 3-4 players.
+
+### Earlier ladder
+
+(4p, 40 random lineups of 4 from 9 agents, 40 duplicate deals each.)
 
 | Agent | Relative | +/- |
 |---|---|---|
