@@ -286,7 +286,8 @@ function setupHome() {
   const saved = loadSetup();
   if (saved.solo) $("solo-players").value = saved.solo;
   if (saved.online) $("online-players").value = saved.online;
-  const defaultAgent = presets.some((p) => p.id === "dmc") ? "dmc" : presets[0] && presets[0].id;
+  // a first game against a Casual opponent; later visits remember the player's choice
+  const defaultAgent = presets.some((p) => p.id === "economist") ? "economist" : presets[0] && presets[0].id;
   presetOptions($("solo-opponent"), false, saved.opponent || defaultAgent);
   if (!$("solo-opponent").value) $("solo-opponent").value = defaultAgent;
   $("solo-custom").open = !!saved.custom;
