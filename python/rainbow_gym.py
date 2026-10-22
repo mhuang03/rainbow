@@ -3,7 +3,8 @@
 Observations are the 172-float `Game.observation` vectors; actions are indices in
 `0..NUM_ACTIONS`. The legal-action mask is in `info["action_mask"]` and from `action_masks()`
 (the convention of sb3-contrib's MaskablePPO). The reward is 0 until the game ends, then the
-learner's win share plus a small score-margin term (as in the other trainers).
+learner's win share plus a small score-margin term (as in the other trainers). An illegal action
+ends the episode with reward -1 and `info["illegal_action"] = True`, unless `on_illegal="raise"`.
 
     import rainbow_gym
     env = rainbow_gym.RainbowEnv(players=4, opponents=["economist"])
@@ -31,12 +32,16 @@ class RainbowEnv(gym.Env):
         players: int | None = 4,
         opponents: list[str] | None = None,
         render_mode: str | None = None,
+        on_illegal: str = "penalize",
     ):
         """`players` fixes the player count (None: 2 to 6 at random each game). Opponents are Rust
         agent specs, drawn at random for each non-learner seat (default: `economist`)."""
         self.players = players
         self.opponent_specs = opponents or ["economist"]
         self.render_mode = render_mode
+        if on_illegal not in ("penalize", "raise"):
+            raise ValueError('on_illegal must be "penalize" or "raise"')
+        self.on_illegal = on_illegal
         self.observation_space = spaces.Box(0.0, 1.0, shape=(re.OBS_SIZE,), dtype=np.float32)
         self.action_space = spaces.Discrete(re.NUM_ACTIONS)
         self._game: re.Game | None = None
@@ -73,6 +78,11 @@ class RainbowEnv(gym.Env):
     def step(self, action: int):
         if self._game is None or self._game.is_over:
             raise RuntimeError("call reset() first")
+        if not self._game.is_legal(int(action)) and self.on_illegal == "penalize":
+            obs, info = self._obs()
+            info["illegal_action"] = True
+            self._game = None
+            return obs, -1.0, True, False, info
         self._game.step(int(action))
         self._advance()
         obs, info = self._obs()

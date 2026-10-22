@@ -76,3 +76,13 @@ def test_gymnasium_env():
         if terminated:
             break
     assert terminated and -1.0 <= total <= 2.0
+
+    # illegal actions end the episode with a penalty, or raise if asked
+    env.reset(seed=2)
+    illegal = int(np.flatnonzero(~env.action_masks())[0])
+    _, reward, terminated, _, info = env.step(illegal)
+    assert terminated and reward == -1.0 and info["illegal_action"]
+    strict = rainbow_gym.RainbowEnv(players=3, on_illegal="raise")
+    strict.reset(seed=2)
+    with pytest.raises(ValueError):
+        strict.step(int(np.flatnonzero(~strict.action_masks())[0]))
