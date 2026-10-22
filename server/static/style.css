@@ -458,3 +458,10 @@ button.close { padding: 6px; line-height: 0; }
 @media (forced-colors: active), (prefers-contrast: more) {
   #over-title.won { animation: none; background: none; color: var(--text); }
 }
+/* the chat slot adds no gap of its own while the chat is hidden */
+#side-chat-slot { display: contents; }
+/* phones: four opponents (when watching) sit two by two rather than three and one */
+@media (max-width: 700px) {
+  .opponents:has(> .opp:nth-child(4):last-child) { display: grid; grid-template-columns: 1fr 1fr; }
+  .opponents:has(> .opp:nth-child(4):last-child) .opp { max-width: none; }
+}
