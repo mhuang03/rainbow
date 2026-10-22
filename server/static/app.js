@@ -364,6 +364,16 @@ function matchingLegal() {
   return game.legal.find((l) => l.cards.join() === ranks) || null;
 }
 
+/** Why the selected cards can't be played, in a few words for the Play button. */
+function whyNot() {
+  const ranks = selection.map((i) => game.hand[i]).sort((a, b) => a - b);
+  const set = ranks.every((r) => r === ranks[0]);
+  const run = ranks.every((r, i) => i === 0 || r === ranks[i - 1] + 1);
+  if (!set && !run) return "Pick equal cards or a run";
+  if (game.trick_type !== "open") return `Only ${TRICK_TYPES[game.trick_type]} now`;
+  return "Can't play that";
+}
+
 /** Selects the hand cards of a legal play. */
 function selectCombo(l) {
   const used = new Set();
@@ -501,8 +511,9 @@ function renderHandNow() {
   const btn = $("play-selected");
   btn.disabled = !match;
   btn.textContent = match ? `Play ${cardsText(match.cards)}`
-    : myTurn && selection.length ? "Can't play that"
+    : myTurn && selection.length ? whyNot()
     : myTurn ? "Select cards" : "Play";
+  btn.classList.toggle("reason", !match && myTurn && selection.length > 0);
   btn.onclick = () => match && play(match.action);
   $("hint-btn").classList.toggle("hidden", !(room && room.hints && myTurn));
 }
@@ -670,7 +681,8 @@ function render() {
   $("room-badge").classList.toggle("hidden", !inRoom);
   if (inRoom) {
     $("room-badge").innerHTML = "";
-    $("room-badge").append(document.createTextNode("Room "), el("b", null, room.code));
+    $("room-badge").append(el("span", "badge-label", "Room "), el("b", null, room.code));
+    $("room-badge").setAttribute("aria-label", `Room ${room.code}`);
     if (room.spectators) $("room-badge").append(document.createTextNode(` · ${room.spectators} watching`));
   }
   if (view === "lobby") renderLobby();
