@@ -353,11 +353,12 @@ stays on round 9. League rounds need the cores to themselves.
       off in one round's training time; round 10 continues from round 9.
 - [ ] `ismcts:extend=F`: past the budget, keep searching (up to F times it) while the top two
       root moves are within a factor 1.5 in visits. Testing on guided ISMCTS.
-- [x] `ismcts:reuse=true`: keep the tree between decisions (plays are public, so the subtree
+- [x] `ismcts:reuse=1`: keep the tree between decisions (plays are public, so the subtree
       under the plays since the last search still applies). Worse on guided ISMCTS: 0.95 (4p
       2+2, 300 deals) and 0.92 (2p, 150 deals). The kept statistics come from deals sampled
       before the latest plays were seen, which belief-weighted sampling now rules out; they
-      outweigh the fresh iterations and bias the search. Off by default.
+      outweigh the fresh iterations and bias the search. Off by default; `reuse=0.25` keeps a
+      quarter of the old statistics instead (testing).
 - [ ] `ismcts:gumbel=m`: sequential halving at the root, as in Gumbel MuZero (Danihelka et al.
       2022), which improves on PUCT at small budgets. Network-free at n=50: with the Gumbel noise
       kept in the final ranking 0.95 against PUCT (4p 2+2, 200 deals), since the noise mostly
