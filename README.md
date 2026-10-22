@@ -126,7 +126,7 @@ Open http://localhost:8080 and enter your name.
 *How to play* can also start a game the computer plays alone, to learn by watching.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
-explains the rules and controls; *Settings* has sound, fast computer moves (solo games), reduced motion and a light or dark
+explains the rules and controls; *Settings* has sound, the computer's speed (slow, normal or fast, in solo games), reduced motion and a light or dark
 theme.
 
 To play with people on other machines, the port must be reachable from them, for example on a

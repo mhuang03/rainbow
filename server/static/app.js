@@ -155,7 +155,7 @@ function receive(msg) {
       me.token = msg.token || null;
       me.host = msg.host;
       if (me.token) localStorage.setItem(`rainbow.token.${me.code}`, me.token);
-      if (fastPlay()) send({ t: "speed", fast: true }); // solo games only; the server checks
+      if (computerSpeed() !== "normal") send({ t: "speed", pace: PACES[computerSpeed()] }); // solo games only; the server checks
       history.replaceState(null, "", `/?room=${me.code}`);
       break;
     case "room":
@@ -529,9 +529,14 @@ function syncThemeColor() {
   });
 }
 
-/** Whether the player wants the computer to move quickly (solo games). */
-function fastPlay() {
-  try { return localStorage.getItem("rainbow.fast") === "on"; } catch { return false; }
+/** How quickly the computer moves in solo games: slow, normal or fast (the pause factor). */
+const PACES = { slow: 1.8, normal: 1, fast: 0.35 };
+function computerSpeed() {
+  try {
+    const s = localStorage.getItem("rainbow.speed");
+    if (s in PACES) return s;
+    return localStorage.getItem("rainbow.fast") === "on" ? "fast" : "normal"; // the old setting
+  } catch { return "normal"; }
 }
 
 /** A server message as a sentence: capitalised, with a full stop. */
@@ -1066,11 +1071,11 @@ async function main() {
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
     SOUNDS.turn();
   };
-  $("fast-toggle").checked = fastPlay();
-  $("fast-toggle").onchange = () => {
-    const fast = $("fast-toggle").checked;
-    try { localStorage.setItem("rainbow.fast", fast ? "on" : "off"); } catch { /* not remembered */ }
-    if (me.code) send({ t: "speed", fast });
+  $("speed-select").value = computerSpeed();
+  $("speed-select").onchange = () => {
+    const speed = $("speed-select").value;
+    try { localStorage.setItem("rainbow.speed", speed); } catch { /* not remembered */ }
+    if (me.code) send({ t: "speed", pace: PACES[speed] });
   };
   $("motion-toggle").checked = document.documentElement.dataset.motion === "reduce";
   $("motion-toggle").onchange = () => {

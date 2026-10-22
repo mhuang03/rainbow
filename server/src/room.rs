@@ -29,8 +29,8 @@ pub static PACE: OnceLock<f32> = OnceLock::new();
 fn paced(delay: Duration) -> Duration {
     delay.mul_f32(*PACE.get().unwrap_or(&1.0))
 }
-/// The share of the agent delay and trick pause kept in a solo game set to fast play.
-const FAST: f32 = 0.35;
+/// The range of the solo-game speed factor on the agent delay and trick pause.
+const PACE_RANGE: std::ops::RangeInclusive<f32> = 0.25..=3.0;
 /// How long an away player's turn waits before the computer plays it for them, while others
 /// are at the table; they take their seat back when they return.
 const AWAY_GRACE: Duration = Duration::from_secs(30);
@@ -84,11 +84,11 @@ pub enum Command {
     Hint {
         conn: u64,
     },
-    /// Fast play: shorter pauses before agents' moves and after tricks. Only in solo games,
-    /// where nobody else needs time to follow.
+    /// Scales the pauses before agents' moves and after tricks (above 1 slower, below 1
+    /// faster). Only in solo games, so nobody else's game changes pace.
     Speed {
         conn: u64,
-        fast: bool,
+        pace: f32,
     },
     /// A chat message to everyone in the room.
     Chat {
@@ -145,8 +145,8 @@ pub struct Room {
     last_chat: HashMap<u64, Instant>,
     /// When the last person disconnected, while nobody is connected.
     empty_since: Option<Instant>,
-    /// Fast play (solo games only).
-    fast: bool,
+    /// The solo-game speed factor (see [`Command::Speed`]).
+    pace: f32,
     /// Every seat is the computer's and everyone watches: games start by themselves, and any
     /// watcher may start the next one.
     watch: bool,
@@ -183,7 +183,7 @@ impl Room {
             rooms,
             last_chat: HashMap::new(),
             empty_since: Some(Instant::now()),
-            fast: false,
+            pace: 1.0,
             watch: false,
         };
         room.seats = seats
@@ -273,9 +273,9 @@ impl Room {
             }
             Command::Play { conn, action } => self.human_move(conn, action),
             Command::Hint { conn } => self.hint(conn),
-            Command::Speed { conn, fast } => {
-                if self.seat_of(conn).is_some() && self.hints_allowed() {
-                    self.fast = fast;
+            Command::Speed { conn, pace } => {
+                if self.seat_of(conn).is_some() && self.hints_allowed() && pace.is_finite() {
+                    self.pace = pace.clamp(*PACE_RANGE.start(), *PACE_RANGE.end());
                 }
             }
             Command::Chat { conn, text } => self.chat(conn, &text),
@@ -567,7 +567,7 @@ impl Room {
     }
 
     fn apply(&mut self, combo: Combo) {
-        let fast = self.fast && self.hints_allowed();
+        let pace = if self.hints_allowed() { self.pace } else { 1.0 };
         let Some(game) = &mut self.game else { return };
         let seat = game.state.current_player();
         let before: Vec<u8> = game.state.scores().to_vec();
@@ -596,7 +596,7 @@ impl Room {
             game.last_trick = Some(summary);
             delay = TRICK_PAUSE;
         }
-        game.agent_at = Instant::now() + paced(if fast { delay.mul_f32(FAST) } else { delay });
+        game.agent_at = Instant::now() + paced(delay.mul_f32(pace));
         self.broadcast();
     }
 
@@ -807,7 +807,10 @@ mod tests {
         }
         tx.send(Command::Start { conn: 1 }).unwrap();
         tx.send(Command::Disconnect { conn: 2 }).unwrap();
-        // P1 plays their own turns; P2's are played for them, so the game still finishes
+        // P1 plays their own turns; P2's are played for them, so the game still finishes. The
+        // same position can be sent twice (the disconnect also rebroadcasts it), so P1 plays
+        // once per position.
+        let mut played_at = None;
         loop {
             let msg: Value = serde_json::from_str(&inboxes[0].blocking_recv().unwrap()).unwrap();
             assert_ne!(msg["t"], "error", "{msg}");
@@ -817,15 +820,20 @@ mod tests {
             if msg["over"] == true {
                 break;
             }
+            let position = (msg["log"].as_array().map(Vec::len), msg["trick"].clone());
+            if played_at.as_ref() == Some(&position) {
+                continue;
+            }
             if let Some(play) = msg["legal"].as_array().and_then(|l| l.first()) {
                 let action = play["action"].as_u64().unwrap() as usize;
                 tx.send(Command::Play { conn: 1, action }).unwrap();
+                played_at = Some(position);
             }
         }
     }
 
     #[test]
-    fn fast_play_is_for_solo_games_only() {
+    fn speed_is_for_solo_games_only() {
         let presets = Arc::new(presets::available(std::path::Path::new("no-models")));
         let mut room = Room::new("TST4".into(), vec![None, None], presets, Arc::default());
         let mut inboxes = Vec::new();
@@ -841,9 +849,9 @@ mod tests {
         }
         room.handle(Command::Speed {
             conn: 1,
-            fast: true,
+            pace: 0.35,
         });
-        assert!(!room.fast, "two people are seated");
+        assert_eq!(room.pace, 1.0, "two people are seated");
         room.handle(Command::Disconnect { conn: 2 });
         room.handle(Command::SetSeat {
             conn: 1,
@@ -852,9 +860,14 @@ mod tests {
         });
         room.handle(Command::Speed {
             conn: 1,
-            fast: true,
+            pace: 0.35,
         });
-        assert!(room.fast, "alone against the computer");
+        assert_eq!(room.pace, 0.35, "alone against the computer");
+        room.handle(Command::Speed {
+            conn: 1,
+            pace: 100.0,
+        });
+        assert_eq!(room.pace, 3.0, "clamped");
     }
 
     #[test]

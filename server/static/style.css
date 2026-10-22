@@ -463,3 +463,4 @@ button.close { padding: 6px; line-height: 0; }
 .card.tiny { width: 16px; height: 22px; font-size: 11px; border-radius: 3px; border-width: 1px; text-shadow: none; }
 .opponents:has(.open-hand) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 720px; margin: 0 auto; width: 100%; }
 .opponents:has(.open-hand) .opp { max-width: none; }
+.menu-note { margin: -8px 0 0; font-size: 12px; color: var(--muted); }
