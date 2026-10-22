@@ -168,7 +168,7 @@ function receive(msg) {
     }
     case "error":
       hintPending(false);
-      toast(msg.msg);
+      toast(sentence(msg.msg));
       if (msg.msg === "that room doesn't exist or has closed" || msg.msg === "the room has closed") leave();
       break;
   }
@@ -457,6 +457,12 @@ function hintPending(on) {
   $("hint-btn").disabled = on;
   $("hint-btn").textContent = on ? "Thinking…" : "Suggest";
 }
+/** A server message as a sentence: capitalised, with a full stop. */
+function sentence(text) {
+  const t = text.charAt(0).toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
 function askHint() {
   if ($("hint-btn").disabled) return;
   hintPending(true);
