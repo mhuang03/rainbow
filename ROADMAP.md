@@ -370,8 +370,14 @@ stays on round 9. League rounds need the cores to themselves.
 - [ ] PFSP (`train_dmc.py --pfsp`, `PFSP=2 scripts/league_round.sh`): league opponents drawn with
       weight (1 - w)^p, w being the learner's rate of finishing ahead of each, as in AlphaStar.
       Testing as a repeat of round 10 against the uniform round 10.
-- [ ] `distill_ensemble.py`: distil the league ensemble into one network by regressing every
-      legal move's ensemble value in ensemble self-play. Training from round 10 on rounds 8-10.
+- [x] `distill_ensemble.py` (`models/dmc_distilled1.bin`): the ensemble of rounds 8-10 plays
+      self-play games, and every legal move's ensemble value is a regression target for one
+      network of the same shape (started from round 10; 90 minutes, 12M decisions, one core).
+      Against three Economists it climbs 2.05 / 2.08 / 2.09 at 30 / 60 / 90 minutes. Head to
+      head it ties its teachers' ensemble (0.99, 4p 2+2, 800 deals) and the browser's ensemble
+      of rounds 7-9 (1.02), and beats round 9 1.13 (4p, one seat against three) and 1.04 (2p),
+      and round 10 1.16 (4p) and 1.05 (2p): ensemble strength at a third of the cost. The
+      browser's DMC opponents (Beginner to Strong) use it.
 - [ ] `train_belief.py --history`: the belief network also reads the public history (who played
       what, in order). Training on the same 60,000 games as `belief_v4` without it.
 
