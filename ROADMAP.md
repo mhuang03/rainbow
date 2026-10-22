@@ -229,9 +229,11 @@ it.
       | 287k | 51% | 1.21 | 0.68 |
       | 384k | 52% | 1.18 | 0.68 |
       | 384k, 512-512-256, 25 epochs (`models/distill_v5.bin`) | 56% | **1.45** | **0.92** |
+      | 390k, 1024-1024-512, 25 epochs | 58.5% | 1.50 | 0.88 |
 
       The curve flattens at about 300k decisions for the 256-256-256 network; a bigger network
-      breaks through, so capacity, not data, was the limit.
+      breaks through, so capacity, not data, was the limit. Going larger again raises agreement
+      but not strength, so `distill_v5` keeps the 512-512-256 size.
 
 - [x] Ensemble leaves (`leaf=a.bin+b.bin`, averaging the networks' values): guided ISMCTS
       with a round 3 + round 4 leaf is level with the round 4 leaf alone (1.00 vs 1.00, 4p, two
