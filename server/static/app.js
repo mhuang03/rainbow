@@ -197,6 +197,7 @@ function renderLobby() {
     if (editable) {
       const select = el("select");
       presetOptions(select, true, s.kind === "agent" ? s.preset : "open");
+      select.setAttribute("aria-label", `Player for seat ${i + 1}`);
       select.onchange = () => send({ t: "seat", seat: i, agent: select.value === "open" ? null : select.value });
       line.append(select);
     }
@@ -335,7 +336,21 @@ function renderMiddle() {
   if (!plays.length) trick.append(el("span", "hint", `${who(game.current)} to lead`));
 }
 
+/** Runs a re-render that rebuilds buttons, keeping keyboard focus on the same logical control. */
+function keepingFocus(fn) {
+  const key = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
+  fn();
+  if (key) {
+    const again = document.querySelector(`[data-key="${key}"]`);
+    if (again) again.focus();
+  }
+}
+
 function renderHand() {
+  keepingFocus(renderHandNow);
+}
+
+function renderHandNow() {
   const mine = game.players[game.seat];
   const myTurn = game.current === game.seat;
   $("me").classList.toggle("turn", myTurn);
@@ -359,6 +374,7 @@ function renderHand() {
     c.classList.toggle("sel", selected);
     c.setAttribute("aria-pressed", String(selected));
     c.setAttribute("aria-label", `Card ${rank}`);
+    c.dataset.key = `card-${i}`;
     c.onclick = () => {
       selection = selected ? selection.filter((j) => j !== i) : [...selection, i];
       renderHand();
@@ -382,6 +398,7 @@ function renderHand() {
       const b = el("button", "chip" + (match && match.action === l.action ? " match" : "") + (markBeats && l.beats ? " beats" : ""));
       b.setAttribute("aria-label", `${l.cards.join(" ")}${markBeats && l.beats ? ", beats the trick" : ""}`);
       b.title = markBeats && l.beats ? "Beats every play so far" : "";
+      b.dataset.key = `chip-${l.action}`;
       l.cards.forEach((r) => b.append(card(r, true)));
       b.onclick = () => { selectCombo(l); renderHand(); };
       b.ondblclick = () => play(l.action);
@@ -465,7 +482,8 @@ function renderTable() {
       });
     $("next-game").classList.toggle("hidden", !me.host);
     $("over-hint").textContent = me.host ? "" : "Waiting for the host to start the next game.";
-    if (me.host && document.activeElement !== $("next-game")) $("next-game").focus();
+    // move focus into the dialog once, when the game ends
+    if (!$("game-over").contains(document.activeElement)) (me.host ? $("next-game") : $("over-title")).focus();
   }
 }
 
@@ -481,7 +499,7 @@ function render() {
     if (room.spectators) $("room-badge").append(document.createTextNode(` · ${room.spectators} watching`));
   }
   if (view === "lobby") renderLobby();
-  if (view === "table") renderTable();
+  if (view === "table") keepingFocus(renderTable);
 }
 
 // Keyboard: 1-6 add a card of that rank to the selection, Enter plays it, Escape clears it.

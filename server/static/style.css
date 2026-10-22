@@ -8,12 +8,12 @@
   --muted: #98a2b8;
   --accent: #ffd166;
   --danger: #ef476f;
-  --r1: #e63946;
-  --r2: #f3722c;
+  --r1: #d62839;
+  --r2: #c4501a;
   --r3: #f9c74f;
-  --r4: #43aa8b;
-  --r5: #4d8fd8;
-  --r6: #9d5cd6;
+  --r4: #21805f;
+  --r5: #2f6fc0;
+  --r6: #8746c4;
   --radius: 10px;
 }
 
@@ -242,7 +242,7 @@ button.card.r3 { color: #3b2a00; }
 .side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; max-height: calc(100vh - 90px); }
 .side-box { background: var(--panel); border-radius: var(--radius); padding: 12px 14px; }
 .side-box.grow { flex: 1; min-height: 120px; overflow: auto; }
-.side h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.side h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
 .scores { margin: 0; padding-left: 20px; }
 .scores li { padding: 2px 0; }
 .scores li span:first-child { display: inline-block; min-width: 140px; }

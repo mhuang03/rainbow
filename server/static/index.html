@@ -50,7 +50,7 @@
     <div class="panel wide">
       <h2>Room <span id="lobby-code" class="code"></span></h2>
       <p class="share">Invite others with the code or this link:
-        <input id="share-link" readonly> <button id="copy-link">Copy</button></p>
+        <input id="share-link" readonly aria-label="Invite link"> <button id="copy-link">Copy</button></p>
       <ol id="lobby-seats" class="lobby-seats"></ol>
       <p id="lobby-hint" class="hint"></p>
       <div class="actions">
@@ -89,24 +89,24 @@
         </div>
       </div>
     </div>
-    <aside class="side">
+    <section class="side" aria-label="Scores and history">
       <div class="side-box">
-        <h3>Scores</h3>
+        <h2>Scores</h2>
         <ol id="scores" class="scores"></ol>
       </div>
       <div id="unseen-box" class="side-box">
-        <h3>Unseen cards</h3>
+        <h2>Unseen cards</h2>
         <div id="unseen" class="unseen"></div>
         <p class="caption">Cards still in other hands, reserves or set aside.</p>
       </div>
       <div class="side-box grow">
-        <h3>Trick log</h3>
+        <h2>Trick log</h2>
         <ol id="log" class="log"></ol>
       </div>
-    </aside>
+    </section>
     <div id="game-over" class="overlay hidden" role="dialog" aria-labelledby="over-title">
       <div class="panel">
-        <h2 id="over-title">Game over</h2>
+        <h2 id="over-title" tabindex="-1">Game over</h2>
         <ol id="standings" class="standings"></ol>
         <div class="actions">
           <button id="next-game" class="primary">Play again</button>
