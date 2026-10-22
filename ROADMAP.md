@@ -311,6 +311,12 @@ of the best network. This is the strongest agent:
 Most of search's gain comes in the first 50 iterations and it saturates by about 200; beyond that
 the network and the deal sampling, not the search budget, limit strength.
 
+Adding opponent inference (dmc_league as the opponent model, 100 candidate deals) to this agent
+hurts: 1.18 against 1.50 without it at the same table (with two raw dmc_league networks, 80
+deals). The search then draws all 200 iterations from only 100 candidates and the sharp softmax
+(temperature 0.1) concentrates weight on a few of them; belief sampling already supplies most of
+what inference adds. More candidates, a softer temperature or `ipower` < 1 may recover it.
+
 ### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
 
 | Lineup | With belief | Without |
