@@ -208,6 +208,12 @@ Learned:
 - [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
       0.57 against `dmc_league3`.
 
+- [x] `prior=counter`: PUCT priors from a softmax over `counter`'s move scores (in points), no
+      network needed. Plain ISMCTS (1000 iterations, counter rollouts) against three
+      Economists: 1.97 without a prior; 2.17 / 2.08 / 2.04 with `ptemp` 1 / 2 / 4.
+- [x] `counter:samples=k`: estimate whether each later opponent can beat a combo from k sampled
+      deals instead of the worst-case bound. Needs a higher card cost to compensate (q 0, card
+      1.5: 1.10, level with the bound version); sweep continuing.
 - [x] `counter:adaptive=w`: each opponent's hold chance learned from their beat rate when
       following, shrunk to the prior with weight w. Neutral: against three Economists 1.10
       (fixed) vs 1.11-1.13 (w = 2-50, within noise), but worse against three `cheapest`
