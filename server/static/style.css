@@ -347,3 +347,23 @@ dialog.rules p { color: var(--muted); }
   .bar button.ghost { padding: 6px 6px; }
 }
 .trick .hint { color: var(--felt-muted); }
+
+/* "+N" after a trick, floating up from the seat that took it */
+.opp, .me-info .points { position: relative; }
+.gain-pop {
+  position: absolute; right: 10px; top: -6px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px;
+  padding: 1px 8px; border-radius: 999px; pointer-events: none;
+  animation: gain-rise 1800ms ease-out forwards;
+}
+.me-info .points .gain-pop { right: auto; left: calc(100% + 8px); top: -2px; }
+@keyframes gain-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+  12% { opacity: 1; transform: none; }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gain-pop { animation: gain-fade 1800ms linear forwards; }
+  @keyframes gain-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+}

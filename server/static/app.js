@@ -315,6 +315,19 @@ function renderLobby() {
 // ---------- table ----------
 const KIND_NAMES = { single: "Singles", set: "Sets", run: "Runs" };
 let freshFrom = Infinity; // plays in the current trick from this index on are new: animate them
+let gainFlash = null;     // { at, taken }: points each seat just took, shown briefly on its seat
+const GAIN_MS = 1800;
+
+/** A "+N" that floats up from a seat for a moment after a trick, continuing across re-renders. */
+function gainPop(seat) {
+  if (!gainFlash || !gainFlash.taken[seat]) return null;
+  const elapsed = Date.now() - gainFlash.at;
+  if (elapsed > GAIN_MS) return null;
+  const pop = el("span", "gain-pop", `+${gainFlash.taken[seat]}`);
+  pop.setAttribute("aria-hidden", "true"); // the live region already announces it
+  pop.style.animationDelay = `-${elapsed}ms`;
+  return pop;
+}
 
 function who(seat) {
   return seat === game.seat ? "You" : seatName(seat);
@@ -343,7 +356,10 @@ function announceChanges(old, next) {
   if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) said.push("Your turn.");
   if (next.over && (!old || !old.over)) said.push("Game over.");
   if (said.length) live.textContent = said.join(" ");
-  if (next.log.length > oldLog && old) SOUNDS.trick();
+  if (next.log.length > oldLog && old) {
+    SOUNDS.trick();
+    gainFlash = { at: Date.now(), taken: next.log[next.log.length - 1].taken };
+  }
   if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) SOUNDS.turn();
   freshFrom = oldTrick;
 }
@@ -393,6 +409,8 @@ function renderOpponents(spectator, base, n) {
       el("span", "points", `${p.points} pts`),
     );
     box.append(head, backs, meta);
+    const pop = gainPop(seat);
+    if (pop) box.append(pop);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
       select.setAttribute("aria-label", `Replace ${seatName(seat)} with an agent`);
@@ -459,6 +477,8 @@ function renderHandNow() {
   $("me").classList.toggle("turn", myTurn);
   $("me-name").textContent = seatName(game.seat);
   $("me-points").textContent = `${mine.points} pts`;
+  const pop = gainPop(game.seat);
+  if (pop) $("me-points").append(pop);
   $("me-reserve").textContent = mine.reserve_size ? `${mine.reserve_size} cards in reserve` : "";
   $("turn-hint").textContent = game.over ? "" : myTurn ? "Your turn" : `Waiting for ${seatName(game.current)}…`;
 
