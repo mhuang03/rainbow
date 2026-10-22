@@ -895,6 +895,9 @@ function renderTable() {
   renderMiddle();
   $("me").classList.toggle("hidden", spectator);
   $("watching").classList.toggle("hidden", !spectator);
+  $("watching").textContent = room.watch
+    ? "You're watching the computer play."
+    : "You're watching this game; it's full.";
   if (!spectator) renderHand();
   renderSide();
 
@@ -916,12 +919,13 @@ function renderTable() {
         standings.append(li);
       });
     renderChart();
-    $("next-game").classList.toggle("hidden", !me.host);
+    $("next-game").classList.toggle("hidden", !me.host && !room.watch);
+    $("next-game").textContent = room.watch ? "Watch another" : "Play again";
     // against the computer there's no room to leave, just a setup to change
-    $("over-leave").textContent = room.hints ? "Change opponents" : "Leave room";
+    $("over-leave").textContent = room.watch ? "Done" : room.hints ? "Change opponents" : "Leave room";
     $("over-hint").textContent = me.host
       ? (soloOpponent() ? recordText(soloOpponent()) : "")
-      : "Waiting for the host to start the next game.";
+      : room.watch ? "" : "Waiting for the host to start the next game.";
     const up = me.host && winners.includes(game.seat) && soloOpponent() && nextChallenge(soloOpponent());
     if (up) {
       const go = el("button", "link", `Try ${up.label}`);
@@ -937,7 +941,7 @@ function renderTable() {
       $("over-hint").append(". ", go);
     }
     // move focus into the dialog once, when the game ends
-    if (!$("game-over").contains(document.activeElement)) (me.host ? $("next-game") : $("over-title")).focus();
+    if (!$("game-over").contains(document.activeElement)) (me.host || room.watch ? $("next-game") : $("over-title")).focus();
   }
 }
 
@@ -948,7 +952,8 @@ function render() {
   for (const v of ["home", "lobby", "table"]) $(v).classList.toggle("hidden", v !== view);
   // the lobby shows the code in its heading; the badge is for the table
   // a solo game's room code is no use to anyone, so only online tables show it
-  const solo = inRoom && room.hints && room.seats.filter((x) => x.kind === "human").length === 1 && !room.spectators;
+  const solo = inRoom && (room.watch
+    || (room.hints && room.seats.filter((x) => x.kind === "human").length === 1 && !room.spectators));
   $("room-badge").classList.toggle("hidden", !inRoom || view === "lobby" || solo);
   if (inRoom) {
     $("room-badge").innerHTML = "";
@@ -1005,11 +1010,19 @@ async function main() {
   }
   setupHome();
   const howto = () => {
+    $("watch-btn").classList.toggle("hidden", !!me.code);
     $("howto").showModal();
     $("howto").scrollTop = 0;
     $("howto-title").focus();
   };
   $("howto-btn").onclick = howto;
+  // a game played by the computer alone, to learn by watching
+  $("watch-btn").onclick = () => {
+    $("howto").close();
+    const ids = ["economist", "counter", "dmc", "ismcts"].filter((id) => presets.some((p) => p.id === id));
+    while (ids.length < 4) ids.push(presets[ids.length % presets.length].id);
+    send({ t: "create", name: playerName(), seats: ids, watch: true });
+  };
   $("hint-btn").onclick = askHint;
   $("first-tip-close").onclick = markTipSeen;
   $("sound-toggle").checked = soundOn;

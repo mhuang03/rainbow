@@ -123,6 +123,8 @@ Open http://localhost:8080 and enter your name.
   anyone joining a full room watches. While the host is away, the next player present acts as
   host. Rooms have a chat.
 
+*How to play* can also start a game the computer plays alone, to learn by watching.
+
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
 explains the rules and controls; *Settings* has sound, fast computer moves (solo games), reduced motion and a light or dark
 theme.

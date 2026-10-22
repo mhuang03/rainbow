@@ -232,6 +232,19 @@ const tests = {
     for (const colorScheme of ["light", "dark"]) await axeScan(browser, colorScheme);
   },
 
+  async "watch the computer play from How to Play"(browser) {
+    const p = await newPage(browser);
+    await p.goto(BASE);
+    await p.click("#howto-btn");
+    await p.click("#watch-btn");
+    await p.waitForSelector("#table:not(.hidden) #watching:not(.hidden)");
+    await p.waitForFunction(() => game && game.log.length >= 1, null, { timeout: 30000 });
+    assert(await p.locator("#me.hidden").count(), "a watcher has no hand");
+    await p.click("#leave-btn");
+    await p.waitForSelector("#home:not(.hidden)");
+    assert.deepStrictEqual(p.errors, []);
+  },
+
   async "phone width: no horizontal scrolling; leave a solo game"(browser) {
     const p = await newPage(browser, { width: 360, height: 780 });
     await p.goto(BASE);

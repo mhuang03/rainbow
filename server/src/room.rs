@@ -147,6 +147,9 @@ pub struct Room {
     empty_since: Option<Instant>,
     /// Fast play (solo games only).
     fast: bool,
+    /// Every seat is the computer's and everyone watches: games start by themselves, and any
+    /// watcher may start the next one.
+    watch: bool,
 }
 
 /// The cards of a combo, lowest first.
@@ -181,12 +184,19 @@ impl Room {
             last_chat: HashMap::new(),
             empty_since: Some(Instant::now()),
             fast: false,
+            watch: false,
         };
         room.seats = seats
             .into_iter()
             .map(|s| s.and_then(|id| room.agent_seat(&id)).unwrap_or(Seat::Open))
             .collect();
         room
+    }
+
+    /// A room where the computer plays every seat, for people to watch.
+    pub fn watching(mut self) -> Self {
+        self.watch = true;
+        self
     }
 
     fn agent_seat(&self, id: &str) -> Option<Seat> {
@@ -250,7 +260,7 @@ impl Room {
                 self.broadcast();
             }
             Command::Start { conn } => {
-                if !self.is_host(conn) {
+                if !self.is_host(conn) && !self.watch {
                     return self.reply(conn, "only the host can start the game");
                 }
                 if self.game.as_ref().is_some_and(|g| !g.state.is_over()) {
@@ -324,6 +334,12 @@ impl Room {
         let Some(seat) = seat else {
             conn.send(&json!({ "t": "joined", "code": self.code, "seat": null, "host": false }));
             self.spectators.push(conn);
+            if self.watch
+                && self.game.is_none()
+                && !self.seats.iter().any(|s| matches!(s, Seat::Open))
+            {
+                return self.start();
+            }
             return self.broadcast();
         };
         let token = match &self.seats[seat] {
@@ -639,6 +655,7 @@ impl Room {
             "games_played": self.games_played,
             "hints": self.hints_allowed(),
             "spectators": self.spectators.len(),
+            "watch": self.watch,
         })
     }
 

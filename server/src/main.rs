@@ -48,6 +48,9 @@ enum ClientMsg {
     Create {
         name: String,
         seats: Vec<String>,
+        /// Every seat in `seats` goes to the computer and the creator watches.
+        #[serde(default)]
+        watch: bool,
     },
     Join {
         code: String,
@@ -200,8 +203,8 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
         let _ = conn.tx.send(error(m));
     };
     let command = match msg {
-        ClientMsg::Create { name, seats } => {
-            let players = seats.len() + 1;
+        ClientMsg::Create { name, seats, watch } => {
+            let players = seats.len() + usize::from(!watch);
             if !(MIN_PLAYERS..=MAX_PLAYERS).contains(&players) {
                 return send_error("a game has 2 to 6 players");
             }
@@ -210,7 +213,12 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
                 return send_error("the server is busy right now; try again in a few minutes");
             }
             let code = new_code(&rooms);
-            let seats = std::iter::once(None)
+            if watch && seats.iter().any(|s| s == "open") {
+                return send_error("a watched game has only computer players");
+            }
+            let seats = (!watch)
+                .then_some(None)
+                .into_iter()
                 .chain(seats.into_iter().map(|s| (s != "open").then_some(s)))
                 .collect();
             let (tx, rx) = std::sync::mpsc::channel();
@@ -220,7 +228,10 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
                 Arc::clone(&app.rooms),
             );
             // The room owns agents, which aren't `Send`, so it is built on its own thread.
-            std::thread::spawn(move || Room::new(c, seats, presets, registry).run(rx));
+            std::thread::spawn(move || {
+                let room = Room::new(c, seats, presets, registry);
+                if watch { room.watching() } else { room }.run(rx)
+            });
             rooms.insert(code, tx.clone());
             leave(room, conn);
             *room = Some(tx);
