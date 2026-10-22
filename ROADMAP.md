@@ -300,6 +300,17 @@ A better network makes a better search, and 200 iterations of search still add a
 of the best network. This is the strongest agent:
 `ismcts:n=200,prior=models/dmc_league.bin,leaf=models/dmc_league.bin,belief=models/belief_v1.bin`.
 
+### Search budget (guided ismcts with dmc_league prior/leaf and belief, 4p vs 3 raw dmc_league)
+
+| Iterations | Relative | Opponents | Time |
+|---|---|---|---|
+| 50 | 1.47 | 0.84 | 47 s for 100 deals |
+| 200 | 1.60 | 0.80 | - |
+| 800 | 1.60 | 0.80 | 6 min 41 s for 60 deals |
+
+Most of search's gain comes in the first 50 iterations and it saturates by about 200; beyond that
+the network and the deal sampling, not the search budget, limit strength.
+
 ### Belief-weighted deals (`models/belief_v1.bin`, 4p unless noted, 200 deals)
 
 | Lineup | With belief | Without |
