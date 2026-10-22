@@ -78,21 +78,28 @@ cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random 
 
 ### Results
 
-Current 4-player ladder (40 random lineups of 4 from 10 agents, 40 duplicate deals each; 1.0 is an
+Current 4-player ladder (60 random lineups of 4 from 14 agents, 40 duplicate deals each; 1.0 is an
 average player):
 
 | Agent | Relative |
 |---|---|
-| `ismcts:n=200,prior=models/dmc_league.bin,leaf=models/dmc_league.bin,belief=models/belief_v1.bin` | 2.32 |
-| `dmc:path=models/dmc_league.bin` | 1.66 |
-| `dmc:path=models/dmc_v2.bin` | 1.20 |
-| `ismcts` | 1.06 |
-| `dqn:path=models/dqn_v1.bin` | 0.85 |
-| `pimc` | 0.68 |
-| `economist` | 0.62 |
-| `ppo:path=models/ppo_v2.bin` | 0.59 |
-| `nfsp:path=models/nfsp_v1.bin` | 0.57 |
-| `cheapest` | 0.32 |
+| `ismcts:n=200,prior=models/dmc_league3.bin,leaf=models/dmc_league3.bin,belief=models/belief_v1.bin` | 2.12 |
+| `hybrid:path=models/dmc_league3.bin` | 1.75 |
+| `dmc:path=models/dmc_league.bin+models/dmc_league2.bin+models/dmc_league3.bin` | 1.66 |
+| `dmc:path=models/dmc_league3.bin` | 1.62 |
+| `dmc:path=models/dmc_v2.bin` | 1.28 |
+| `ismcts` | 1.04 |
+| `dqn:path=models/dqn_v1.bin` | 0.97 |
+| `economist` | 0.73 |
+| `counter` | 0.64 |
+| `pimc` | 0.57 |
+| `margin` | 0.54 |
+| `nfsp:path=models/nfsp_v1.bin` | 0.51 |
+| `ppo:path=models/ppo_v2.bin` | 0.47 |
+| `cheapest` | 0.42 |
+
+Head-to-head, `counter` beats the Economist (1.14 / 1.07 / 1.10 / 0.96 at 2 / 3 / 4 / 6 players), but
+in a field of mostly learned agents it ranks just below it.
 
 [ROADMAP.md](ROADMAP.md) has the full results and what each experiment taught.
 

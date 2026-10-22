@@ -194,7 +194,30 @@ Learned:
 
 ## Results
 
-### Current ladder (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
+### Current ladder (4p, 60 random lineups of 4 from 14 agents, 40 duplicate deals each)
+
+| Agent | Relative | +/- |
+|---|---|---|
+| ismcts:n=200,prior=dmc_league3.bin,leaf=dmc_league3.bin,belief=belief_v1.bin | **2.12** | 0.12 |
+| hybrid:path=dmc_league3.bin | 1.75 | 0.10 |
+| dmc:path=dmc_league.bin+dmc_league2.bin+dmc_league3.bin | 1.66 | 0.10 |
+| dmc:path=dmc_league3.bin | 1.62 | 0.10 |
+| dmc:path=dmc_v2.bin | 1.28 | 0.11 |
+| ismcts | 1.04 | 0.09 |
+| dqn:path=dqn_v1.bin | 0.97 | 0.11 |
+| economist | 0.73 | 0.07 |
+| counter | 0.64 | 0.04 |
+| pimc | 0.57 | 0.04 |
+| margin | 0.54 | 0.03 |
+| nfsp:path=nfsp_v1.bin | 0.51 | 0.05 |
+| ppo:path=ppo_v2.bin | 0.47 | 0.06 |
+| cheapest | 0.42 | 0.06 |
+
+The hybrid (DMC plus endgame minimax) and the league ensemble edge out round 3 alone, matching
+their small head-to-head gains. `counter` beats Economists head-to-head but is exploited more by
+the learned agents that fill most lineups, and `margin` is weaker than the Economist at 4p.
+
+### Ladder before the second round of agents (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
 
 | Agent | Relative | +/- |
 |---|---|---|
