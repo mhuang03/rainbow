@@ -44,6 +44,12 @@
     <label class="name-field">Your name
       <input id="name" maxlength="20" placeholder="Player" autocomplete="nickname">
     </label>
+    <!-- shown instead of the panels when someone opens an invite link -->
+    <div id="invite" class="panel invite hidden">
+      <h2>Join room <span id="invite-code" class="code"></span></h2>
+      <button id="invite-join" class="primary">Join game</button>
+      <button id="invite-dismiss" class="link">Not now</button>
+    </div>
     <div class="panels">
       <div class="panel">
         <h2>Play against the computer</h2>

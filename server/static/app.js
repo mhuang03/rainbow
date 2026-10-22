@@ -329,6 +329,14 @@ function setupHome() {
   };
   $("join-btn").onclick = join;
   $("join-code").onkeydown = (e) => { if (e.key === "Enter") join(); };
+  // an invite link opens a focused view: a name and one button
+  $("invite-join").onclick = join;
+  $("name").onkeydown = (e) => { if (e.key === "Enter" && $("home").classList.contains("invited")) join(); };
+  $("invite-dismiss").onclick = () => {
+    $("home").classList.remove("invited");
+    $("invite").classList.add("hidden");
+    history.replaceState(null, "", "/");
+  };
 }
 
 // ---------- lobby ----------
@@ -352,12 +360,12 @@ function renderLobby() {
       select.onchange = () => select.value && send({ t: "seat", seat: i, agent: select.value === "open" ? null : select.value });
       line.append(select);
     } else if (s.kind === "human") {
-      who.append(document.createTextNode(s.name + " "));
+      who.append(document.createTextNode(s.name));
       if (i === me.seat) who.append(el("span", "tag you", "you"));
       if (s.host) who.append(el("span", "tag", "host"));
       if (!s.connected) who.append(el("span", "tag off", "away"));
     } else if (s.kind === "agent") {
-      who.append(document.createTextNode(s.name + " "), el("span", "tag", "computer"));
+      who.append(document.createTextNode(s.name), el("span", "tag", "computer"));
     } else {
       who.append(el("span", "hint", "Waiting for a player…"));
     }
@@ -974,6 +982,9 @@ async function main() {
       me.code = code.toUpperCase();
       me.token = localStorage.getItem(`rainbow.token.${me.code}`);
     } else {
+      $("home").classList.add("invited");
+      $("invite").classList.remove("hidden");
+      $("invite-code").textContent = code.toUpperCase();
       $("name").focus();
     }
   }

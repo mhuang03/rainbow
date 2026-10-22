@@ -79,7 +79,7 @@ async function joinByPastedLink(page, code, name) {
 async function joinByLink(page, code, name) {
   await page.goto(`${BASE}/?room=${code}`);
   await page.fill("#name", name);
-  await page.click("#join-btn");
+  await page.click("#invite-join");
   await page.waitForSelector("#lobby:not(.hidden), #table:not(.hidden)");
 }
 
@@ -90,6 +90,8 @@ async function axeScan(browser, colorScheme) {
     const r = await p.evaluate(() => axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] }));
     assert.deepStrictEqual(r.violations.map((v) => `${colorScheme} ${label}: ${v.id}`), []);
   };
+  await p.goto(`${BASE}/?room=ABCD`);
+  await scan("invite");
   await p.goto(BASE);
   await scan("home");
   await p.click("#howto-btn");

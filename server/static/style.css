@@ -106,6 +106,9 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .panel.wide { max-width: 640px; margin: 0 auto; }
 .seat-pickers { display: flex; flex-direction: column; gap: 8px; }
 .seat-pickers label select { min-width: 180px; }
+#home.invited .panels { display: none; }
+.invite { max-width: 380px; }
+.invite .link { align-self: center; }
 .divider { text-align: center; color: var(--muted); font-size: 13px; margin: 4px 0; }
 .join-row { display: flex; gap: 8px; }
 .join-row input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 3px; }
@@ -118,7 +121,7 @@ main { flex: 1; display: flex; justify-content: center; padding: 20px; min-heigh
 .lobby-seats { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
 .lobby-seats li { padding: 6px 0; }
 .lobby-seats .seat-line { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
-.tag { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+.tag { margin-left: 6px; font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 .tag.you { color: var(--accent-text); border-color: var(--accent); }
 .tag.off { color: var(--danger); border-color: var(--danger); }
 .hint { color: var(--muted); margin: 0; font-size: 14px; }
