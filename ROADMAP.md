@@ -200,7 +200,7 @@ Continued from round 3 for 60 minutes against economist, counter, dmc_league2 an
       1.29 to 0.71. Counter rollouts are now the default for both ISMCTS (eps 0.2) and PIMC
       (eps 0.1). A much better playout policy matters more than the extra time it costs, as
       in Go before value networks.
-- [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v3.bin`)
+- [x] `prior=` accepts a policy network (one logit per action, e.g. `models/distill_v4.bin`)
       as well as a DMC network; the kind is told by the output width. With `distill_v3` as the prior
       (DMC leaf, belief, n=200) the search loses to the same search with the DMC prior: 0.93 to
       1.07 (4p, two seats each) and 0.89 to 1.11 (2p). The distilled policy (48% top-move
@@ -211,8 +211,15 @@ Continued from round 3 for 60 minutes against economist, counter, dmc_league2 an
       level with the pure-network leaf in 4p (0.99 vs 1.01, two seats each) and loses in 2p
       (0.80 vs 1.20), at about twice the cost. The league network's values are already better
       than counter playouts.
-- [x] `distill_v3` (189k search decisions): 48% top-move agreement, 1.06 against Economists,
-      0.57 against `dmc_league3`.
+- [x] Distillation keeps scaling with search data (round-3 guided search, n=200):
+
+      | Decisions | Top-move agreement | vs 3 Economists | vs 3 `dmc_league3` |
+      |---|---|---|---|
+      | 43k | 36% | 0.42 | 0.22 |
+      | 91k | 43% | 0.88 | 0.45 |
+      | 137k | 46% | 0.97 | 0.52 |
+      | 189k | 48% | 1.06 | 0.57 |
+      | 287k (`models/distill_v4.bin`) | 51% | 1.21 | 0.68 |
 
 - [x] `pimc:leaf=...`: PIMC valuing each move with a DMC network instead of a rollout. Weak
       (about 0.6 against three Economists, 10 deals) and slow: without a tree, opponents
