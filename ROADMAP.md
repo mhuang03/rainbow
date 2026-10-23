@@ -226,8 +226,12 @@ stays on round 9. League rounds need the cores to themselves.
 The distilled network continued for 90 minutes against economist, counter, rounds 8-9 and
 itself, with the cores to itself for most of it (312,000 games). Against the distilled network:
 0.98 (4p, one seat against three) and 0.93 (2p). Monte Carlo training on single game returns
-seems to undo the smoothness the network got from distilling an ensemble; the next step is to
-fold round 11 into a new ensemble and distil again, rather than train the distilled network on.
+seems to undo the smoothness the network got from distilling an ensemble. Nor would distilling
+again help: ensembles with round 11 don't beat the distilled network (distilled + 11 + 9: 0.99;
+11 + 9 + 8: 0.95, 4p 2+2). The league networks have plateaued at the distilled network's
+level, so the next attempt uses search as the teacher instead (expert iteration round 2: 1200
+guided self-play games at n=300 with the distilled network as prior and leaf, then a gentle
+fine-tune of it on the search's move values).
 
 ## Milestone 14: Better playouts and search inputs
 
