@@ -391,16 +391,17 @@ pub struct EnsembleAgent {
     counter_blend: Option<f32>,
 }
 
-/// Plays one agent in 2-player games and another in games of 3 or more: the 2-player game,
-/// where each player plays twice a trick and holds a reserve, rewards a specialist.
+/// Plays a specialist agent in games of the player counts it has one for, and another agent
+/// otherwise: the game changes with the player count (with two, each plays twice a trick and
+/// holds a reserve), and networks trained on one count can beat a generalist there.
 pub struct ByPlayerCount {
-    two: Box<dyn Agent>,
+    specialists: Vec<(usize, Box<dyn Agent>)>,
     rest: Box<dyn Agent>,
 }
 
 impl ByPlayerCount {
-    pub fn new(two: Box<dyn Agent>, rest: Box<dyn Agent>) -> Self {
-        Self { two, rest }
+    pub fn new(specialists: Vec<(usize, Box<dyn Agent>)>, rest: Box<dyn Agent>) -> Self {
+        Self { specialists, rest }
     }
 }
 
@@ -410,10 +411,10 @@ impl Agent for ByPlayerCount {
     }
 
     fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
-        if obs.num_players() == 2 {
-            self.two.act(obs, legal)
-        } else {
-            self.rest.act(obs, legal)
+        let n = obs.num_players();
+        match self.specialists.iter_mut().find(|(count, _)| *count == n) {
+            Some((_, agent)) => agent.act(obs, legal),
+            None => self.rest.act(obs, legal),
         }
     }
 }
@@ -496,7 +497,7 @@ mod tests {
     fn by_player_count_routes_two_player_games_to_the_specialist() {
         use crate::agents::baseline::{BiggestAgent, LowestAgent};
         use rand::SeedableRng;
-        let mut by = ByPlayerCount::new(Box::new(BiggestAgent), Box::new(LowestAgent));
+        let mut by = ByPlayerCount::new(vec![(2, Box::new(BiggestAgent))], Box::new(LowestAgent));
         for (n, expect_biggest) in [(2, true), (3, false), (5, false)] {
             let state = crate::GameState::new(n, 0, &mut SmallRng::seed_from_u64(n as u64));
             let (obs, legal) = (state.observe(0), state.legal_actions());

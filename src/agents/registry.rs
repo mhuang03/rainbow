@@ -250,8 +250,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dmc` also takes several
 ///   `+`-separated paths and averages their predictions (an ensemble), and with one network
 ///   `temp` (sample moves from a softmax at this temperature) and `counter` (add this multiple
-///   of the `counter` agent's scores to break near-ties), and `path2` (a network played in
-///   2-player games instead, such as a 2-player specialist).
+///   of the `counter` agent's scores to break near-ties), and `path2` to `path6` (a network
+///   played instead in games of that many players, such as a specialist trained on them).
 /// - `hybrid`: `path` (a DMC network, or an `a+b` ensemble, played until the endgame) or `base`
 ///   (`counter`, `ismcts` or `pimc`), `cards` (cards left in all hands and reserves at which to
 ///   switch to exact search; default 8), `k` (deals solved per endgame move; default 8) and
@@ -419,10 +419,17 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
                 }
             };
             let general = build(&path, seed)?;
-            match opts.take::<String>("path2")? {
-                // a specialist network for 2-player games
-                Some(two) => Box::new(dmc::ByPlayerCount::new(build(&two, seed ^ 2)?, general)),
-                None => general,
+            // specialist networks for single player counts: path2= ... path6=
+            let mut specialists = Vec::new();
+            for n in crate::constants::MIN_PLAYERS..=crate::constants::MAX_PLAYERS {
+                if let Some(p) = opts.take::<String>(&format!("path{n}"))? {
+                    specialists.push((n, build(&p, seed ^ n as u64)?));
+                }
+            }
+            if specialists.is_empty() {
+                general
+            } else {
+                Box::new(dmc::ByPlayerCount::new(specialists, general))
             }
         }
         "hybrid" => {
