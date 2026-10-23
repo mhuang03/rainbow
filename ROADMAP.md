@@ -389,8 +389,11 @@ from.
       game to a spec by its player count): with the 4-player specialist as prior and leaf at 4
       players 1.92 +/- 0.07 against 1.75 +/- 0.08 with the distilled network (80 lineups from
       8 agents, 20 deals); with the 3-player one at 3 players 1.79 +/- 0.09 against 1.68 +/-
-      0.09. The browser's Guided ISMCTS uses them at 3 and 4 players, the distilled network
-      otherwise.
+      0.09. At the other counts (60 lineups): the 2-player specialist is level, 1.85 +/- 0.05
+      against 1.87 +/- 0.07; the 5-player one, no help to DMC's own play, guides the search
+      better, 1.65 +/- 0.05 against 1.50 +/- 0.06; the 6-player one is level, 1.52 against 1.50.
+      The browser's Guided ISMCTS uses the 3-, 4- and 5-player specialists (`dmc_spec5p_1.bin`
+      kept for this), the distilled network otherwise.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score

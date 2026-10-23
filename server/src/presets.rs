@@ -48,6 +48,8 @@ pub fn available(models: &Path) -> Vec<Preset> {
     // likewise with 3 and 4 players: 1.63 to 1.50 and 1.55 to 1.43 in mixed fields
     let three = m("dmc_spec3p_1.bin");
     let four = m("dmc_spec4p_1.bin");
+    // no help to DMC's own play at 5 players, but a better guide for the search there
+    let five = m("dmc_spec5p_1.bin");
     let belief = m("belief_v3.bin");
     let ensemble = format!("{}+{}+{league}", m("dmc_league7.bin"), m("dmc_league8.bin"));
     let list = [
@@ -195,16 +197,17 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "guided",
             "Guided ISMCTS",
             "Tree search guided by the DMC network. The strongest; thinks for a moment.",
-            // steered by the player-count specialist where there is one tested for search (3 and
-            // 4 players: 1.79 to 1.68 and 1.92 to 1.75 over the distilled network), else by the
-            // distilled network (level with league 9 at 4 players, ahead at 6)
+            // steered by the player-count specialist where one guides the search better (3, 4 and
+            // 5 players: 1.79 to 1.68, 1.92 to 1.75 and 1.65 to 1.50 over the distilled network;
+            // level at 2 and 6), else by the distilled network (ahead of league 9 at 6 players)
             {
                 let guided =
                     |net: &str| format!("ismcts:n=200,prior={net},leaf={net},belief={belief}");
                 format!(
-                    "bycount:3={}|4={}|rest={}",
+                    "bycount:3={}|4={}|5={}|rest={}",
                     guided(&three),
                     guided(&four),
+                    guided(&five),
                     guided(&distilled)
                 )
             },
