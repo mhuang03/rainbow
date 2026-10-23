@@ -195,7 +195,8 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "guided",
             "Guided ISMCTS",
             "Tree search guided by the DMC network. The strongest; thinks for a moment.",
-            format!("ismcts:n=200,prior={league},leaf={league},belief={belief}"),
+            // steered by the distilled network: level with league 9 at 4 players, ahead at 6
+            format!("ismcts:n=200,prior={distilled},leaf={distilled},belief={belief}"),
             2.18,
         ),
     ];

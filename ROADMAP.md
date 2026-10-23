@@ -381,6 +381,10 @@ from.
       at 6 players 1.40 against 1.40. Not adopted: with five or more players the network trained
       on every count already plays as well. In both fields network-free ISMCTS rates highest
       (1.52 at 5p, 1.60 at 6p), ahead of every DMC network.
+- [x] Guided ISMCTS steered by the distilled network instead of league 9 (`prior=`, `leaf=`):
+      at 6 players 1.60 +/- 0.05 against 1.45 +/- 0.05 (60 lineups from 10 agents, 20 deals),
+      at 4 players level, 1.70 +/- 0.07 against 1.75 +/- 0.06 (100 lineups). The browser's
+      Guided ISMCTS now uses the distilled network.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
