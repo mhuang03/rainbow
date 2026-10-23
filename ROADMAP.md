@@ -360,8 +360,10 @@ stays on round 9. League rounds need the cores to themselves.
       under the plays since the last search still applies). Worse on guided ISMCTS: 0.95 (4p
       2+2, 300 deals) and 0.92 (2p, 150 deals). The kept statistics come from deals sampled
       before the latest plays were seen, which belief-weighted sampling now rules out; they
-      outweigh the fresh iterations and bias the search. Off by default; `reuse=0.25` keeps a
-      quarter of the old statistics instead (testing).
+      outweigh the fresh iterations and bias the search. Keeping a quarter of them
+      (`reuse=0.25`) is worse still, 0.89 (4p 2+2, 200 deals): a reused tree also keeps its
+      shape (which moves were expanded and how deeply), which steers the new iterations along
+      lines chosen under stale beliefs. Off by default.
 - [x] Guided ISMCTS's PUCT constant: `cpuct=0.5` scores 0.99 and `cpuct=2` 0.90 against the
       default 1 (4p 2+2, 200 deals each). More exploration spends the 200 iterations on moves
       the network already rates poorly; 1 stays.
