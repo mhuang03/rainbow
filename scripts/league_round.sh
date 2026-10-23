@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One round of DMC league training: continue a network against a pool of opponents, then
-# compare it head-to-head with the network it started from (2 and 4 players).
+# One round of DMC league training: continue a network against a pool of opponents, then rate
+# it beside the network it started from in a mixed field of varied agents (2 and 4 players).
 #
 # Usage: scripts/league_round.sh INIT OUT [MINUTES] [OPPONENT...]
 #   e.g. scripts/league_round.sh models/dmc_league8.bin models/dmc_league9.bin 90 \
@@ -39,7 +39,17 @@ cargo build --release -q
 arena=./target/release/rainbow
 new="dmc:path=$out"
 old="dmc:path=$init"
-echo "== $out vs $init, 2 players"
-"$arena" arena -d 400 "$new" "$old" | sed -n 3,4p
-echo "== $out vs $init, 4 players (one seat against three)"
-"$arena" arena -d 400 "$new" "$old" "$old" "$old" | sed -n 3,4p
+# Judge the new network in a mixed field rather than only against its predecessor: both are
+# rated side by side over random lineups drawn from a varied pool (rule-based, learned and
+# search agents), at 4 players and at 2, so a gain has to hold up against many styles of play.
+m=models
+field=(cheapest economist counter "ppo:path=$m/ppo_v2.bin" "nfsp:path=$m/nfsp_v1.bin" pimc ismcts)
+echo "== mixed field, 4 players: $out and $init among ${#field[@]} others"
+"$arena" ladder -p 4 -l "${LINEUPS:-120}" -d 30 "$new" "$old" "${field[@]}"
+echo "== mixed field, 2 players"
+"$arena" ladder -p 2 -l "${LINEUPS:-120}" -d 30 "$new" "$old" "${field[@]}"
+# the direct comparison too, when asked for (HEAD_TO_HEAD=1)
+if [ -n "${HEAD_TO_HEAD:-}" ]; then
+    echo "== $out vs $init, 4 players (one seat against three)"
+    "$arena" arena -d 400 "$new" "$old" "$old" "$old" | sed -n 3,4p
+fi

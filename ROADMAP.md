@@ -14,6 +14,12 @@ games (Skat, Bridge); see [References](#references).
 - [x] **Agent registry and CLI**: `rainbow arena -p 4 -d 1000 economist random random random`.
 - [x] Agent `name()` for reports.
 
+- [x] Mixed-field evaluation. Head-to-head matches (a candidate against copies of its
+      predecessor) can reward exploiting one opponent's habits. Candidates are now judged in a
+      mixed field as well: rated side by side with the agent they would replace, over random
+      lineups from a varied pool (rule-based, learned and search agents) with `rainbow ladder`.
+      `scripts/league_round.sh` does this at 2 and 4 players after every round.
+
 ## Milestone 1: Baselines
 
 - [x] `random`: uniformly random legal move (exists).
