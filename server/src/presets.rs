@@ -195,8 +195,19 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "guided",
             "Guided ISMCTS",
             "Tree search guided by the DMC network. The strongest; thinks for a moment.",
-            // steered by the distilled network: level with league 9 at 4 players, ahead at 6
-            format!("ismcts:n=200,prior={distilled},leaf={distilled},belief={belief}"),
+            // steered by the player-count specialist where there is one tested for search (3 and
+            // 4 players: 1.79 to 1.68 and 1.92 to 1.75 over the distilled network), else by the
+            // distilled network (level with league 9 at 4 players, ahead at 6)
+            {
+                let guided =
+                    |net: &str| format!("ismcts:n=200,prior={net},leaf={net},belief={belief}");
+                format!(
+                    "bycount:3={}|4={}|rest={}",
+                    guided(&three),
+                    guided(&four),
+                    guided(&distilled)
+                )
+            },
             2.18,
         ),
     ];

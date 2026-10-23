@@ -385,6 +385,12 @@ from.
       at 6 players 1.60 +/- 0.05 against 1.45 +/- 0.05 (60 lineups from 10 agents, 20 deals),
       at 4 players level, 1.70 +/- 0.07 against 1.75 +/- 0.06 (100 lineups). The browser's
       Guided ISMCTS now uses the distilled network.
+- [x] Guided ISMCTS steered by the player-count specialists (`bycount:`, which routes each
+      game to a spec by its player count): with the 4-player specialist as prior and leaf at 4
+      players 1.92 +/- 0.07 against 1.75 +/- 0.08 with the distilled network (80 lineups from
+      8 agents, 20 deals); with the 3-player one at 3 players 1.79 +/- 0.09 against 1.68 +/-
+      0.09. The browser's Guided ISMCTS uses them at 3 and 4 players, the distilled network
+      otherwise.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
