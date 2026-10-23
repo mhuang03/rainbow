@@ -448,7 +448,15 @@ function cardsText(cards) {
   return cards.join(" ");
 }
 
-/** Screen-reader (and log) announcements for what changed between two states. */
+/** A play as spoken: "a 4", "three 5s", "a run 2 to 4". */
+function cardsSpoken(cards) {
+  const words = ["", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  if (cards.length === 1) return `a ${cards[0]}`;
+  if (cards.every((r) => r === cards[0])) return `${words[cards.length] || cards.length} ${cards[0]}s`;
+  return `a run ${cards[0]} to ${cards[cards.length - 1]}`;
+}
+
+/** Screen-reader announcements for what changed between two states. */
 function announceChanges(old, next) {
   const live = $("live");
   const said = [];
@@ -458,13 +466,15 @@ function announceChanges(old, next) {
     const done = next.log[next.log.length - 1];
     // plays of the finished trick not yet announced
     done.plays.slice(oldLog === next.log.length - 1 && old ? old.trick.length : 0)
-      .forEach((pl) => said.push(`${who(pl.seat)} played ${cardsText(pl.cards)}.`));
+      .forEach((pl) => said.push(`${who(pl.seat)} played ${cardsSpoken(pl.cards)}.`));
     const gains = [...new Set(done.plays.map((pl) => pl.seat))]
-      .map((seat) => `${who(seat)} +${done.taken[seat]}`);
-    said.push(`Trick over: ${gains.join(", ")}.`);
+      .map((seat) => `${who(seat)} took ${done.taken[seat]}`);
+    said.push(`Trick over. ${gains.join(", ")}.`);
   }
-  next.trick.slice(oldTrick).forEach((pl) => said.push(`${who(pl.seat)} played ${cardsText(pl.cards)}.`));
-  if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) said.push("Your turn.");
+  next.trick.slice(oldTrick).forEach((pl) => said.push(`${who(pl.seat)} played ${cardsSpoken(pl.cards)}.`));
+  if (!next.over && next.current === next.seat && (!old || old.current !== next.seat)) {
+    said.push(next.trick_type !== "open" ? `Your turn. Only ${TRICK_TYPES[next.trick_type]} now.` : "Your turn.");
+  }
   if (next.over && (!old || !old.over)) said.push("Game over.");
   if (said.length) live.textContent = said.join(" ");
   if (next.log.length > oldLog && old) {
@@ -786,7 +796,7 @@ function renderHandNow() {
     : myTurn ? "Select cards" : "Play";
   btn.classList.toggle("reason", !match && myTurn && selection.length > 0);
   if (match && would !== undefined && would !== null) {
-    btn.setAttribute("aria-label", `Play ${cardsText(match.cards)}, would take ${would} so far`);
+    btn.setAttribute("aria-label", `Play ${cardsSpoken(match.cards)}, which would take ${would} so far`);
   } else {
     btn.removeAttribute("aria-label");
   }
