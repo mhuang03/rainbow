@@ -26,7 +26,7 @@ async function legalCards(page) {
 async function playUntilOver(page) {
   let moves = 0;
   for (let i = 0; i < 5000; i++) {
-    if (await page.locator("#game-over:not(.hidden)").count()) return moves;
+    if (await page.evaluate(() => game && game.over)) return moves;
     const cards = await legalCards(page);
     if (cards) {
       try {
@@ -125,7 +125,17 @@ const tests = {
     await p.waitForFunction(() => document.querySelectorAll("#hand .card.sel").length > 0);
     assert((await p.textContent("#play-selected")).startsWith("Play "), "hint names the play");
     await playUntilOver(p);
-    assert(await p.locator("#chart svg").count(), "score chart shown");
+    await p.waitForSelector("#game-over[open] #chart svg");
+    // closing the chart leaves the finished table to look over, with no layout shift
+    await p.keyboard.press("Escape");
+    await p.waitForFunction(() => !$("game-over").open && document.activeElement === $("next-game"));
+    assert(await p.evaluate(() => $("end-actions").parentElement.classList.contains("play-actions")
+      && $("play-selected").classList.contains("hidden")), "the end buttons replace the play buttons");
+    assert(await p.locator("#table:not(.hidden) #end-actions:not(.hidden)").count());
+    assert.strictEqual(await p.locator("#log > li").count(), await p.evaluate(() => game.log.length), "every trick listed");
+    await p.click("#show-chart");
+    await p.waitForSelector("#game-over[open] #chart svg");
+    await p.click("#game-over .close");
     await p.click("#over-leave");
     await p.reload();
     assert.strictEqual(await p.locator("#solo-seats select").nth(1).inputValue(), "counter");
@@ -161,8 +171,11 @@ const tests = {
     await b.reload();
     await b.waitForSelector("#table:not(.hidden)", { timeout: 10000 });
     await Promise.all([playUntilOver(a), playUntilOver(b)]);
+    await a.waitForSelector("#game-over[open]");
+    await a.keyboard.press("Escape");
     await a.click("#next-game");
-    await b.waitForFunction(() => document.querySelector("#game-over").classList.contains("hidden"));
+    // the next game closes the chart for everyone
+    await b.waitForFunction(() => !document.querySelector("#game-over").open);
     assert.deepStrictEqual([...a.errors, ...b.errors], []);
   },
 

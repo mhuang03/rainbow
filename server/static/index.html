@@ -124,6 +124,7 @@
   <!-- Table -->
   <section id="table" class="view hidden">
     <div class="table-main">
+      <div id="spectator-bar" class="spectator-bar hidden">
       <p id="watching" class="watching hidden">You're watching this game; it's full.</p>
       <div id="watch-controls" class="watch-controls hidden" role="group" aria-label="Playback">
         <button id="pause-btn" type="button">Pause</button>
@@ -135,6 +136,7 @@
             <option value="fast">Fast</option>
           </select>
         </label>
+      </div>
       </div>
       <div id="opponents" class="opponents" aria-label="Other players"></div>
       <div class="middle">
@@ -157,6 +159,12 @@
         <div class="actions play-actions">
           <button id="play-selected" class="primary" disabled>Play</button>
           <button id="hint-btn" class="hidden">Suggest</button>
+          <!-- in place of the play buttons once the game ends (moved to the spectator bar for watchers) -->
+          <div id="end-actions" class="actions end-actions hidden">
+            <button id="next-game" class="primary">Play again</button>
+            <button id="show-chart">Scores</button>
+            <button id="over-leave">Leave</button>
+          </div>
         </div>
       </div>
     </div>
@@ -180,18 +188,16 @@
         <ol id="log" class="log"></ol>
       </div>
     </section>
-    <div id="game-over" class="overlay hidden" role="dialog" aria-labelledby="over-title">
-      <div class="panel">
+    <dialog id="game-over" class="howto over-dialog" aria-labelledby="over-title">
+      <div class="dialog-head">
         <h2 id="over-title" tabindex="-1">Game over</h2>
-        <ol id="standings" class="standings"></ol>
-        <div id="chart" class="chart-box"></div>
-        <div class="actions">
-          <button id="next-game" class="primary">Play again</button>
-          <button id="over-leave">Leave room</button>
-        </div>
-        <p id="over-hint" class="hint"></p>
+        <form method="dialog"><button class="ghost icon close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button></form>
       </div>
-    </div>
+      <div id="chart" class="chart-box"></div>
+      <p id="over-hint" class="hint"></p>
+    </dialog>
   </section>
 </main>
 

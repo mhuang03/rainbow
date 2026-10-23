@@ -210,6 +210,7 @@ function leave() {
   me.host = false;
   room = null;
   game = null;
+  if ($("game-over").open) $("game-over").close();
   $("chat-log").innerHTML = "";
   history.replaceState(null, "", "/");
   renderRecord();
@@ -833,7 +834,6 @@ function renderHandNow() {
   $("first-tip").classList.toggle("hidden", !myTurn || tipSeen());
 }
 
-let showAllTricks = false;
 
 function renderSide() {
   // cards I haven't seen, per rank
@@ -847,30 +847,28 @@ function renderSide() {
     unseen.append(cell);
   });
 
-  // trick log, newest first; the latest few unless the player asks for all
+  // trick log: every trick, newest first, compact enough to scan; the box scrolls
   const log = $("log");
   log.innerHTML = "";
-  const shown = showAllTricks ? game.log.length : Math.min(3, game.log.length);
-  game.log.slice().reverse().slice(0, shown).forEach((t, k) => {
+  game.log.slice().reverse().forEach((t, k) => {
     const li = el("li");
-    li.append(el("div", "log-title", `Trick ${game.log.length - k}`));
+    const number = el("span", "log-num", String(game.log.length - k));
+    number.setAttribute("aria-label", `Trick ${game.log.length - k}`);
+    li.append(number);
+    const plays = el("div", "log-plays");
     t.plays.forEach((pl, i) => {
       const line = el("div", "log-line");
-      line.append(el("span", null, who(pl.seat)), cardRow(pl.cards, true));
+      line.append(el("span", "log-who", who(pl.seat)), cardRow(pl.cards, true));
       const lastOfSeat = !t.plays.slice(i + 1).some((q) => q.seat === pl.seat);
       if (lastOfSeat) line.append(el("span", "gain", `+${t.taken[pl.seat]}`));
-      li.append(line);
+      plays.append(line);
     });
+    li.append(plays);
     log.append(li);
   });
+  // one name column for the whole log, as wide as the longest name
+  log.style.setProperty("--who", `${Math.max(...game.players.map((_, seat) => who(seat).length))}ch`);
   $("log-box").classList.toggle("hidden", !game.log.length);
-  if (game.log.length > 3) {
-    const more = el("button", "link", showAllTricks ? "Show fewer" : `Show all ${game.log.length} tricks`);
-    more.onclick = () => { showAllTricks = !showAllTricks; renderSide(); };
-    const li = el("li");
-    li.append(more);
-    log.append(li);
-  }
 }
 
 // Player colours for charts: a validated categorical palette per theme, assigned by seat.
@@ -962,7 +960,7 @@ function renderChart() {
   // each line is named at its end, so no separate legend
   box.append(chart, tip);
 }
-addEventListener("resize", () => { if (game && game.over) renderChart(); });
+addEventListener("resize", () => { if ($("game-over").open) renderChart(); });
 
 function renderTable() {
   const n = game.players.length;
@@ -971,8 +969,9 @@ function renderTable() {
   renderOpponents(spectator, base, n);
   renderMiddle();
   $("me").classList.toggle("hidden", spectator);
+  $("spectator-bar").classList.toggle("hidden", !spectator);
   // a watched game's playback controls say it all
-  $("watching").classList.toggle("hidden", !spectator || room.watch);
+  $("watching").classList.toggle("hidden", !spectator || room.watch || game.over);
   $("watching").textContent = room.watch
     ? "You're watching the computer play."
     : "You're watching this game; it's full.";
@@ -983,30 +982,26 @@ function renderTable() {
     $("step-btn").disabled = !room.paused;
     $("watch-speed").value = computerSpeed();
   }
+  // once the game ends, its buttons take the place of the play buttons (or the playback
+  // controls), so nothing on the table moves
+  const endSlot = spectator ? $("spectator-bar") : $("play-selected").parentElement;
+  if ($("end-actions").parentElement !== endSlot) endSlot.append($("end-actions"));
+  $("end-actions").classList.toggle("hidden", !game.over);
+  $("play-selected").classList.toggle("hidden", game.over);
   if (!spectator) renderHand();
   renderSide();
 
   // game over
-  $("game-over").classList.toggle("hidden", !game.over);
+  if (!game.over && $("game-over").open) $("game-over").close();
   if (game.over) {
     const winners = game.winners || [];
     $("over-title").textContent = winners.includes(game.seat)
       ? winners.length > 1 ? "You tied for the win!" : "You win!"
       : `${winners.map(seatName).join(" and ")} win${winners.length > 1 ? "" : "s"}`;
-    const standings = $("standings");
-    standings.innerHTML = "";
-    [...game.players.keys()]
-      .sort((a, b) => game.players[b].points - game.players[a].points)
-      .forEach((seat) => {
-        const li = el("li", winners.includes(seat) ? "win" : "");
-        li.append(el("span", null, who(seat)), el("span", "points", `${game.players[seat].points} pts`));
-        standings.append(li);
-      });
-    renderChart();
     $("next-game").classList.toggle("hidden", !me.host && !room.watch);
     $("next-game").textContent = room.watch ? "Watch another" : "Play again";
-    // against the computer there's no room to leave, just a setup to change
-    $("over-leave").textContent = room.watch ? "Done" : room.hints ? "Change opponents" : "Leave room";
+    // short labels, so the three buttons fit the play buttons' row on a phone
+    $("over-leave").textContent = room.watch ? "Done" : "Leave";
     $("over-hint").textContent = me.host
       ? (soloOpponent() ? recordText(soloOpponent()) : "")
       : room.watch ? "" : "Waiting for the host to start the next game.";
@@ -1024,9 +1019,20 @@ function renderTable() {
       };
       $("over-hint").append(". ", go);
     }
-    // move focus into the dialog once, when the game ends
-    if (!$("game-over").contains(document.activeElement)) (me.host || room.watch ? $("next-game") : $("over-title")).focus();
+    // the score chart opens once per game; closing it leaves the table to look over
+    const key = `${room.code}:${room.games_played}`;
+    if (chartShownFor !== key) {
+      chartShownFor = key;
+      openChart();
+    }
   }
+}
+
+let chartShownFor = null;
+function openChart() {
+  if (!$("game-over").open) $("game-over").showModal();
+  renderChart(); // after opening: it's drawn at the dialog's width
+  $("over-title").focus();
 }
 
 // ---------- views ----------
@@ -1164,7 +1170,7 @@ async function main() {
     if (t === "auto") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = t;
     try { localStorage.setItem("rainbow.theme", t); } catch { /* not remembered */ }
-    if (game && game.over) renderChart(); // the chart palette depends on the theme
+    if ($("game-over").open) renderChart(); // the chart palette depends on the theme
     syncThemeColor();
   };
   syncThemeColor();
@@ -1189,6 +1195,11 @@ async function main() {
   $("next-game").onclick = () => send({ t: "start" });
   $("lobby-leave").onclick = leave;
   $("over-leave").onclick = leave;
+  $("show-chart").onclick = openChart;
+  // back on the table, focus goes to the next thing to do
+  $("game-over").addEventListener("close", () => {
+    if (game && game.over) ($("next-game").classList.contains("hidden") ? $("over-leave") : $("next-game")).focus();
+  });
   // leaving a solo game ends it; an online seat can be reclaimed with the room's link
   $("leave-btn").onclick = () => {
     const solo = room && room.hints && room.seats.filter((x) => x.kind === "human").length === 1;
