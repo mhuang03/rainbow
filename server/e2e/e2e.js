@@ -242,12 +242,24 @@ const tests = {
     await p.selectOption("#watch-players", "3");
     assert.strictEqual(await p.locator("#watch-seats select").count(), 3);
     await p.selectOption("#watch-seats label:nth-child(1) select", "random");
+    await p.evaluate(() => localStorage.setItem("rainbow.speed", "slow"));
     await p.click("#watch-start");
     await p.waitForSelector("#table:not(.hidden) #watching:not(.hidden)");
     assert.strictEqual(await p.evaluate(() => room.seats[0].preset), "random");
-    await p.waitForFunction(() => game && game.log.length >= 1, null, { timeout: 30000 });
+    await p.waitForSelector("#watch-controls:not(.hidden)");
     assert(await p.locator("#me.hidden").count(), "a watcher has no hand");
     assert.strictEqual(await p.locator("#opponents .open-hand").count(), 3, "every computer hand is shown");
+    // pause, step one move, resume
+    await p.click("#pause-btn");
+    await p.waitForFunction(() => room.paused && $("pause-btn").textContent === "Resume");
+    const cardsLeft = () => game.players.reduce((n, x) => n + x.hand.length, 0);
+    const before = await p.evaluate(cardsLeft);
+    await p.waitForTimeout(300);
+    assert.strictEqual(await p.evaluate(cardsLeft), before, "nothing moves while paused");
+    await p.click("#step-btn");
+    await p.waitForFunction((n) => game.players.reduce((m, x) => m + x.hand.length, 0) < n, before);
+    await p.click("#pause-btn");
+    await p.waitForFunction(() => !room.paused && $("step-btn").disabled);
     await p.click("#leave-btn");
     await p.waitForSelector("#home:not(.hidden)");
     assert.deepStrictEqual(p.errors, []);

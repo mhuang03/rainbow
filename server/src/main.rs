@@ -66,6 +66,10 @@ enum ClientMsg {
     Speed {
         pace: f32,
     },
+    Pause {
+        paused: bool,
+    },
+    Step,
     Chat {
         text: String,
     },
@@ -282,6 +286,11 @@ fn handle(msg: ClientMsg, app: &App, conn: &Conn, room: &mut Option<Sender<Comma
             conn: conn.id,
             pace,
         },
+        ClientMsg::Pause { paused } => Command::Pause {
+            conn: conn.id,
+            paused,
+        },
+        ClientMsg::Step => Command::Step { conn: conn.id },
         ClientMsg::Chat { text } => Command::Chat {
             conn: conn.id,
             text,

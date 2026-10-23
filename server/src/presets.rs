@@ -48,7 +48,13 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let belief = m("belief_v3.bin");
     let ensemble = format!("{}+{}+{league}", m("dmc_league7.bin"), m("dmc_league8.bin"));
     let list = [
-        ("random", "Random", "Plays a random legal move.", "random".to_string(), 0.03),
+        (
+            "random",
+            "Random",
+            "Plays a random legal move.",
+            "random".to_string(),
+            0.03,
+        ),
         (
             "lowest",
             "Lowest",

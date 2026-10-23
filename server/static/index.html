@@ -41,7 +41,7 @@
           <option value="fast">Fast</option>
         </select>
       </label>
-      <p id="speed-note" class="menu-note">Games against the computer only.</p>
+      <p id="speed-note" class="menu-note">Games against the computer, and games you watch.</p>
       <label>Theme
         <select id="theme-select">
           <option value="auto">Match system</option>
@@ -125,6 +125,17 @@
   <section id="table" class="view hidden">
     <div class="table-main">
       <p id="watching" class="watching hidden">You're watching this game; it's full.</p>
+      <div id="watch-controls" class="watch-controls hidden" role="group" aria-label="Playback">
+        <button id="pause-btn" type="button">Pause</button>
+        <button id="step-btn" type="button" disabled>Next move</button>
+        <label>Speed
+          <select id="watch-speed">
+            <option value="slow">Slow</option>
+            <option value="normal">Normal</option>
+            <option value="fast">Fast</option>
+          </select>
+        </label>
+      </div>
       <div id="opponents" class="opponents" aria-label="Other players"></div>
       <div class="middle">
         <div class="piles-area">
@@ -233,6 +244,8 @@
     <dt><kbd>Enter</kbd></dt><dd>Play the selected cards</dd>
     <dt><kbd>Esc</kbd></dt><dd>Clear the selection</dd>
     <dt><kbd>H</kbd></dt><dd>Suggest a move</dd>
+    <dt><kbd>Space</kbd></dt><dd>Pause or resume a game you're watching</dd>
+    <dt><kbd>→</kbd></dt><dd>Next move, while paused</dd>
     <dt><kbd>?</kbd></dt><dd>Open this page</dd>
   </dl>
 

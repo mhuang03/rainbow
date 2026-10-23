@@ -977,6 +977,13 @@ function renderTable() {
   $("watching").textContent = room.watch
     ? "You're watching the computer play."
     : "You're watching this game; it's full.";
+  const controls = room.watch && !game.over;
+  $("watch-controls").classList.toggle("hidden", !controls);
+  if (controls) {
+    $("pause-btn").textContent = room.paused ? "Resume" : "Pause";
+    $("step-btn").disabled = !room.paused;
+    $("watch-speed").value = computerSpeed();
+  }
   if (!spectator) renderHand();
   renderSide();
 
@@ -1059,6 +1066,26 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// Watching: Space pauses or resumes, the right arrow plays the next move while paused.
+document.addEventListener("keydown", (e) => {
+  if (!game || !room || !room.watch || game.over || $("table").classList.contains("hidden")) return;
+  const tag = document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "BUTTON" || tag === "TEXTAREA") return;
+  if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+  if (e.key === " ") { e.preventDefault(); togglePause(); }
+  else if (e.key === "ArrowRight" && room.paused) { e.preventDefault(); send({ t: "step" }); }
+});
+
+function togglePause() {
+  send({ t: "pause", paused: !room.paused });
+}
+
+function setSpeed(speed) {
+  try { localStorage.setItem("rainbow.speed", speed); } catch { /* not remembered */ }
+  $("speed-select").value = speed;
+  if (me.code) send({ t: "speed", pace: PACES[speed] });
+}
+
 // Keyboard: 1-6 add a card of that rank to the selection, Enter plays it, Escape clears it.
 document.addEventListener("keydown", (e) => {
   if (!game || game.seat === null || $("table").classList.contains("hidden")) return;
@@ -1117,11 +1144,13 @@ async function main() {
     try { localStorage.setItem("rainbow.sound", soundOn ? "on" : "off"); } catch { /* not remembered */ }
     SOUNDS.turn();
   };
+  $("pause-btn").onclick = togglePause;
+  $("step-btn").onclick = () => send({ t: "step" });
+  $("watch-speed").onchange = () => setSpeed($("watch-speed").value);
   $("speed-select").value = computerSpeed();
   $("speed-select").onchange = () => {
     const speed = $("speed-select").value;
-    try { localStorage.setItem("rainbow.speed", speed); } catch { /* not remembered */ }
-    if (me.code) send({ t: "speed", pace: PACES[speed] });
+    setSpeed(speed);
   };
   $("motion-toggle").checked = document.documentElement.dataset.motion === "reduce";
   $("motion-toggle").onchange = () => {

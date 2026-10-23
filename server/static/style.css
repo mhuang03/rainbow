@@ -419,6 +419,9 @@ dialog.howto .ex-pile b { color: var(--accent-text); }
 .opp .wait { font-weight: 400; font-size: 12px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
 .opp .wait:empty { display: none; }
 .watching { margin: 0; color: var(--muted); text-align: center; }
+.watch-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
+.watch-controls #pause-btn { min-width: 6.5em; }
+.watch-controls label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 /* "Reduce motion" in Settings: no animations or transitions, whatever the system setting */
 :root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after {
   animation: none !important;

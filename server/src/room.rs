@@ -85,10 +85,19 @@ pub enum Command {
         conn: u64,
     },
     /// Scales the pauses before agents' moves and after tricks (above 1 slower, below 1
-    /// faster). Only in solo games, so nobody else's game changes pace.
+    /// faster). Only in solo games, so nobody else's game changes pace, and in watched ones.
     Speed {
         conn: u64,
         pace: f32,
+    },
+    /// Watched games only: holds the computer's moves until resumed.
+    Pause {
+        conn: u64,
+        paused: bool,
+    },
+    /// Watched games only, while paused: plays the next move.
+    Step {
+        conn: u64,
     },
     /// A chat message to everyone in the room.
     Chat {
@@ -150,6 +159,8 @@ pub struct Room {
     /// Every seat is the computer's and everyone watches: games start by themselves, and any
     /// watcher may start the next one.
     watch: bool,
+    /// A watched game held by a watcher (see [`Command::Pause`]).
+    paused: bool,
 }
 
 /// The cards of a combo, lowest first.
@@ -185,6 +196,7 @@ impl Room {
             empty_since: Some(Instant::now()),
             pace: 1.0,
             watch: false,
+            paused: false,
         };
         room.seats = seats
             .into_iter()
@@ -274,8 +286,28 @@ impl Room {
             Command::Play { conn, action } => self.human_move(conn, action),
             Command::Hint { conn } => self.hint(conn),
             Command::Speed { conn, pace } => {
-                if self.seat_of(conn).is_some() && self.hints_allowed() && pace.is_finite() {
+                let allowed = self.watch || self.seat_of(conn).is_some() && self.hints_allowed();
+                if allowed && pace.is_finite() {
                     self.pace = pace.clamp(*PACE_RANGE.start(), *PACE_RANGE.end());
+                }
+            }
+            Command::Pause { conn, paused } => {
+                if !self.watch {
+                    return self.reply(conn, "only watched games can be paused");
+                }
+                self.paused = paused;
+                if let Some(game) = &mut self.game {
+                    // resume after a short beat rather than with a move already overdue
+                    game.agent_at = game.agent_at.max(Instant::now() + paced(AGENT_DELAY));
+                }
+                self.broadcast();
+            }
+            Command::Step { conn } => {
+                if !self.watch || !self.paused {
+                    return self.reply(conn, "pause the game to step through it");
+                }
+                if self.game.as_ref().is_some_and(|g| !g.state.is_over()) {
+                    self.agent_move();
                 }
             }
             Command::Chat { conn, text } => self.chat(conn, &text),
@@ -409,6 +441,7 @@ impl Room {
     }
 
     fn start(&mut self) {
+        self.paused = false;
         let n = self.seats.len();
         let leader = self.rng.random_range(0..n);
         let state = GameState::new(n, leader, &mut self.rng);
@@ -438,7 +471,7 @@ impl Room {
 
     fn agent_due(&self) -> Option<Instant> {
         let game = self.game.as_ref()?;
-        if game.state.is_over() {
+        if game.state.is_over() || self.paused {
             return None;
         }
         let seat = game.state.current_player();
@@ -656,6 +689,7 @@ impl Room {
             "hints": self.hints_allowed(),
             "spectators": self.spectators.len(),
             "watch": self.watch,
+            "paused": self.paused,
         })
     }
 
@@ -868,6 +902,46 @@ mod tests {
             pace: 100.0,
         });
         assert_eq!(room.pace, 3.0, "clamped");
+    }
+
+    #[test]
+    fn watchers_pause_step_and_pace_a_watched_game() {
+        let presets = Arc::new(presets::available(std::path::Path::new("no-models")));
+        let seats = vec![Some("random".into()), Some("random".into())];
+        let mut room = Room::new("TST5".into(), seats, presets, Arc::default()).watching();
+        let (out, _inbox) = tokio::sync::mpsc::unbounded_channel();
+        room.handle(Command::Join {
+            name: "Viewer".into(),
+            token: None,
+            conn: Conn { id: 1, tx: out },
+        });
+        assert!(room.agent_due().is_some(), "watching starts the game");
+        room.handle(Command::Speed {
+            conn: 1,
+            pace: 0.35,
+        });
+        assert_eq!(room.pace, 0.35, "a watcher sets the pace");
+
+        let cards_left = |room: &Room| {
+            let state = &room.game.as_ref().unwrap().state;
+            (0..2).map(|i| state.hand(i).cards().count()).sum::<usize>()
+        };
+        let before = cards_left(&room);
+        room.handle(Command::Step { conn: 1 });
+        assert_eq!(cards_left(&room), before, "no stepping while it plays on");
+        room.handle(Command::Pause {
+            conn: 1,
+            paused: true,
+        });
+        assert!(room.agent_due().is_none(), "paused");
+        room.handle(Command::Step { conn: 1 });
+        assert!(cards_left(&room) < before, "a step plays one move");
+        assert!(room.agent_due().is_none(), "still paused after the step");
+        room.handle(Command::Pause {
+            conn: 1,
+            paused: false,
+        });
+        assert!(room.agent_due().is_some(), "resumed");
     }
 
     #[test]
