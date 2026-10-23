@@ -902,9 +902,11 @@ function renderChart() {
   });
   // end-of-game bonus points (2 players) aren't in the trick log
   series.forEach((pts, seat) => { pts[pts.length - 1] = Math.max(pts[pts.length - 1], game.players[seat].points); });
-  // the right margin fits the longest end label ("Economist 2 43"; about 6 units a character)
+  // drawn at the box's own width, so text keeps its size on a phone instead of shrinking;
+  // the right margin fits the longest end label ("Economist 2 43"; about 7px a character)
   const longest = Math.max(...series.map((p, seat) => `${who(seat)} ${p[p.length - 1]}`.length));
-  const W = 440, H = 190, L = 34, R = Math.max(60, 16 + 6 * longest), T = 10, B = 24;
+  const W = Math.round(box.clientWidth) || 440, H = Math.round(Math.min(200, Math.max(160, W * 0.45)));
+  const L = 30, R = Math.max(60, 26 + 7 * longest), T = 10, B = 24;
   const tricks = game.log.length;
   const maxY = Math.max(10, ...series.flat());
   const x = (i) => L + (i / Math.max(1, tricks)) * (W - L - R);
@@ -924,13 +926,15 @@ function renderChart() {
   chart.append(xl);
   // lines, with direct labels at the end (nudged apart so they don't collide)
   const ends = series.map((p, seat) => ({ seat, y: y(p[p.length - 1]), v: p[p.length - 1] })).sort((a, b) => a.y - b.y);
-  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 13);
+  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
   series.forEach((pts, seat) => {
     chart.append(svg("polyline", { points: pts.map((v, i) => `${x(i)},${y(v)}`).join(" "), class: "series", stroke: SERIES[seat] }));
   });
   ends.forEach(({ seat, y: ly, v }) => {
     chart.append(svg("circle", { cx: x(tricks), cy: y(v), r: 4, fill: SERIES[seat], class: "end" }));
-    const t = svg("text", { x: x(tricks) + 8, y: ly + 4, class: "end-label" });
+    // a swatch beside the label: nudged labels can sit away from their own line's end
+    chart.append(svg("rect", { x: x(tricks) + 8, y: ly - 4, width: 8, height: 8, rx: 2, fill: SERIES[seat] }));
+    const t = svg("text", { x: x(tricks) + 20, y: ly + 4, class: "end-label" });
     t.textContent = `${who(seat)} ${v}`;
     chart.append(t);
   });
@@ -955,16 +959,10 @@ function renderChart() {
     tip.style.left = `${Math.min(r.width - 150, (x(i) / W) * r.width + 12)}px`;
   });
   chart.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); tip.classList.add("hidden"); });
-  // legend, always present for two or more series
-  const legend = el("div", "legend");
-  series.forEach((_, seat) => {
-    const item = el("span", "legend-item");
-    const dot = el("span", "dot"); dot.style.background = SERIES[seat];
-    item.append(dot, document.createTextNode(who(seat)));
-    legend.append(item);
-  });
-  box.append(legend, chart, tip);
+  // each line is named at its end, so no separate legend
+  box.append(chart, tip);
 }
+addEventListener("resize", () => { if (game && game.over) renderChart(); });
 
 function renderTable() {
   const n = game.players.length;
