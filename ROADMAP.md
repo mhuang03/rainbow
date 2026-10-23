@@ -221,6 +221,14 @@ machine shared with search experiments it played only 115,000 games (a round usu
 500,000). Against round 9: 1.04 (2p) but 0.96 (4p, one seat against three), so the browser
 stays on round 9. League rounds need the cores to themselves.
 
+### League round 11 (not kept)
+
+The distilled network continued for 90 minutes against economist, counter, rounds 8-9 and
+itself, with the cores to itself for most of it (312,000 games). Against the distilled network:
+0.98 (4p, one seat against three) and 0.93 (2p). Monte Carlo training on single game returns
+seems to undo the smoothness the network got from distilling an ensemble; the next step is to
+fold round 11 into a new ensemble and distil again, rather than train the distilled network on.
+
 ## Milestone 14: Better playouts and search inputs
 
 - [x] `rollout=counter`: playouts with the `counter` strategy (plus `eps` random moves).
