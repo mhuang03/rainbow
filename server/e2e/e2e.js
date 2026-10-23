@@ -232,15 +232,22 @@ const tests = {
     for (const colorScheme of ["light", "dark"]) await axeScan(browser, colorScheme);
   },
 
-  async "watch the computer play from How to Play"(browser) {
+  async "watch a chosen table of computer players"(browser) {
     const p = await newPage(browser);
     await p.goto(BASE);
     await p.click("#howto-btn");
     await p.click("#watch-btn");
+    await p.waitForSelector("#watch-dialog[open]");
+    // a 3-player table of the viewer's choosing
+    await p.selectOption("#watch-players", "3");
+    assert.strictEqual(await p.locator("#watch-seats select").count(), 3);
+    await p.selectOption("#watch-seats label:nth-child(1) select", "random");
+    await p.click("#watch-start");
     await p.waitForSelector("#table:not(.hidden) #watching:not(.hidden)");
+    assert.strictEqual(await p.evaluate(() => room.seats[0].preset), "random");
     await p.waitForFunction(() => game && game.log.length >= 1, null, { timeout: 30000 });
     assert(await p.locator("#me.hidden").count(), "a watcher has no hand");
-    assert.strictEqual(await p.locator("#opponents .open-hand").count(), 4, "every computer hand is shown");
+    assert.strictEqual(await p.locator("#opponents .open-hand").count(), 3, "every computer hand is shown");
     await p.click("#leave-btn");
     await p.waitForSelector("#home:not(.hidden)");
     assert.deepStrictEqual(p.errors, []);

@@ -237,6 +237,34 @@ function presetOptions(select, withOpen, value) {
   if (value) select.value = value;
 }
 
+/** The Watch a Game dialog: the player count and an agent for every seat. */
+function openWatch() {
+  const select = $("watch-players");
+  if (!select.options.length) for (let n = 2; n <= 6; n++) select.append(new Option(`${n} players`, n));
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem("rainbow.watch")) || []; } catch { /* none */ }
+  select.value = String(saved.length >= 2 ? saved.length : 4);
+  watchSeats(+select.value, saved);
+  $("watch-dialog").showModal();
+  $("watch-title").focus();
+}
+
+/** One agent menu per seat; by default a varied table, from rule-based players to search. */
+function watchSeats(count, saved = []) {
+  const box = $("watch-seats");
+  const old = [...box.querySelectorAll("select")].map((x) => x.value);
+  const variety = ["economist", "counter", "dmc", "ismcts", "ppo", "guided"].filter((id) => presets.some((p) => p.id === id));
+  box.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const label = el("label", null, `Seat ${i + 1}`);
+    const select = el("select");
+    presetOptions(select, false, old[i] || saved[i] || variety[i % variety.length]);
+    if (!select.value && presets[0]) select.value = presets[0].id;
+    label.append(select);
+    box.append(label);
+  }
+}
+
 function seatPickers(container, count, fallback, saved) {
   const old = [...container.querySelectorAll("select")].map((s) => s.value);
   container.innerHTML = "";
@@ -1071,12 +1099,15 @@ async function main() {
     $("rating-help").hidden = !open;
     $("rating-info").setAttribute("aria-expanded", String(open));
   };
-  // a game played by the computer alone, to learn by watching
-  $("watch-btn").onclick = () => {
-    $("howto").close();
-    const ids = ["economist", "counter", "dmc", "ismcts"].filter((id) => presets.some((p) => p.id === id));
-    while (ids.length < 4) ids.push(presets[ids.length % presets.length].id);
-    send({ t: "create", name: playerName(), seats: ids, watch: true });
+  // a game played by the computer alone, at a table the viewer chooses
+  $("watch-btn").onclick = () => { $("howto").close(); openWatch(); };
+  $("watch-link").onclick = openWatch;
+  $("watch-players").onchange = () => watchSeats(+$("watch-players").value);
+  $("watch-start").onclick = () => {
+    const seats = [...$("watch-seats").querySelectorAll("select")].map((x) => x.value);
+    try { localStorage.setItem("rainbow.watch", JSON.stringify(seats)); } catch { /* not remembered */ }
+    $("watch-dialog").close();
+    send({ t: "create", name: playerName(), seats, watch: true });
   };
   $("hint-btn").onclick = askHint;
   $("first-tip-close").onclick = markTipSeen;

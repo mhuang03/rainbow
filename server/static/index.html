@@ -86,6 +86,7 @@
           <div id="solo-seats" class="seat-pickers"></div>
         </details>
         <button id="solo-start" class="primary">Start game</button>
+        <button id="watch-link" class="link watch-link" type="button">Watch computer players</button>
       </div>
       <div class="panel secondary">
         <h2>Play with friends</h2>
@@ -243,6 +244,25 @@
 
   <form method="dialog" class="actions"><button class="primary">Got it</button>
     <button id="watch-btn" type="button">Watch a game</button></form>
+</dialog>
+<dialog id="watch-dialog" class="howto watch-dialog" aria-labelledby="watch-title">
+  <div class="dialog-head">
+    <h2 id="watch-title" tabindex="-1">Watch a Game</h2>
+    <form method="dialog"><button class="ghost icon close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button></form>
+  </div>
+  <p>Choose who sits at the table; you watch with every hand open.</p>
+  <div class="watch-form">
+    <label>Players
+      <select id="watch-players"></select>
+    </label>
+    <div id="watch-seats" class="seat-pickers"></div>
+  </div>
+  <div class="actions">
+    <button id="watch-start" class="primary" type="button">Watch</button>
+    <form method="dialog"><button>Cancel</button></form>
+  </div>
 </dialog>
 <div id="toast" class="toast hidden" role="alert"></div>
 <div id="live" class="sr-only" aria-live="polite"></div>

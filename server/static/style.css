@@ -473,3 +473,10 @@ button.info {
 }
 button.info[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
 .rating-help { margin: -4px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); color: var(--text); font-size: 13px; }
+/* Watch a Game */
+.watch-link { align-self: center; font-size: 14px; }
+dialog.watch-dialog { max-width: 440px; }
+.watch-form { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 16px; }
+.watch-form label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); }
+.watch-form select { max-width: 66%; }
+.watch-dialog .actions form { margin: 0; }
