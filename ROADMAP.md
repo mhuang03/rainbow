@@ -350,6 +350,13 @@ from.
       beats `hybrid` on round 9 alone 1.10 (4p 2+2, 800 deals) but is level with the ensemble
       itself, 1.00: the ensemble already plays the endgame about as well. The browser drops its
       Hybrid preset, which the DMC ensemble outplays.
+- [x] Player-count specialists (`train_dmc.py --players`, `dmc:path2=`): every network so far
+      trained on a mix of 2-6 players, but the 2-player game differs (two plays a trick, a
+      reserve, running out twice ends it). The distilled network trained on 2-player games alone
+      for 90 minutes (1.5M games, against economist, counter, round 9 and itself) beats it at 2
+      players 1.05 (1000 deals, 2000 games; about 3 standard errors) - the first gain past the
+      distilled network. `dmc:path=<net>,path2=<2p net>` plays the specialist in 2-player games
+      (`models/dmc_spec2p_1.bin`); the browser's DMC opponents use it.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score

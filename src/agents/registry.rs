@@ -250,7 +250,8 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 /// - `dmc`, `dqn`, `ppo`, `nfsp`: `path`, a trained network file. `dmc` also takes several
 ///   `+`-separated paths and averages their predictions (an ensemble), and with one network
 ///   `temp` (sample moves from a softmax at this temperature) and `counter` (add this multiple
-///   of the `counter` agent's scores to break near-ties).
+///   of the `counter` agent's scores to break near-ties), and `path2` (a network played in
+///   2-player games instead, such as a 2-player specialist).
 /// - `hybrid`: `path` (a DMC network, or an `a+b` ensemble, played until the endgame) or `base`
 ///   (`counter`, `ismcts` or `pimc`), `cards` (cards left in all hands and reserves at which to
 ///   switch to exact search; default 8), `k` (deals solved per endgame move; default 8) and
@@ -392,25 +393,36 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
             let path: String = opts
                 .take("path")?
                 .ok_or_else(|| format!("{name} requires path=<network file>"))?;
-            let mut members = path
-                .split('+')
-                .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
-                .collect::<Result<Vec<_>, String>>()?;
-            if members.len() == 1 {
-                let mut agent = members.remove(0);
-                if let Some(w) = opts.take::<f32>("counter")? {
-                    agent = agent.counter_blend(w);
+            let temp = opts.take::<f32>("temp")?;
+            let counter = opts.take::<f32>("counter")?;
+            // one network, or an averaged ensemble of `+`-joined ones
+            let build = |path: &str, seed: u64| -> Result<Box<dyn Agent>, String> {
+                let mut members = path
+                    .split('+')
+                    .map(|p| DmcAgent::new(dmc::Mlp::load_cached(p)?))
+                    .collect::<Result<Vec<_>, String>>()?;
+                if members.len() == 1 {
+                    let mut agent = members.remove(0);
+                    if let Some(w) = counter {
+                        agent = agent.counter_blend(w);
+                    }
+                    Ok(match temp {
+                        Some(t) => Box::new(agent.sampling(t, seed)),
+                        None => Box::new(agent),
+                    })
+                } else {
+                    let ensemble = dmc::EnsembleAgent::new(members);
+                    Ok(match counter {
+                        Some(w) => Box::new(ensemble.counter_blend(w)),
+                        None => Box::new(ensemble),
+                    })
                 }
-                match opts.take::<f32>("temp")? {
-                    Some(t) => Box::new(agent.sampling(t, seed)),
-                    None => Box::new(agent),
-                }
-            } else {
-                let ensemble = dmc::EnsembleAgent::new(members);
-                match opts.take::<f32>("counter")? {
-                    Some(w) => Box::new(ensemble.counter_blend(w)),
-                    None => Box::new(ensemble),
-                }
+            };
+            let general = build(&path, seed)?;
+            match opts.take::<String>("path2")? {
+                // a specialist network for 2-player games
+                Some(two) => Box::new(dmc::ByPlayerCount::new(build(&two, seed ^ 2)?, general)),
+                None => general,
             }
         }
         "hybrid" => {

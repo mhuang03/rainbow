@@ -29,6 +29,8 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let league = m("dmc_league9.bin");
     // the league ensemble (rounds 8-10) distilled into one network; it plays like the ensemble
     let distilled = m("dmc_distilled1.bin");
+    // played instead in 2-player games: trained on them alone, it beats the distilled one 1.05
+    let two = m("dmc_spec2p_1.bin");
     let belief = m("belief_v3.bin");
     // Grouped by difficulty and ordered by strength (the 4-player ladder in ROADMAP.md).
     let list = [
@@ -51,7 +53,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "DMC, playful",
             "Beginner",
             "The neural network with its moves loosened: often sensible, sometimes not.",
-            format!("dmc:path={distilled},temp=0.1"),
+            format!("dmc:path={distilled},path2={two},temp=0.1"),
         ),
         (
             "economist",
@@ -72,14 +74,14 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "DMC, relaxed",
             "Casual",
             "The neural network playing a little loosely.",
-            format!("dmc:path={distilled},temp=0.04"),
+            format!("dmc:path={distilled},path2={two},temp=0.04"),
         ),
         (
             "dmc",
             "DMC",
             "Strong",
             "Neural network trained by self-play and league play, with card counting to break near-ties. Fast.",
-            format!("dmc:path={distilled},counter=0.04"),
+            format!("dmc:path={distilled},path2={two},counter=0.04"),
         ),
         (
             "ismcts",

@@ -391,6 +391,33 @@ pub struct EnsembleAgent {
     counter_blend: Option<f32>,
 }
 
+/// Plays one agent in 2-player games and another in games of 3 or more: the 2-player game,
+/// where each player plays twice a trick and holds a reserve, rewards a specialist.
+pub struct ByPlayerCount {
+    two: Box<dyn Agent>,
+    rest: Box<dyn Agent>,
+}
+
+impl ByPlayerCount {
+    pub fn new(two: Box<dyn Agent>, rest: Box<dyn Agent>) -> Self {
+        Self { two, rest }
+    }
+}
+
+impl Agent for ByPlayerCount {
+    fn name(&self) -> &str {
+        "dmc"
+    }
+
+    fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {
+        if obs.num_players() == 2 {
+            self.two.act(obs, legal)
+        } else {
+            self.rest.act(obs, legal)
+        }
+    }
+}
+
 /// Adds `weight` times the `counter` agent's score of each legal combo to `values`, in games of
 /// 3 to 5 players. Against DMC alone (round 9, weight 0.04): 1.10 (3p), 1.07 (4p), 1.04 (5p);
 /// but 0.93 with six players, and with two, where each plays twice a trick, 0.88 at 0.03.
@@ -464,6 +491,23 @@ impl Agent for EnsembleAgent {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn by_player_count_routes_two_player_games_to_the_specialist() {
+        use crate::agents::baseline::{BiggestAgent, LowestAgent};
+        use rand::SeedableRng;
+        let mut by = ByPlayerCount::new(Box::new(BiggestAgent), Box::new(LowestAgent));
+        for (n, expect_biggest) in [(2, true), (3, false), (5, false)] {
+            let state = crate::GameState::new(n, 0, &mut SmallRng::seed_from_u64(n as u64));
+            let (obs, legal) = (state.observe(0), state.legal_actions());
+            let expected = if expect_biggest {
+                BiggestAgent.act(&obs, &legal)
+            } else {
+                LowestAgent.act(&obs, &legal)
+            };
+            assert_eq!(by.act(&obs, &legal), expected, "{n} players");
+        }
+    }
     use super::*;
     use crate::GameState;
     use rand::SeedableRng;
