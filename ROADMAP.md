@@ -362,7 +362,9 @@ from.
       for 90 minutes (1.5M games, against economist, counter, round 9 and itself) beats it at 2
       players 1.05 (1000 deals, 2000 games; about 3 standard errors) - the first gain past the
       distilled network. `dmc:path=<net>,path2=<2p net>` plays the specialist in 2-player games
-      (`models/dmc_spec2p_1.bin`); the browser's DMC opponents use it.
+      (`models/dmc_spec2p_1.bin`); the browser's DMC opponents use it. Rechecked in a mixed
+      2-player field (200 random pairings from 11 agents, 30 deals each): 1.44 +/- 0.08 with the
+      specialist against 1.35 +/- 0.08 without, the same direction as the head-to-head.
 - [x] A 4-player specialist the same way (`--players 4`, 90 minutes from the distilled
       network, lr 1e-4, two learner seats against economist, counter, round 9 and the distilled
       network; 800k games): 2.19 against three Economists. Judged in a mixed 4-player field
