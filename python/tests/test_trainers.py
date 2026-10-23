@@ -25,6 +25,7 @@ def run(script: str, *args: str) -> None:
         ("train_dmc.py", "dmc", ["--hidden", "16", "8", "--aux-weight", "1"]),
         ("train_dmc.py", "dmc", ["--hidden", "16", "--opponents", "cheapest"]),
         ("train_dmc.py", "dmc", ["--hidden", "16", "--opponents", "cheapest", "random", "--pfsp", "2"]),
+        ("train_dmc.py", "dmc", ["--hidden", "16", "--players", "2"]),
         ("train_dmc.py", "dmc_hist", ["--hidden", "16", "--history"]),
         ("train_dqn.py", "dqn", ["--hidden", "16", "--batch", "32"]),
         ("train_ppo.py", "ppo", ["--hidden", "16", "--rollout", "256", "--minibatch", "128"]),

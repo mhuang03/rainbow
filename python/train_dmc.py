@@ -100,11 +100,11 @@ class Actors:
     """A batch of concurrent self-play games."""
 
     def __init__(self, count: int, rng: np.random.Generator, opponents: list[str] | None = None, learners: int = 1,
-                 history: bool = False, pfsp: float | None = None):
+                 history: bool = False, pfsp: float | None = None, players: int | None = None):
         self.rng = rng
         self.with_history = history
         self.env = re.VecEnv(count, seed=int(rng.integers(1 << 62)), opponents=opponents, learners=learners,
-                             pfsp=pfsp)
+                             pfsp=pfsp, players=players)
         # per game: (seat, input row, hidden cards) for every decision so far
         self.history: list[list[tuple[int, np.ndarray, np.ndarray]]] = [[] for _ in range(count)]
         self.episodes = 0
@@ -168,6 +168,8 @@ def main() -> None:
     parser.add_argument("--opponents", nargs="+", default=None,
                         help="Rust agent specs for non-learner seats (default: pure self-play)")
     parser.add_argument("--learners", type=int, default=1, help="learner seats per game with --opponents")
+    parser.add_argument("--players", type=int, default=None,
+                        help="train on games of this many players only (default: 2 to 6 at random)")
     parser.add_argument("--pfsp", type=float, default=None,
                         help="with --opponents: draw opponents with weight (1 - win rate)^P, favouring the "
                              "ones the learner beats least (default: uniformly)")
@@ -191,7 +193,7 @@ def main() -> None:
         parser.error("--init network's inputs don't match --history")
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     buffer = Buffer(args.buffer, obs_size)
-    actors = Actors(args.actors, rng, args.opponents, args.learners, args.history, args.pfsp)
+    actors = Actors(args.actors, rng, args.opponents, args.learners, args.history, args.pfsp, args.players)
 
     start = time.monotonic()
     deadline = start + args.minutes * 60
@@ -219,11 +221,12 @@ def main() -> None:
             next_eval += args.eval_every * 60
             export(net.to_sequential(), args.out)
             elapsed = (time.monotonic() - start) / 60
-            rel = arena_relative(f"dmc:path={args.out}", ["economist"] * 3, args.eval_deals, args.arena)
+            others = (args.players or 4) - 1
+            rel = arena_relative(f"dmc:path={args.out}", ["economist"] * others, args.eval_deals, args.arena)
             loss = np.mean(losses[-200:]) if losses else float("nan")
             print(
                 f"{elapsed:6.1f} min  episodes {actors.episodes:>8}  decisions {decisions:>9}  "
-                f"updates {updates:>7}  loss {loss:.4f}  eps {epsilon:.3f}  vs 3x economist {rel}",
+                f"updates {updates:>7}  loss {loss:.4f}  eps {epsilon:.3f}  vs {others}x economist {rel}",
                 flush=True,
             )
             if args.opponents:
