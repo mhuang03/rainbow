@@ -230,7 +230,7 @@ function presetOptions(select, withOpen, value) {
       groups.set(p.level, g);
       select.append(g);
     }
-    const o = new Option(p.label, p.id);
+    const o = new Option(`${p.label} (${p.rating.toFixed(2)})`, p.id);
     o.title = p.description;
     groups.get(p.level).append(o);
   });
@@ -295,7 +295,7 @@ function renderRecord() {
   const text = recordText(id);
   const box = $("solo-record");
   box.innerHTML = "";
-  if (p) box.append(el("span", null, `${p.level}. ${p.description}`));
+  if (p) box.append(el("span", null, `${p.level} · rating ${p.rating.toFixed(2)}. ${p.description}`));
   if (text) box.append(el("span", null, `${text}.`));
   box.classList.toggle("hidden", !box.childElementCount);
 }
@@ -1066,6 +1066,11 @@ async function main() {
     $("howto-title").focus();
   };
   $("howto-btn").onclick = howto;
+  $("rating-info").onclick = () => {
+    const open = $("rating-help").hidden;
+    $("rating-help").hidden = !open;
+    $("rating-info").setAttribute("aria-expanded", String(open));
+  };
   // a game played by the computer alone, to learn by watching
   $("watch-btn").onclick = () => {
     $("howto").close();

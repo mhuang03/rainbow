@@ -71,9 +71,15 @@
         <label>Players
           <select id="solo-players"></select>
         </label>
-        <label>Opponents
+        <div class="opp-row">
+          <label for="solo-opponent">Opponents</label>
+          <button type="button" id="rating-info" class="info" aria-expanded="false" aria-controls="rating-help" aria-label="How ratings work">?</button>
           <select id="solo-opponent"></select>
-        </label>
+        </div>
+        <p id="rating-help" class="rating-help" hidden>The number after each computer player is its
+          rating: how its share of the wins compares with an even share, measured over thousands of
+          four-player games against a mix of the others. 1.00 holds its own, 2.00 wins twice its
+          share, 0.50 half of it. Each group (Beginner to Expert) covers a range of ratings.</p>
         <p id="solo-record" class="record hidden"></p>
         <details id="solo-custom" class="custom">
           <summary>Choose each seat</summary>
