@@ -669,7 +669,7 @@ function renderOpponents(spectator, base, n) {
     const box = el("div", "opp" + (turn ? " turn" : ""));
     const head = el("div", "who");
     head.append(
-      el("span", turn && s.kind === "agent" ? "thinking" : "", seatName(seat)),
+      el("span", turn && s.kind === "agent" && !room.paused ? "thinking" : "", seatName(seat)),
       el("span", "kind offline", s.connected === false ? "away" : ""),
     );
     const meta = el("div", "meta");
@@ -973,7 +973,8 @@ function renderTable() {
   renderOpponents(spectator, base, n);
   renderMiddle();
   $("me").classList.toggle("hidden", spectator);
-  $("watching").classList.toggle("hidden", !spectator);
+  // a watched game's playback controls say it all
+  $("watching").classList.toggle("hidden", !spectator || room.watch);
   $("watching").textContent = room.watch
     ? "You're watching the computer play."
     : "You're watching this game; it's full.";

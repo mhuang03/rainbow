@@ -244,7 +244,7 @@ const tests = {
     await p.selectOption("#watch-seats label:nth-child(1) select", "random");
     await p.evaluate(() => localStorage.setItem("rainbow.speed", "slow"));
     await p.click("#watch-start");
-    await p.waitForSelector("#table:not(.hidden) #watching:not(.hidden)");
+    await p.waitForSelector("#table:not(.hidden) #watch-controls:not(.hidden)");
     assert.strictEqual(await p.evaluate(() => room.seats[0].preset), "random");
     await p.waitForSelector("#watch-controls:not(.hidden)");
     assert(await p.locator("#me.hidden").count(), "a watcher has no hand");
@@ -252,6 +252,7 @@ const tests = {
     // pause, step one move, resume
     await p.click("#pause-btn");
     await p.waitForFunction(() => room.paused && $("pause-btn").textContent === "Resume");
+    assert.strictEqual(await p.locator(".thinking").count(), 0, "nobody is thinking while paused");
     const cardsLeft = () => game.players.reduce((n, x) => n + x.hand.length, 0);
     const before = await p.evaluate(cardsLeft);
     await p.waitForTimeout(300);
