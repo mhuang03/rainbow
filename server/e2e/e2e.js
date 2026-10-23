@@ -302,7 +302,7 @@ const tests = {
       console.log(`ok   ${name}${note ? ` (${note})` : ""}`);
     } catch (e) {
       failed++;
-      console.log(`FAIL ${name}\n     ${String(e.message).split("\n")[0]}`);
+      console.log(`FAIL ${name}\n     ${String(e.message).split("\n").slice(0, 12).join("\n     ")}`);
     }
   }
   await browser.close();

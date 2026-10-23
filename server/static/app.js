@@ -658,6 +658,8 @@ setInterval(() => {
   });
 }, 1000);
 
+const pts = (n) => `${n} ${n === 1 ? "pt" : "pts"}`;
+
 function renderOpponents(spectator, base, n) {
   if (turnStart.seat !== game.current) turnStart = { seat: game.current, at: Date.now() };
   const opps = $("opponents");
@@ -680,19 +682,32 @@ function renderOpponents(spectator, base, n) {
     count.append(back, document.createTextNode(
       `${p.hand_size}${p.reserve_size ? ` + ${p.reserve_size}` : ""}`));
     count.setAttribute("aria-label", `${p.hand_size} cards${p.reserve_size ? `, ${p.reserve_size} in reserve` : ""}`);
-    meta.append(count, el("span", "points" + (justScored(seat) ? " bump" : ""), `${p.points} pts`));
-    // a watched game shows every hand, to learn from
+    meta.append(count, el("span", "points" + (justScored(seat) ? " bump" : ""), pts(p.points)));
+    // a watched game shows every hand, to learn from: a card per rank with its count, so a
+    // full hand takes one short line
     let shown = null;
     if (p.hand) {
       shown = el("div", "open-hand");
+      shown.setAttribute("role", "img");
       shown.setAttribute("aria-label", `Hand: ${p.hand.join(" ") || "empty"}`);
-      for (const r of p.hand) shown.append(el("span", `card tiny r${r}`, String(r)));
+      const counts = new Map();
+      for (const r of p.hand) counts.set(r, (counts.get(r) || 0) + 1);
+      for (const [r, c] of counts) {
+        const group = el("span", "open-group");
+        group.append(el("span", `card tiny r${r}`, String(r)));
+        if (c > 1) group.append(el("span", null, `×${c}`));
+        shown.append(group);
+      }
+      if (p.reserve_size) shown.append(el("span", "open-group", `+ ${p.reserve_size} in reserve`));
     }
     const wait = el("span", "wait", waitText(seat));
     wait.dataset.waitSeat = seat;
     head.append(wait);
-    box.append(head, meta);
-    if (shown) box.append(shown);
+    // with the hand open, its card count says nothing new: the points join the name instead
+    if (shown) {
+      head.append(meta.lastChild);
+      box.append(head, shown);
+    } else box.append(head, meta);
     if (me.host && s.kind === "human" && !s.connected && !game.over) {
       const select = el("select");
       select.setAttribute("aria-label", `Give ${seatName(seat)}'s seat to the computer`);
@@ -781,7 +796,7 @@ function renderHandNow() {
   const myTurn = game.current === game.seat;
   $("me").classList.toggle("turn", myTurn);
   $("me-name").textContent = seatName(game.seat);
-  $("me-points").textContent = `${mine.points} pts`;
+  $("me-points").textContent = pts(mine.points);
   $("me-points").classList.toggle("bump", justScored(game.seat));
   $("me-reserve").textContent = mine.reserve_size ? `${mine.reserve_size} cards in reserve` : "";
   $("turn-hint").textContent = game.over ? "" : myTurn ? "Your turn" : `Waiting for ${seatName(game.current)}…`;
