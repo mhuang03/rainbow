@@ -371,6 +371,10 @@ from.
       (150 random lineups from 12 agents, 30 deals each), the DMC preset with it (`path4=`)
       rates 1.55 +/- 0.05 and without it 1.43 +/- 0.05; the guided search tops the field at 1.88.
       Adopted as `models/dmc_spec4p_1.bin` in the browser's DMC presets.
+- [x] A 3-player specialist likewise (`--players 3`, one learner seat, 775k games): 2.33
+      against two Economists. In a mixed 3-player field (150 lineups from 12 agents) the DMC
+      preset with it (`path3=`) rates 1.63 +/- 0.07, without it 1.50 +/- 0.07; the guided search
+      1.78. Adopted as `models/dmc_spec3p_1.bin`.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
