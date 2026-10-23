@@ -407,7 +407,7 @@ impl ByPlayerCount {
 
 impl Agent for ByPlayerCount {
     fn name(&self) -> &str {
-        "dmc"
+        self.rest.name()
     }
 
     fn act(&mut self, obs: &Observation, legal: &[Combo]) -> Combo {

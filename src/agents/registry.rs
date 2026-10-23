@@ -25,6 +25,7 @@ pub const AGENT_NAMES: &[&str] = &[
     "ppo",
     "nfsp",
     "distill",
+    "bycount",
 ];
 
 /// Options of a [`create`] spec, as `key=value` pairs.
@@ -258,6 +259,9 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///   `belief` (a belief network weighting the endgame's deals).
 /// - `dqn`, `ppo` and `nfsp` also take `sample` (`true` to sample from the softmax of the
 ///   outputs; the default for `nfsp`).
+/// - `bycount`: a different agent for each player count, as `|`-separated `<count>=<spec>`
+///   routes and a `rest=<spec>` for the other counts, e.g.
+///   `bycount:2=dmc:path=a.bin|rest=ismcts:n=200`.
 ///
 /// Rollout options are `rollout` (`random`, `cheapest` or `counter`), `eps` (random-move rate of the
 /// cheapest and counter rollouts) and `margin` (score-margin reward weight).
@@ -268,18 +272,11 @@ fn parse_ismcts(opts: &mut Options) -> Result<ismcts::Params, String> {
 ///
 /// # Errors
 /// If the name or an option is unknown or invalid.
-/// The `belief=<network file>` option, if given.
-fn belief_option(opts: &mut Options) -> Result<Option<std::sync::Arc<belief::Belief>>, String> {
-    opts.take::<String>("belief")?
-        .map(|path| {
-            Ok(std::sync::Arc::new(belief::Belief::new(
-                dmc::Mlp::load_cached(&path)?,
-            )?))
-        })
-        .transpose()
-}
-
 pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
+    // its routes hold whole specs, commas and all, so it's parsed before the options
+    if let Some(routes) = spec.strip_prefix("bycount:") {
+        return by_count(routes, seed);
+    }
     let (name, options) = spec.split_once(':').unwrap_or((spec, ""));
     let mut opts = Options::parse(options)?;
     let agent: Box<dyn Agent> = match name {
@@ -480,6 +477,40 @@ pub fn create(spec: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
     Ok(agent)
 }
 
+/// The `belief=<network file>` option, if given.
+fn belief_option(opts: &mut Options) -> Result<Option<std::sync::Arc<belief::Belief>>, String> {
+    opts.take::<String>("belief")?
+        .map(|path| {
+            Ok(std::sync::Arc::new(belief::Belief::new(
+                dmc::Mlp::load_cached(&path)?,
+            )?))
+        })
+        .transpose()
+}
+
+/// A `bycount` spec's routes: `<count>=<spec>|...|rest=<spec>`.
+fn by_count(routes: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
+    let mut specialists = Vec::new();
+    let mut rest = None;
+    for route in routes.split('|') {
+        let (key, spec) = route
+            .split_once('=')
+            .ok_or_else(|| format!("bycount route {route:?} isn't <count>=<spec>"))?;
+        if key == "rest" {
+            rest = Some(create(spec, seed)?);
+            continue;
+        }
+        let count: usize = key
+            .parse()
+            .ok()
+            .filter(|n| (crate::constants::MIN_PLAYERS..=crate::constants::MAX_PLAYERS).contains(n))
+            .ok_or_else(|| format!("bycount route {key:?} isn't a player count"))?;
+        specialists.push((count, create(spec, seed ^ count as u64)?));
+    }
+    let rest = rest.ok_or("bycount needs a rest=<spec> route")?;
+    Ok(Box::new(dmc::ByPlayerCount::new(specialists, rest)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,7 +518,10 @@ mod tests {
     #[test]
     fn every_registered_name_builds() {
         for &name in AGENT_NAMES.iter().filter(|&&n| {
-            !["dmc", "dmc_hist", "hybrid", "dqn", "ppo", "nfsp", "distill"].contains(&n)
+            ![
+                "dmc", "dmc_hist", "hybrid", "dqn", "ppo", "nfsp", "distill", "bycount",
+            ]
+            .contains(&n)
         }) {
             let agent = create(name, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(agent.name(), name);
@@ -501,5 +535,33 @@ mod tests {
         assert!(create("ismcts:n=10,infer=cheapest,icands=20,iwindow=6", 0).is_ok());
         assert!(create("ismcts:infer=/nonexistent", 0).is_err());
         assert!(create("dmc:path=/nonexistent", 0).is_err());
+    }
+
+    #[test]
+    fn bycount_routes_games_by_their_player_count() {
+        let mut agent = create("bycount:2=biggest|rest=lowest", 0).unwrap();
+        assert_eq!(agent.name(), "lowest");
+        for players in [2, 4] {
+            let state = crate::game::GameState::new(players, 0, &mut rand::rng());
+            let legal = state.legal_actions();
+            let expected = if players == 2 {
+                BiggestAgent.act(&state.observe(0), &legal)
+            } else {
+                LowestAgent.act(&state.observe(0), &legal)
+            };
+            assert_eq!(
+                agent.act(&state.observe(0), &legal),
+                expected,
+                "{players} players"
+            );
+        }
+        // routes hold whole specs, options and all
+        assert!(create("bycount:3=pimc:k=4,rollout=random|rest=ismcts:n=10", 0).is_ok());
+        assert!(create("bycount:2=biggest", 0).is_err(), "no rest route");
+        assert!(
+            create("bycount:9=biggest|rest=lowest", 0).is_err(),
+            "no such player count"
+        );
+        assert!(create("bycount:biggest", 0).is_err());
     }
 }
