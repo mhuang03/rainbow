@@ -375,6 +375,12 @@ from.
       against two Economists. In a mixed 3-player field (150 lineups from 12 agents) the DMC
       preset with it (`path3=`) rates 1.63 +/- 0.07, without it 1.50 +/- 0.07; the guided search
       1.78. Adopted as `models/dmc_spec3p_1.bin`.
+- [ ] 5- and 6-player specialists the same way (90 minutes each, two learner seats): 2.17
+      against four Economists and 2.1 against five, but no gain in mixed fields (100 lineups
+      from 11 agents, 30 deals): at 5 players 1.46 +/- 0.04 with `path5=` against 1.49 without,
+      at 6 players 1.40 against 1.40. Not adopted: with five or more players the network trained
+      on every count already plays as well. In both fields network-free ISMCTS rates highest
+      (1.52 at 5p, 1.60 at 6p), ahead of every DMC network.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
