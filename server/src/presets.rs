@@ -45,6 +45,8 @@ pub fn available(models: &Path) -> Vec<Preset> {
     let distilled = m("dmc_distilled1.bin");
     // played instead in 2-player games: trained on them alone, it beats the distilled one 1.05
     let two = m("dmc_spec2p_1.bin");
+    // and in 4-player games: rates 1.55 to the distilled one's 1.43 in a mixed 4-player field
+    let four = m("dmc_spec4p_1.bin");
     let belief = m("belief_v3.bin");
     let ensemble = format!("{}+{}+{league}", m("dmc_league7.bin"), m("dmc_league8.bin"));
     let list = [
@@ -80,7 +82,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "dmc-playful",
             "DMC, playful",
             "The neural network with its moves loosened: often sensible, sometimes not.",
-            format!("dmc:path={distilled},path2={two},temp=0.1"),
+            format!("dmc:path={distilled},path2={two},path4={four},temp=0.1"),
             0.45,
         ),
         (
@@ -129,7 +131,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "dmc-relaxed",
             "DMC, relaxed",
             "The neural network playing a little loosely.",
-            format!("dmc:path={distilled},path2={two},temp=0.04"),
+            format!("dmc:path={distilled},path2={two},path4={four},temp=0.04"),
             1.01,
         ),
         (
@@ -164,7 +166,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "dmc",
             "DMC",
             "Neural network trained by self-play and league play, with card counting to break near-ties. Fast.",
-            format!("dmc:path={distilled},path2={two},counter=0.04"),
+            format!("dmc:path={distilled},path2={two},path4={four},counter=0.04"),
             1.76,
         ),
         (
