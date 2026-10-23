@@ -443,7 +443,24 @@ from.
 
 ## Results
 
-### Current ladder (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
+### Current ladder: the browser's opponents (4p, 40 random lineups of 4 from 9, 40 duplicate deals each)
+
+| Difficulty | Opponent (spec) | Relative | +/- |
+|---|---|---|---|
+| Expert | Guided ISMCTS (`ismcts:n=200,prior=dmc_league9,leaf=dmc_league9,belief=belief_v3`) | **2.08** | 0.12 |
+| Strong | ISMCTS (`ismcts`, counter rollouts and prior) | 1.81 | 0.14 |
+| Strong | DMC (`dmc:path=dmc_distilled1,counter=0.04`) | 1.76 | 0.11 |
+| Casual | DMC, relaxed (`temp=0.04`) | 1.01 | 0.08 |
+| Casual | Counter | 0.84 | 0.09 |
+| Casual | Economist | 0.78 | 0.11 |
+| Beginner | DMC, playful (`temp=0.1`) | 0.45 | 0.07 |
+| Beginner | Cheapest | 0.31 | 0.03 |
+| Beginner | Random | 0.03 | 0.01 |
+
+Every difficulty group sits above the one before it, so the browser's groups and their order
+hold.
+
+### Previous ladder (4p, 40 random lineups of 4 from 10 agents, 40 duplicate deals each)
 
 | Agent | Relative | +/- |
 |---|---|---|
