@@ -699,6 +699,7 @@ function renderOpponents(spectator, base, n) {
         shown.append(group);
       }
       if (p.reserve_size) shown.append(el("span", "open-group", `+ ${p.reserve_size} in reserve`));
+      if (!p.hand.length && !p.reserve_size) shown.append(el("span", "open-group", "No cards left"));
     }
     const wait = el("span", "wait", waitText(seat));
     wait.dataset.waitSeat = seat;
@@ -871,18 +872,23 @@ function renderSide() {
     number.setAttribute("aria-label", `Trick ${game.log.length - k}`);
     li.append(number);
     const plays = el("div", "log-plays");
+    // as on the table, the play that took the most won the trick: its name stands out
+    const top = Math.max(...t.taken);
     t.plays.forEach((pl, i) => {
-      const line = el("div", "log-line");
-      line.append(el("span", "log-who", who(pl.seat)), cardRow(pl.cards, true));
       const lastOfSeat = !t.plays.slice(i + 1).some((q) => q.seat === pl.seat);
+      const won = lastOfSeat && t.taken[pl.seat] === top;
+      const line = el("div", "log-line" + (won ? " won" : ""));
+      const name = el("span", "log-who", who(pl.seat));
+      if (won) name.append(el("span", "sr-only", " won"));
+      line.append(name, cardRow(pl.cards, true));
       if (lastOfSeat) line.append(el("span", "gain", `+${t.taken[pl.seat]}`));
       plays.append(line);
     });
     li.append(plays);
     log.append(li);
   });
-  // one name column for the whole log, as wide as the longest name
-  log.style.setProperty("--who", `${Math.max(...game.players.map((_, seat) => who(seat).length))}ch`);
+  // one name column for the whole log, as wide as the longest name (in bold)
+  log.style.setProperty("--who", `${Math.max(...game.players.map((_, seat) => who(seat).length)) + 1}ch`);
   $("log-box").classList.toggle("hidden", !game.log.length);
 }
 
