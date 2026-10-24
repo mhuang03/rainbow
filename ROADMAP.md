@@ -403,6 +403,9 @@ from.
       0.06 against 1.53 +/- 0.04 on the distilled network at 4 players, 1.68 +/- 0.08 against
       1.64 +/- 0.06 at 3 (100 lineups from 9 agents each). Small, but the same direction as
       DMC's gain from them; the browser's Hybrid uses them.
+- [ ] Guided ISMCTS with twice the search (`n=400`, steered by the 4-player specialist): level
+      with `n=200`, 1.80 +/- 0.06 against 1.80 +/- 0.06 (4p, 100 lineups from 8 agents). The
+      network-steered search has saturated at this budget; the browser keeps the faster 200.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
