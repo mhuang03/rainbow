@@ -202,16 +202,20 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "Tree search steered by DMC networks trained for the table size. The strongest; thinks for a moment.",
             // steered by the player-count specialist where one guides the search better (3, 4 and
             // 5 players: 1.79 to 1.68, 1.92 to 1.75 and 1.65 to 1.50 over the distilled network;
-            // level at 2 and 6), else by the distilled network (ahead of league 9 at 6 players)
+            // level at 2 and 6), else by the distilled network (ahead of league 9 at 6 players).
+            // At 3 and 4 players its leaves average the specialist with the distilled network:
+            // 1.86 to 1.71 and 1.86 to 1.78 over the specialist alone, for about twice the
+            // thinking time (still well under a second a move).
             {
-                let guided =
-                    |net: &str| format!("ismcts:n=200,prior={net},leaf={net},belief={belief}");
+                let guided = |prior: &str, leaf: &str| {
+                    format!("ismcts:n=200,prior={prior},leaf={leaf},belief={belief}")
+                };
                 format!(
                     "bycount:3={}|4={}|5={}|rest={}",
-                    guided(&three),
-                    guided(&four),
-                    guided(&five),
-                    guided(&distilled)
+                    guided(&three, &format!("{three}+{distilled}")),
+                    guided(&four, &format!("{four}+{distilled}")),
+                    guided(&five, &five),
+                    guided(&distilled, &distilled)
                 )
             },
             2.19,
