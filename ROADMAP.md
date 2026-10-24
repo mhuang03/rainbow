@@ -416,6 +416,9 @@ from.
       search is steered by the distilled network, averaging its leaf with that count's specialist
       is level (60 lineups each): 1.89 +/- 0.04 against 1.91 +/- 0.04 at 2, 1.46 against 1.46
       at 6.
+- [ ] Guided ISMCTS prior temperature with the current setup (4p, specialist prior, ensemble
+      leaf; 90 lineups from 9 agents): `ptemp` 0.05 / 0.1 (the default) / 0.2 score 1.60 / 1.64 /
+      1.53 (+/- 0.04-0.07). The default stays.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
