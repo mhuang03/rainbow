@@ -406,6 +406,10 @@ from.
 - [ ] Guided ISMCTS with twice the search (`n=400`, steered by the 4-player specialist): level
       with `n=200`, 1.80 +/- 0.06 against 1.80 +/- 0.06 (4p, 100 lineups from 8 agents). The
       network-steered search has saturated at this budget; the browser keeps the faster 200.
+- [ ] Guided ISMCTS with an ensemble leaf (`leaf=dmc_spec4p_1.bin+dmc_distilled1.bin`, prior from
+      the specialist alone): 1.86 +/- 0.07 against 1.78 +/- 0.07 with the specialist's leaf (4p,
+      100 lineups). Under one standard error, at about twice the leaf cost; being rechecked at 3
+      players before the browser adopts it.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
