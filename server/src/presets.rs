@@ -168,7 +168,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
         (
             "dmc",
             "DMC",
-            "Neural network trained by self-play and league play, with card counting to break near-ties. Fast.",
+            "Neural network trained by self-play and league play, with versions for 2, 3 and 4 players and card counting to break near-ties. Fast.",
             format!("dmc:path={distilled},path2={two},path3={three},path4={four},counter=0.04"),
             1.81,
         ),
@@ -196,7 +196,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
         (
             "guided",
             "Guided ISMCTS",
-            "Tree search guided by the DMC network. The strongest; thinks for a moment.",
+            "Tree search steered by DMC networks trained for the table size. The strongest; thinks for a moment.",
             // steered by the player-count specialist where one guides the search better (3, 4 and
             // 5 players: 1.79 to 1.68, 1.92 to 1.75 and 1.65 to 1.50 over the distilled network;
             // level at 2 and 6), else by the distilled network (ahead of league 9 at 6 players)

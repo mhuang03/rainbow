@@ -55,9 +55,9 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `margin` | The Economist scoring piles by their *difference* from what the other players take (`economist:objective=margin`). `economist:adaptive=N` also learns each opponent's willingness to contest tricks from the play history. |
 | `counter` | Card counter: samples deals of the unseen cards to judge which later opponents can beat each combo, and scores each combo by the pile it expects to finish on. The strongest hand-written agent; its fast variant drives search rollouts and priors. |
 | `pimc` | Samples deals consistent with what it knows (optionally weighted by a belief network) and finishes every move on each with `counter` rollouts, or values it with a network (`leaf=`). |
-| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from a league network (`models/dmc_league9.bin`) and `belief=models/belief_v3.bin` it is the strongest agent. Without a network it uses `counter` rollouts and a `counter` move prior, which bring it close to the league networks. |
+| `ismcts` | Information-set MCTS with max-n backups. Options add network move priors (`prior=`), network leaf values (`leaf=`), belief-weighted deals (`belief=`) and opponent inference (`infer=`). With `prior` and `leaf` from a DMC network and `belief=models/belief_v3.bin` it is the strongest agent ("Guided ISMCTS"); it plays best steered by the player-count specialist at 3, 4 and 5 players (`models/dmc_spec3p_1.bin` to `dmc_spec5p_1.bin`) and by the distilled network otherwise. Without a network it uses `counter` rollouts and a `counter` move prior, which bring it close to the best networks. |
 | `minimax` | Paranoid alpha-beta or max-n search over sampled deals, with exact endgames. |
-| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in nine league rounds, widened to 512-512-256 in round 6 (`models/dmc_league9.bin`, the strongest agent that doesn't search). `temp=` samples its moves for weaker, more human opponents; `counter=0.04` breaks near-ties with the Counter agent's card counting (1.07 against the network alone, 3-5 players). Several `+`-joined paths make an ensemble, and `python/distill_ensemble.py` distils one into a single network (`models/dmc_distilled1.bin`, which plays like the ensemble of rounds 8-10 and beats round 9 1.13 at 4p); `path2=` plays a second network in 2-player games, such as `models/dmc_spec2p_1.bin`, trained on them alone (1.05 against the distilled network there). |
+| `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in nine league rounds, widened to 512-512-256 in round 6 (`models/dmc_league9.bin`). Several `+`-joined paths make an ensemble, and `python/distill_ensemble.py` distils one into a single network (`models/dmc_distilled1.bin`, which plays like the ensemble of rounds 8-10 and beats round 9 1.13 at 4p). `path2=` to `path6=` play another network in games of that many players: specialists trained on one player count (`train_dmc.py --players`) beat the distilled network at 2, 3 and 4 players (`models/dmc_spec2p_1.bin`, `dmc_spec3p_1.bin`, `dmc_spec4p_1.bin`) but not at 5 or 6. `counter=0.04` breaks near-ties with the Counter agent's card counting (1.07 against the network alone, 3-5 players); `temp=` samples its moves for weaker, more human opponents. With the specialists and `counter=0.04` it is the strongest agent that doesn't search. |
 | `dmc_hist` | A DMC network that also sees the recent plays and each seat's rate of beating the trick when following (`train_dmc.py --history`). |
 | `dmc:path=a.bin+b.bin` | An ensemble averaging several DMC networks' values. |
 | `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). |
@@ -65,6 +65,7 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `dqn` | A masked Double DQN network. |
 | `ppo` | A PPO policy trained with a full-information critic. |
 | `nfsp` | An NFSP average policy (played by sampling). |
+| `bycount` | A different agent for each player count: `bycount:3=<spec>\|4=<spec>\|rest=<spec>` (any specs, searches included). The browser's Guided ISMCTS uses it to pick its networks. |
 
 `rainbow arena` runs a duplicate tournament: every deal is replayed once per seat rotation, on all cores. Agents take options after a colon:
 
@@ -72,32 +73,40 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 cargo run --release -- arena -d 1000 ismcts economist pimc:k=128,rollout=random cheapest
 ```
 
+`rainbow ladder` rates a pool of agents over many random lineups drawn from it, so each is judged against a varied field:
+
+```sh
+cargo run --release -- ladder -p 4 -l 100 -d 30 ismcts counter economist pimc cheapest dmc:path=models/dmc_distilled1.bin
+```
+
 [ROADMAP.md](ROADMAP.md) tracks planned agents and records tournament results.
 
-`scripts/league_round.sh` runs one round of DMC league training and compares the result head-to-head with its starting network (`WIDEN=` grows the network first).
+`scripts/league_round.sh` runs one round of DMC league training, then rates the result against its starting network in mixed 4- and 2-player ladders (`WIDEN=` grows the network first; `HEAD_TO_HEAD=1` adds the old head-to-head check).
 
 `rainbow selfplay` plays games with network-guided ISMCTS and records the search's value for every root move, as training data for expert iteration.
 
 ### Results
 
-Current 4-player ladder (40 random lineups of 4 from 10 agents, 40 duplicate deals each; 1.0 is an
-average player):
+Current 4-player ladder over the browser's opponents (160 random lineups of 4 from 21 agents, 30
+duplicate deals each; 1.0 is an even share of the wins), top and selected others:
 
 | Agent | Relative |
 |---|---|
-| `ismcts:n=200,prior=models/dmc_league5.bin,leaf=models/dmc_league5.bin,belief=models/belief_v1.bin` | 1.72 |
-| `dmc:path=models/dmc_league3.bin+models/dmc_league4.bin+models/dmc_league5.bin` | 1.40 |
-| `hybrid:path=models/dmc_league5.bin` | 1.36 |
-| `ismcts` | 1.29 |
-| `dmc:path=models/dmc_league5.bin` | 1.19 |
-| `pimc` | 1.04 |
-| `distill` (v4, since replaced by `models/distill_v5.bin`) | 0.74 |
-| `counter` | 0.64 |
-| `economist` | 0.42 |
-| `cheapest` | 0.26 |
+| Guided ISMCTS: `bycount:` routing `ismcts:n=200` with `prior`, `leaf` from the 3-, 4- and 5-player specialists (else `dmc_distilled1`), `belief=models/belief_v3.bin` | 2.19 |
+| `ismcts` (no network: `counter` rollouts and prior) | 1.91 |
+| `dmc:path=models/dmc_distilled1.bin,path2=…,path3=…,path4=…,counter=0.04` | 1.81 |
+| `hybrid:path=models/dmc_distilled1.bin` | 1.78 |
+| `dmc:path=models/dmc_league7.bin+models/dmc_league8.bin+models/dmc_league9.bin` | 1.70 |
+| `pimc` | 1.28 |
+| `distill:path=models/distill_v5.bin` | 1.19 |
+| `counter` | 0.96 |
+| `economist` | 0.88 |
+| `ppo:path=models/ppo_v2.bin` | 0.51 |
+| `cheapest` | 0.42 |
 
-`ismcts` here uses no network: `counter` rollouts and a `counter` move prior put it above the raw
-league network. Head-to-head, `counter` beats the Economist (1.20 against three of them, 4p).
+A field with many weak agents spreads the scores out; in stronger fields Economist rates about
+0.4. Agents are judged by ladders over mixed fields like this rather than head-to-head, so a gain
+has to hold against many kinds of opponent.
 
 [ROADMAP.md](ROADMAP.md) has the full results and what each experiment taught.
 
@@ -112,10 +121,13 @@ cargo run --release -p rainbow-server -- --port 8080 --models models
 
 Open http://localhost:8080 and enter your name.
 
-- **Against the computer:** pick the number of players and an opponent, grouped from Beginner
-  (Random, Cheapest, a loosened DMC) through Casual (Economist, Counter) and Strong (DMC,
-  ISMCTS) to Expert (Guided ISMCTS, the strongest), or choose each
-  seat separately. *Suggest* asks the strongest available agent for a move.
+- **Against the computer:** pick the number of players and an opponent from 21, grouped by their
+  measured rating from Beginner (Random, Cheapest, PPO) through Casual (Economist, Counter, PIMC,
+  a loosened DMC) and Strong (DMC, Hybrid, the DMC ensemble, ISMCTS) to Expert (Guided ISMCTS);
+  the *?* beside the menu explains the ratings. Or choose each seat separately. *Suggest* asks
+  the strongest available agent for a move.
+- **Watch the computer:** *Watch computer players* sets up a table of 2-6 agents of your choice
+  and shows every hand as they play; pause, step one move at a time, or change the speed.
 - **With friends:** create a room and share its four-letter code or link; a link opens straight
   to a join screen. In the lobby the host can give open seats to the computer, and during a
   game can hand an absent player's seat to it. A player who reloads or loses their connection
@@ -123,11 +135,12 @@ Open http://localhost:8080 and enter your name.
   anyone joining a full room watches. While the host is away, the next player present acts as
   host. Rooms have a chat.
 
-*How to play* can also start a game the computer plays alone, to learn by watching.
+When a game ends, a score chart shows how the points built up; close it to look back over the
+table and the full trick history, then play again or leave.
 
 Play by tapping cards and pressing *Play* (or keys `1`-`6`, `Enter` and `Esc`). *How to play*
-explains the rules and controls; *Settings* has sound, the computer's speed (slow, normal or fast, in solo games), reduced motion and a light or dark
-theme.
+explains the rules and controls; *Settings* has sound, the computer's speed (slow, normal or fast, in solo and watched games),
+reduced motion and a light or dark theme.
 
 To play with people on other machines, the port must be reachable from them, for example on a
 LAN, through port forwarding, or behind a reverse proxy that passes WebSockets through (the page
@@ -141,7 +154,8 @@ cards.
 
 `server/e2e/run.sh` runs browser tests against a fast-paced server (needs Node with Playwright,
 and optionally axe-core for the WCAG 2.2 AA checks): a solo game, an online room with a reload
-mid-trick, keyboard-only play, both colour themes and a 360-pixel-wide phone.
+mid-trick, keyboard-only play, a watched game paused and stepped, both colour themes and a
+360-pixel-wide phone.
 
 ## Python bindings
 
@@ -203,6 +217,7 @@ All trainers play many games at once through `VecEnv`, check progress in the Rus
 | `distill_ensemble.py` | Distils a DMC ensemble into one network, regressing every legal move's ensemble value in ensemble self-play. |
 
 `train_dmc.py` also takes `--init` (continue a network), `--widen` (grow it first, function-preserving),
+`--players N` (train on N-player games only, for the player-count specialists),
 `--history` (public-history inputs) and, with `--opponents`, `--pfsp P` (draw opponents with weight
 (1 - win rate)^P, favouring those the learner beats least). `scripts/league_round.sh` runs one league
 round with these and a head-to-head check. `analyze_play.py` compares how agents play (leads,
