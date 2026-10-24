@@ -60,7 +60,7 @@ println!("{:?} won with {:?}", game.winners(), game.scores());
 | `dmc` | A DouZero-style network trained by self-play (`models/dmc_v2.bin`) and fine-tuned in nine league rounds, widened to 512-512-256 in round 6 (`models/dmc_league9.bin`). Several `+`-joined paths make an ensemble, and `python/distill_ensemble.py` distils one into a single network (`models/dmc_distilled1.bin`, which plays like the ensemble of rounds 8-10 and beats round 9 1.13 at 4p). `path2=` to `path6=` play another network in games of that many players: specialists trained on one player count (`train_dmc.py --players`) beat the distilled network at 2, 3 and 4 players (`models/dmc_spec2p_1.bin`, `dmc_spec3p_1.bin`, `dmc_spec4p_1.bin`) but not at 5 or 6. `counter=0.04` breaks near-ties with the Counter agent's card counting (1.07 against the network alone, 3-5 players); `temp=` samples its moves for weaker, more human opponents. With the specialists and `counter=0.04` it is the strongest agent that doesn't search. |
 | `dmc_hist` | A DMC network that also sees the recent plays and each seat's rate of beating the trick when following (`train_dmc.py --history`). |
 | `dmc:path=a.bin+b.bin` | An ensemble averaging several DMC networks' values. |
-| `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). |
+| `hybrid` | A DMC network that hands over to exact max-n minimax once few cards are left (`cards=`, `k=` deals). The browser's Hybrid plays the player-count specialists through `bycount:`, like `dmc`. |
 | `distill` | A policy network trained to imitate guided ISMCTS's visit counts (`train_distill.py`, `models/distill_v5.bin`). |
 | `dqn` | A masked Double DQN network. |
 | `ppo` | A PPO policy trained with a full-information critic. |
@@ -95,7 +95,7 @@ duplicate deals each; 1.0 is an even share of the wins), top and selected others
 | Guided ISMCTS: `bycount:` routing `ismcts:n=200` with `prior`, `leaf` from the 3-, 4- and 5-player specialists (else `dmc_distilled1`), `belief=models/belief_v3.bin` | 2.19 |
 | `ismcts` (no network: `counter` rollouts and prior) | 1.91 |
 | `dmc:path=models/dmc_distilled1.bin,path2=…,path3=…,path4=…,counter=0.04` | 1.81 |
-| `hybrid:path=models/dmc_distilled1.bin` | 1.78 |
+| `hybrid` on the distilled network (now on the specialists too, like `dmc`) | 1.78 |
 | `dmc:path=models/dmc_league7.bin+models/dmc_league8.bin+models/dmc_league9.bin` | 1.70 |
 | `pimc` | 1.28 |
 | `distill:path=models/distill_v5.bin` | 1.19 |

@@ -175,8 +175,11 @@ pub fn available(models: &Path) -> Vec<Preset> {
         (
             "hybrid",
             "Hybrid",
-            "The DMC network, solving the endgame exactly by search.",
-            format!("hybrid:path={distilled}"),
+            "The DMC networks, solving the endgame exactly by search.",
+            // with DMC's player-count specialists: 1.57 to 1.53 at 4 players, 1.68 to 1.64 at 3
+            format!(
+                "bycount:2=hybrid:path={two}|3=hybrid:path={three}|4=hybrid:path={four}|rest=hybrid:path={distilled}"
+            ),
             1.78,
         ),
         (

@@ -399,6 +399,10 @@ from.
       three Economists, up from 2.19, but level in a mixed 4-player field (100 lineups from 10
       agents) both as the search's guide (1.71 +/- 0.06 against 1.72) and as DMC's network
       (1.40 against 1.37). More of the same training has stopped paying.
+- [x] Hybrid on the player-count specialists like DMC (`bycount:` over `hybrid:path=`): 1.57 +/-
+      0.06 against 1.53 +/- 0.04 on the distilled network at 4 players, 1.68 +/- 0.08 against
+      1.64 +/- 0.06 at 3 (100 lineups from 9 agents each). Small, but the same direction as
+      DMC's gain from them; the browser's Hybrid uses them.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
