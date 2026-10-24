@@ -412,7 +412,10 @@ from.
       against 1.71 +/- 0.08: about two standard errors together. It roughly doubles the search
       time (about 0.6 s a move instead of 0.33 on one core). At 5 players (`dmc_spec5p_1.bin+
       dmc_distilled1.bin`, 60 lineups) 1.63 +/- 0.05 against 1.55 +/- 0.05, the same direction.
-      The browser's Guided ISMCTS uses it at 3, 4 and 5 players.
+      The browser's Guided ISMCTS uses it at 3, 4 and 5 players. At 2 and 6 players, where the
+      search is steered by the distilled network, averaging its leaf with that count's specialist
+      is level (60 lineups each): 1.89 +/- 0.04 against 1.91 +/- 0.04 at 2, 1.46 against 1.46
+      at 6.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
