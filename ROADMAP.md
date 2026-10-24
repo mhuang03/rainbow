@@ -394,6 +394,11 @@ from.
       better, 1.65 +/- 0.05 against 1.50 +/- 0.06; the 6-player one is level, 1.52 against 1.50.
       The browser's Guided ISMCTS uses the 3-, 4- and 5-player specialists (`dmc_spec5p_1.bin`
       kept for this), the distilled network otherwise.
+- [ ] A second round for the 4-player specialist (two more hours from `dmc_spec4p_1`, lr 5e-5,
+      against economist, counter, the distilled network and itself; 1.15M games): 2.25 against
+      three Economists, up from 2.19, but level in a mixed 4-player field (100 lineups from 10
+      agents) both as the search's guide (1.71 +/- 0.06 against 1.72) and as DMC's network
+      (1.40 against 1.37). More of the same training has stopped paying.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
