@@ -251,6 +251,15 @@ function openWatch() {
 }
 
 /** One agent menu per seat; by default a varied table, from rule-based players to search. */
+/** Shuffles `list` in place (Fisher-Yates) and returns it. */
+function shuffle(list) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+
 function watchSeats(count, saved = []) {
   const box = $("watch-seats");
   const old = [...box.querySelectorAll("select")].map((x) => x.value);
@@ -1156,6 +1165,18 @@ async function main() {
   $("watch-btn").onclick = () => { $("howto").close(); openWatch(); };
   $("watch-link").onclick = openWatch;
   $("watch-players").onchange = () => watchSeats(+$("watch-players").value);
+  // a random table of different agents, one from each difficulty group before any repeats
+  $("watch-mix").onclick = () => {
+    const pool = shuffle([...presets]);
+    const picks = [];
+    for (const level of ["Expert", "Strong", "Casual", "Beginner"]) {
+      const p = pool.find((x) => x.level === level && !picks.includes(x));
+      if (p) picks.push(p);
+    }
+    picks.push(...pool.filter((x) => !picks.includes(x)));
+    const order = shuffle(picks.slice(0, $("watch-seats").querySelectorAll("select").length));
+    $("watch-seats").querySelectorAll("select").forEach((select, i) => { select.value = order[i].id; });
+  };
   $("watch-start").onclick = () => {
     const seats = [...$("watch-seats").querySelectorAll("select")].map((x) => x.value);
     try { localStorage.setItem("rainbow.watch", JSON.stringify(seats)); } catch { /* not remembered */ }

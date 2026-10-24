@@ -254,6 +254,10 @@ const tests = {
     // a 3-player table of the viewer's choosing
     await p.selectOption("#watch-players", "3");
     assert.strictEqual(await p.locator("#watch-seats select").count(), 3);
+    // mixing it up seats different agents
+    await p.click("#watch-mix");
+    const mixed = await p.$$eval("#watch-seats select", (s) => s.map((x) => x.value));
+    assert.strictEqual(new Set(mixed).size, 3, `three different agents: ${mixed}`);
     await p.selectOption("#watch-seats label:nth-child(1) select", "random");
     await p.evaluate(() => localStorage.setItem("rainbow.speed", "slow"));
     await p.click("#watch-start");

@@ -489,4 +489,5 @@ dialog.watch-dialog { max-width: 440px; }
 .watch-form { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 16px; }
 .watch-form label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); }
 .watch-form select { max-width: 66%; }
+.watch-mix { align-self: flex-end; margin-left: auto; display: block; }
 .watch-dialog .actions form { margin: 0; }
