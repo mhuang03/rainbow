@@ -410,8 +410,9 @@ from.
       the specialist alone): 1.86 +/- 0.07 against 1.78 +/- 0.07 with the specialist's leaf (4p,
       100 lineups), and at 3 players (`dmc_spec3p_1.bin+dmc_distilled1.bin`) 1.86 +/- 0.06
       against 1.71 +/- 0.08: about two standard errors together. It roughly doubles the search
-      time (about 0.6 s a move instead of 0.33 on one core). The browser's Guided ISMCTS uses it at
-      3 and 4 players.
+      time (about 0.6 s a move instead of 0.33 on one core). At 5 players (`dmc_spec5p_1.bin+
+      dmc_distilled1.bin`, 60 lineups) 1.63 +/- 0.05 against 1.55 +/- 0.05, the same direction.
+      The browser's Guided ISMCTS uses it at 3, 4 and 5 players.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score

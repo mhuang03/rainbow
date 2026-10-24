@@ -203,9 +203,9 @@ pub fn available(models: &Path) -> Vec<Preset> {
             // steered by the player-count specialist where one guides the search better (3, 4 and
             // 5 players: 1.79 to 1.68, 1.92 to 1.75 and 1.65 to 1.50 over the distilled network;
             // level at 2 and 6), else by the distilled network (ahead of league 9 at 6 players).
-            // At 3 and 4 players its leaves average the specialist with the distilled network:
-            // 1.86 to 1.71 and 1.86 to 1.78 over the specialist alone, for about twice the
-            // thinking time (still well under a second a move).
+            // With a specialist its leaves average it with the distilled network: 1.86 to 1.71,
+            // 1.86 to 1.78 and 1.63 to 1.55 over the specialist alone at 3, 4 and 5 players, for
+            // about twice the thinking time (still well under a second a move).
             {
                 let guided = |prior: &str, leaf: &str| {
                     format!("ismcts:n=200,prior={prior},leaf={leaf},belief={belief}")
@@ -214,7 +214,7 @@ pub fn available(models: &Path) -> Vec<Preset> {
                     "bycount:3={}|4={}|5={}|rest={}",
                     guided(&three, &format!("{three}+{distilled}")),
                     guided(&four, &format!("{four}+{distilled}")),
-                    guided(&five, &five),
+                    guided(&five, &format!("{five}+{distilled}")),
                     guided(&distilled, &distilled)
                 )
             },
