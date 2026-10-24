@@ -169,7 +169,11 @@ pub fn available(models: &Path) -> Vec<Preset> {
             "dmc",
             "DMC",
             "Neural network trained by self-play and league play, with versions for 2, 3 and 4 players and card counting to break near-ties. Fast.",
-            format!("dmc:path={distilled},path2={two},path3={three},path4={four},counter=0.04"),
+            // at 3 players the specialist averaged with the distilled network: 1.63 to 1.51 over
+            // the specialist alone (level at 4 players, where it stays alone)
+            format!(
+                "dmc:path={distilled},path2={two},path3={three}+{distilled},path4={four},counter=0.04"
+            ),
             1.81,
         ),
         (

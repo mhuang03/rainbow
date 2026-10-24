@@ -419,6 +419,10 @@ from.
 - [ ] Guided ISMCTS prior temperature with the current setup (4p, specialist prior, ensemble
       leaf; 90 lineups from 9 agents): `ptemp` 0.05 / 0.1 (the default) / 0.2 score 1.60 / 1.64 /
       1.53 (+/- 0.04-0.07). The default stays.
+- [x] DMC with each specialist averaged with the distilled network (`path3=a+b`, `path4=a+b`;
+      150 lineups from 10 agents, 30 deals): level at 4 players (1.52 against 1.52), ahead at 3
+      (1.63 +/- 0.07 against 1.51 +/- 0.05). The browser's DMC averages at 3 players only; its
+      relaxed and playful variants keep single networks, which their temperatures need.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
