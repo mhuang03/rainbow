@@ -487,38 +487,40 @@ from.
 
 ## Results
 
-### Current ladder: every browser opponent (4p, 80 random lineups of 4 from 21, 30 duplicate deals each)
+### Current ladder: every browser opponent (4p, 160 random lineups of 4 from 21, 30 duplicate deals each)
 
-The DMC presets here play the 2- and 4-player specialists (`path2=dmc_spec2p_1,path4=dmc_spec4p_1`).
-Each agent sits in only 7-23 lineups, so the margins are wide; the ratings shown in the browser
-come from this table.
+The DMC presets play the 2-, 3- and 4-player specialists; Guided ISMCTS is steered by the 3-, 4-
+and 5-player ones (`bycount:`). Each agent sits in 19-39 lineups. The ratings shown in the
+browser come from this table.
 
 | Difficulty | Opponent | Relative | +/- |
 |---|---|---|---|
-| Expert | Guided ISMCTS | **2.18** | 0.13 |
-| Expert | ISMCTS | 2.16 | 0.25 |
-| Strong | DMC (`counter=0.04`) | 1.86 | 0.23 |
-| Strong | DMC ensemble (league 7+8+9) | 1.83 | 0.11 |
-| Strong | Hybrid | 1.78 | 0.11 |
-| Strong | DMC, first version (`dmc_v2`) | 1.38 | 0.16 |
-| Strong | PIMC | 1.35 | 0.15 |
-| Casual | Distilled search (`distill_v5`) | 1.29 | 0.12 |
-| Casual | DMC, relaxed (`temp=0.04`) | 1.19 | 0.11 |
-| Casual | Economist, margin | 1.09 | 0.16 |
-| Casual | Counter | 0.98 | 0.10 |
-| Casual | Economist | 0.85 | 0.17 |
-| Casual | DQN | 0.80 | 0.13 |
-| Casual | DMC, playful (`temp=0.1`) | 0.79 | 0.16 |
-| Casual | NFSP | 0.73 | 0.11 |
-| Beginner | PPO | 0.52 | 0.07 |
-| Beginner | Cheapest | 0.48 | 0.06 |
-| Beginner | Minimax | 0.34 | 0.07 |
-| Beginner | Random | 0.17 | 0.04 |
-| Beginner | Biggest | 0.02 | 0.01 |
+| Expert | Guided ISMCTS | **2.19** | 0.08 |
+| Strong | ISMCTS | 1.91 | 0.15 |
+| Strong | DMC (`counter=0.04`) | 1.81 | 0.11 |
+| Strong | Hybrid | 1.78 | 0.09 |
+| Strong | DMC ensemble (league 7+8+9) | 1.70 | 0.10 |
+| Casual | PIMC | 1.28 | 0.10 |
+| Casual | DMC, relaxed (`temp=0.04`) | 1.23 | 0.08 |
+| Casual | DMC, first version (`dmc_v2`) | 1.22 | 0.09 |
+| Casual | Distilled search (`distill_v5`) | 1.19 | 0.08 |
+| Casual | Economist, margin | 0.97 | 0.13 |
+| Casual | Counter | 0.96 | 0.09 |
+| Casual | Economist | 0.88 | 0.12 |
+| Casual | DQN | 0.76 | 0.08 |
+| Casual | NFSP | 0.73 | 0.08 |
+| Casual | DMC, playful (`temp=0.1`) | 0.62 | 0.09 |
+| Beginner | PPO | 0.51 | 0.05 |
+| Beginner | Cheapest | 0.42 | 0.04 |
+| Beginner | Minimax | 0.41 | 0.08 |
+| Beginner | Random | 0.10 | 0.03 |
+| Beginner | Biggest | 0.01 | 0.00 |
 | Beginner | Lowest | 0.00 | 0.00 |
 
-A field this full of weak agents spreads the scores out: Economist rates 0.85 here but 0.43
-in the stronger 12-agent field used to judge the 4-player specialist. Minimax, which assumes
+The previous run of this ladder (80 lineups, before the specialist-steered search) put the same
+agents in the same groups, except ISMCTS (2.16 +/- 0.25 there, Expert; 1.91 +/- 0.15 here).
+A field this full of weak agents spreads the scores out: Economist rates 0.88 here but 0.41
+in the stronger 10-agent fields used to judge the specialists. Minimax, which assumes
 everyone plays against it, does worst where most opponents are weak.
 
 ### Previous ladder: the browser's opponents (4p, 40 random lineups of 4 from 9, 40 duplicate deals each)
