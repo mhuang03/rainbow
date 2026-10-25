@@ -225,8 +225,23 @@ pub fn available(models: &Path) -> Vec<Preset> {
             2.19,
         ),
     ];
+    // a network trained with python/train_max.py, once python/eval_max.py has rated it
+    let max = models.join("max.bin");
+    let max_rating = std::fs::read_to_string(models.join("max.rating"))
+        .ok()
+        .and_then(|r| r.trim().parse::<f32>().ok());
+    let trained = max.exists().then_some(()).and(max_rating).map(|rating| {
+        (
+            "max",
+            "Max",
+            "The network trained with train_max.py on this machine, with card counting to break near-ties.",
+            format!("dmc:path={},counter=0.04", max.display()),
+            rating,
+        )
+    });
     let mut presets: Vec<Preset> = list
         .into_iter()
+        .chain(trained)
         .map(|(id, label, description, spec, rating)| Preset {
             id: id.into(),
             label: label.into(),

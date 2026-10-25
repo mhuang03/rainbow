@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import struct
 import subprocess
 from pathlib import Path
@@ -12,7 +13,7 @@ from torch import nn
 
 import rainbow_engine as re
 
-ARENA = Path(__file__).parent.parent / "target/release/rainbow"
+ARENA = Path(__file__).parent.parent / "target/release" / ("rainbow.exe" if os.name == "nt" else "rainbow")
 MARGIN_WEIGHT = 0.2  # matches the Rust search agents' default reward
 
 
@@ -91,6 +92,29 @@ def widen(net: nn.Sequential, hidden: list[int], noise: float = 1e-3, seed: int 
     return nn.Sequential(*layers)
 
 
+def deepen(net: nn.Sequential, after: int, count: int = 1) -> nn.Sequential:
+    """Net2DeeperNet (Chen et al., 2016): inserts `count` identity layers after hidden layer
+    `after` (0-based). Its inputs have passed a ReLU, so they are non-negative and ReLU(I x) = x:
+    the network computes the same function, and training then puts the new layers to use."""
+    linears = [m for m in net if isinstance(m, nn.Linear)]
+    if not 0 <= after < len(linears) - 1:
+        raise ValueError(f"hidden layer {after} doesn't exist")
+    width = linears[after].out_features
+    layers: list[nn.Module] = []
+    for i, linear in enumerate(linears):
+        layers.append(linear)
+        if i < len(linears) - 1:
+            layers.append(nn.ReLU())
+        if i == after:
+            for _ in range(count):
+                identity = nn.Linear(width, width)
+                with torch.no_grad():
+                    identity.weight.copy_(torch.eye(width))
+                    identity.bias.zero_()
+                layers += [identity, nn.ReLU()]
+    return nn.Sequential(*layers)
+
+
 def mlp(inputs: int, hidden: list[int], outputs: int) -> nn.Sequential:
     layers: list[nn.Module] = []
     size = inputs
@@ -124,12 +148,13 @@ def final_returns_row(returns: np.ndarray, scores: np.ndarray, n: int) -> np.nda
     return (r + MARGIN_WEIGHT * (sc - best_other) / 100).astype(np.float32)
 
 
-def arena_relative(spec: str, opponents: list[str], deals: int, arena: Path = ARENA) -> str:
-    """Relative win share of `spec` in a Rust arena tournament, or "n/a" without the binary."""
+def arena_relative(spec: str, opponents: list[str], deals: int, arena: Path = ARENA, threads: int = 0) -> str:
+    """Relative win share of `spec` in a Rust arena tournament, or "n/a" without the binary.
+    `threads` caps the arena's worker threads (0: one per core)."""
     if not arena.exists():
         return "n/a"
     result = subprocess.run(
-        [str(arena), "arena", "-d", str(deals), spec, *opponents],
+        [str(arena), "arena", "-d", str(deals), *(["-t", str(threads)] if threads else []), spec, *opponents],
         capture_output=True,
         text=True,
         check=True,

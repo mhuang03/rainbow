@@ -125,3 +125,32 @@ def test_widening_preserves_the_function():
     x = torch.randn(32, 10)
     assert torch.allclose(net(x), wide(x), atol=1e-5)
     assert [m.out_features for m in wide if isinstance(m, torch.nn.Linear)] == [16, 9, 2]
+
+
+def test_deepening_preserves_the_function():
+    from rl_common import deepen, mlp
+
+    torch.manual_seed(0)
+    net = mlp(10, [6, 5], 2)
+    deep = deepen(net, after=0, count=2)
+    x = torch.randn(32, 10)
+    assert torch.allclose(net(x), deep(x), atol=1e-6)
+    assert [m.out_features for m in deep if isinstance(m, torch.nn.Linear)] == [6, 6, 6, 5, 2]
+
+
+def test_train_max_grows_a_network_from_its_start():
+    import argparse
+    from pathlib import Path
+
+    from rl_common import load
+    import train_max
+
+    start = Path(__file__).parent.parent.parent / "models" / "dmc_distilled1.bin"
+    if not start.exists():
+        pytest.skip("models/dmc_distilled1.bin not present")
+    args = argparse.Namespace(init=start, hidden=[1024, 1024, 1024, 512], seed=0)
+    small, big = load(start), train_max.build_network(args)
+    assert [m.out_features for m in big if isinstance(m, torch.nn.Linear)] == [1024, 1024, 1024, 512, 1]
+    x = torch.rand(64, small[0].in_features)
+    # only the widening noise separates them
+    assert (small(x) - big(x)).abs().max() < 0.05

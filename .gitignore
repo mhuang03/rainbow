@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 /python/models/
 /runs/
+# train_max.py checkpoints and league snapshots (the exported network and its rating can be committed)
+models/*.pt
+models/*_snapshots/

@@ -394,12 +394,16 @@ type StepResult<'py> = (
 /// opponent is drawn with weight (1 - w)^p, where w is the learners' running rate of finishing
 /// ahead of it, so the opponents the learners beat least are played most. By default
 /// opponents are drawn uniformly.
-#[pyclass(module = "rainbow_engine", unsendable)]
+///
+/// `step` plays the games (and the opponents' turns) without holding the GIL, so several
+/// VecEnvs can step at once from different threads.
+#[pyclass(module = "rainbow_engine")]
 struct VecEnv {
     games: Vec<GameState>,
     rng: SmallRng,
     players: Option<usize>,
-    opponents: Vec<Box<dyn Agent>>,
+    /// In mutexes only so the class is `Sync`; `&mut self` reaches them with `get_mut`.
+    opponents: Vec<std::sync::Mutex<Box<dyn Agent>>>,
     learners: usize,
     /// Per game and seat: `None` for a learner, or an index into `opponents`.
     seats: Vec<[Option<u8>; MAX_PLAYERS]>,
@@ -477,26 +481,56 @@ impl VecEnv {
     }
 
     /// Plays opponents' turns in game `i` until a learner is to move or the game ends.
-    fn advance(&mut self, i: usize) -> PyResult<()> {
+    fn advance(&mut self, i: usize) -> Result<(), String> {
         while !self.games[i].is_over() {
             let seat = self.games[i].current_player();
             let Some(k) = self.seats[i][seat] else {
                 return Ok(());
             };
             let game = &mut self.games[i];
-            let combo = self.opponents[k as usize].act(&game.observe(seat), &game.legal_actions());
-            game.apply(combo).map_err(|e| {
-                PyValueError::new_err(format!(
-                    "opponent {}: {e}",
-                    self.opponents[k as usize].name()
-                ))
-            })?;
+            let agent = self.opponents[k as usize]
+                .get_mut()
+                .map_err(|_| "an opponent panicked".to_string())?;
+            let combo = agent.act(&game.observe(seat), &game.legal_actions());
+            game.apply(combo)
+                .map_err(|e| format!("opponent {}: {e}", agent.name()))?;
         }
         Ok(())
     }
 
+    /// `step`'s work, which needs no Python: returns per game whether it ended, and its final
+    /// win shares and points (row-major, MAX_PLAYERS per game) if so.
+    #[allow(clippy::type_complexity)]
+    fn step_all(&mut self, actions: &[i64]) -> Result<(Vec<bool>, Vec<f32>, Vec<i64>), String> {
+        let b = self.games.len();
+        let mut done = vec![false; b];
+        let mut returns = vec![0.0; b * MAX_PLAYERS];
+        let mut scores = vec![0; b * MAX_PLAYERS];
+        for (i, &action) in actions.iter().enumerate() {
+            let combo = usize::try_from(action)
+                .ok()
+                .and_then(Combo::from_action_index)
+                .ok_or_else(|| format!("action must be in 0..{NUM_ACTIONS}"))?;
+            self.games[i]
+                .apply(combo)
+                .map_err(|e| format!("game {i}: {e}"))?;
+            self.advance(i)?;
+            if self.games[i].is_over() {
+                done[i] = true;
+                let game = &self.games[i];
+                for (seat, (&ret, &pts)) in game.returns().iter().zip(&game.scores()).enumerate() {
+                    returns[i * MAX_PLAYERS + seat] = ret;
+                    scores[i * MAX_PLAYERS + seat] = pts.into();
+                }
+                self.record(i);
+                self.reset(i)?;
+            }
+        }
+        Ok((done, returns, scores))
+    }
+
     /// Replaces game `i` with a new one and plays opponents up to the first learner turn.
-    fn reset(&mut self, i: usize) -> PyResult<()> {
+    fn reset(&mut self, i: usize) -> Result<(), String> {
         let (game, seats) = self.new_game();
         self.games[i] = game;
         self.seats[i] = seats;
@@ -526,7 +560,11 @@ impl VecEnv {
         let opponents = opponents
             .unwrap_or_default()
             .iter()
-            .map(|spec| agents::create(spec, rng.random()).map_err(PyValueError::new_err))
+            .map(|spec| {
+                agents::create(spec, rng.random())
+                    .map(std::sync::Mutex::new)
+                    .map_err(PyValueError::new_err)
+            })
             .collect::<PyResult<Vec<_>>>()?;
         let results = vec![(0.0, 0.0); opponents.len()];
         let mut env = Self {
@@ -543,7 +581,7 @@ impl VecEnv {
             let (game, seats) = env.new_game();
             env.games.push(game);
             env.seats.push(seats);
-            env.advance(i)?;
+            env.advance(i).map_err(PyValueError::new_err)?;
         }
         Ok(env)
     }
@@ -639,41 +677,19 @@ impl VecEnv {
         py: Python<'py>,
         actions: numpy::PyReadonlyArray1<'py, i64>,
     ) -> PyResult<StepResult<'py>> {
-        let actions = actions.as_slice()?;
+        let actions = actions.as_slice()?.to_vec();
         if actions.len() != self.games.len() {
             return Err(PyValueError::new_err("need one action per game"));
         }
         let b = self.games.len();
-        let mut done = vec![false; b];
-        let returns = PyArray2::<f32>::zeros(py, [b, MAX_PLAYERS], false);
-        let scores = PyArray2::<i64>::zeros(py, [b, MAX_PLAYERS], false);
-        {
-            let mut r_rw = returns.readwrite();
-            let mut s_rw = scores.readwrite();
-            let r = r_rw.as_slice_mut().expect("contiguous");
-            let sc = s_rw.as_slice_mut().expect("contiguous");
-            for i in 0..b {
-                let action = usize::try_from(actions[i])
-                    .map_err(|_| PyValueError::new_err("negative action"))?;
-                self.games[i]
-                    .apply(combo(action)?)
-                    .map_err(|e| PyValueError::new_err(format!("game {i}: {e}")))?;
-                self.advance(i)?;
-                if self.games[i].is_over() {
-                    done[i] = true;
-                    let game = &self.games[i];
-                    for (seat, (&ret, &pts)) in
-                        game.returns().iter().zip(&game.scores()).enumerate()
-                    {
-                        r[i * MAX_PLAYERS + seat] = ret;
-                        sc[i * MAX_PLAYERS + seat] = pts.into();
-                    }
-                    self.record(i);
-                    self.reset(i)?;
-                }
-            }
-        }
-        Ok((PyArray1::from_vec(py, done), returns, scores))
+        let (done, returns, scores) = py
+            .detach(|| self.step_all(&actions))
+            .map_err(PyValueError::new_err)?;
+        Ok((
+            PyArray1::from_vec(py, done),
+            PyArray1::from_vec(py, returns).reshape([b, MAX_PLAYERS])?,
+            PyArray1::from_vec(py, scores).reshape([b, MAX_PLAYERS])?,
+        ))
     }
 
     /// The learners' rate of finishing ahead of each opponent so far (level counts half), in

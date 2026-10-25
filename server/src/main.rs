@@ -80,7 +80,9 @@ enum ClientMsg {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: rainbow-server [--host ADDR] [--port PORT] [--models DIR] [--pace FACTOR]");
+    eprintln!(
+        "usage: rainbow-server [--host ADDR] [--port PORT] [--models DIR] [--pace FACTOR] [--list-presets]"
+    );
     std::process::exit(2);
 }
 
@@ -89,6 +91,7 @@ async fn main() {
     let mut host = "0.0.0.0".to_string();
     let mut port = 8080u16;
     let mut models = PathBuf::from("models");
+    let mut list = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().unwrap_or_else(|| usage());
@@ -96,6 +99,7 @@ async fn main() {
             "--host" => host = value(),
             "--port" => port = value().parse().unwrap_or_else(|_| usage()),
             "--models" => models = value().into(),
+            "--list-presets" => list = true,
             "--pace" => {
                 let pace = value().parse().unwrap_or_else(|_| usage());
                 room::PACE.set(pace).expect("set once");
@@ -104,6 +108,13 @@ async fn main() {
         }
     }
     let presets = presets::available(&models);
+    // for scripts (such as python/eval_max.py) that rate a network against the same opponents
+    if list {
+        for p in &presets {
+            println!("{}\t{}\t{}", p.id, p.rating, p.spec);
+        }
+        return;
+    }
     eprintln!(
         "agents: {}",
         presets

@@ -201,6 +201,54 @@ cd python && python train_dmc.py --minutes 30 --out models/dmc.bin
 ../target/release/rainbow arena dmc:path=python/models/dmc.bin economist economist economist
 ```
 
+### Training a top model on your own GPU
+
+`python/train_max.py` trains the strongest DMC network this project can make, on a desktop with
+an NVIDIA GPU, within a budget of CPU cores and GPU time:
+
+- It starts from the best network so far (`models/dmc_distilled1.bin`) and grows it,
+  function-preservingly, to 1024-1024-1024-512 (2.8M parameters), so it starts as strong as
+  that network.
+- It learns by league play against the strongest fast agents (the DMC presets, the league
+  ensemble, Hybrid, Counter, Economist) plus snapshots of itself that join every 30 minutes,
+  drawn by prioritized fictitious self-play.
+- Each CPU core runs a batch of 256 games in parallel (the Rust engine releases the GIL), and
+  the GPU scores every learner move in one batch and trains from a 2M-decision replay buffer
+  kept on the GPU.
+- `--cores N` pins the process (and the arena it starts) to N physical cores; `--gpu-share 0.5`
+  idles the GPU enough to keep it busy at most half the time and caps its memory at half.
+
+Setup, from the repository root (Linux shown; on Windows activate with
+`.venv\Scripts\activate`):
+
+```sh
+cargo build --release && cargo build --release -p rainbow-server
+cd python
+python -m venv .venv && source .venv/bin/activate
+pip install maturin numpy psutil
+pip install torch --index-url https://download.pytorch.org/whl/cu128   # RTX 50-series needs CUDA 12.8+
+maturin develop --release
+```
+
+Train (Ctrl-C stops and saves; add `--resume` to carry on; `--minutes` sets a time limit):
+
+```sh
+python train_max.py --cores 4 --gpu-share 0.5
+```
+
+Every 30 minutes it saves `models/max.bin` and a checkpoint, and prints its score against three
+Economists (the best existing networks score about 2.1-2.3) and its win rate against each
+opponent in the league. Give it at least a day: the gains in this project came from scale.
+
+Rate it against random lineups of all the browser's opponents, at every player count:
+
+```sh
+python eval_max.py --cores 4             # add --search to also rate Guided ISMCTS steered by it
+```
+
+It writes the 4-player rating to `models/max.rating`; after a restart the browser then offers
+the network as the opponent *Max*.
+
 ### Other trainers
 
 All trainers play many games at once through `VecEnv`, check progress in the Rust arena, and export networks the Rust agents load. Pass `--threads` to share cores between runs; `train_dmc.py` and `train_ppo.py` also take `--opponents` to train against fixed Rust agents.
@@ -215,6 +263,7 @@ All trainers play many games at once through `VecEnv`, check progress in the Rus
 | `train_exit.py` | Expert iteration: fine-tunes a DMC network on `rainbow selfplay` search values. |
 | `train_distill.py` | Policy network imitating guided ISMCTS's visit counts from `rainbow selfplay` (`distill`). |
 | `distill_ensemble.py` | Distils a DMC ensemble into one network, regressing every legal move's ensemble value in ensemble self-play. |
+| `train_max.py` | The large-scale GPU trainer above: a grown DMC network, league play with self-snapshots, resource limits, checkpoints. |
 
 `train_dmc.py` also takes `--init` (continue a network), `--widen` (grow it first, function-preserving),
 `--players N` (train on N-player games only, for the player-count specialists),

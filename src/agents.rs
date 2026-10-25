@@ -35,7 +35,7 @@ pub use registry::{AGENT_NAMES, create, ismcts_params};
 ///
 /// Search agents can sample full states consistent with the observation through
 /// [`Observation::determinize`].
-pub trait Agent {
+pub trait Agent: Send {
     /// Short name used in reports.
     fn name(&self) -> &str;
 
