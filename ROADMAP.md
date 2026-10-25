@@ -423,6 +423,13 @@ from.
       150 lineups from 10 agents, 30 deals): level at 4 players (1.52 against 1.52), ahead at 3
       (1.63 +/- 0.07 against 1.51 +/- 0.05). The browser's DMC averages at 3 players only; its
       relaxed and playful variants keep single networks, which their temperatures need.
+- [ ] `distill_v6`: a policy distilled from the current guided search (distilled-network prior
+      and leaf, 8000 self-play games of 2-6 players, 240k decisions; 512-512-256, 25 epochs):
+      54% top-move agreement and 1.28 against three Economists, both below `distill_v5` (56%,
+      1.45). In a mixed 4-player field (120 lineups from 10 agents) it rates 0.79 +/- 0.03
+      against `distill_v5`'s 0.91 +/- 0.03, and as the search's prior 1.69 +/- 0.05 against the
+      specialist prior's 1.77 +/- 0.04. A stronger teacher didn't make up for 40% less data;
+      `distill_v5` stays.
 - [x] `dmc:counter=w`: add w times the Counter agent's per-move score (in points) to the
       network's predicted returns, so card counting breaks the network's near-ties. Against
       round 9 alone (4p 2+2, 600 deals): w = 0.003 / 0.01 / 0.03 / 0.06 / 0.1 / 0.2 score
